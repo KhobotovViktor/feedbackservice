@@ -23,10 +23,10 @@ export async function GET(req: NextRequest) {
       where: { key: { in: ["b24_webhook_url", "b24_message_template"] } }
     });
     
-    const settingsMap = settings.reduce((acc, curr) => {
+    const settingsMap = settings.reduce((acc: Record<string, string>, curr: { key: string, value: string }) => {
       acc[curr.key] = curr.value;
       return acc;
-    }, {} as Record<string, string>);
+    }, {});
 
     if (settingsMap.b24_webhook_url) {
       const template = settingsMap.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}";

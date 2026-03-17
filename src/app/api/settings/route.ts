@@ -4,10 +4,10 @@ import { prisma } from "@/lib/prisma";
 export async function GET() {
   try {
     const settings = await prisma.settings.findMany();
-    const settingsMap = settings.reduce((acc, curr) => {
+    const settingsMap = settings.reduce((acc: Record<string, string>, curr: { key: string, value: string }) => {
       acc[curr.key] = curr.value;
       return acc;
-    }, {} as Record<string, string>);
+    }, {});
 
     return NextResponse.json(settingsMap);
   } catch (error) {
