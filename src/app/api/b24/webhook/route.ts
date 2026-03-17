@@ -69,16 +69,20 @@ async function handleWebhook(req: NextRequest) {
         const sendMessage = async (type: string, id: string) => {
           console.log(`Sending direct message via imopenlines.crm.message.add to ${type} ${id}...`);
           try {
+            const payload = {
+              // Bitrix24 is inconsistent, so we provide every possible variation of the entity ID/Type
+              CRM_ENTITY_TYPE: type,
+              CRM_ENTITY_ID: id,
+              CRM_ENTITY: `${type}|${id}`,
+              ENTITY_TYPE: type,
+              ENTITY_ID: id,
+              MESSAGE: message
+            };
+            
             const res = await fetch(`${baseUrl}/imopenlines.crm.message.add.json`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                // Try multiple common parameter names that B24 expects
-                ENTITY_TYPE: type,
-                ENTITY_ID: id,
-                CRM_ENTITY: `${type}|${id}`, // Some versions expect this combined format
-                MESSAGE: message
-              })
+              body: JSON.stringify(payload)
             });
             const data = await res.json();
             console.log(`Result for ${type} ${id}:`, JSON.stringify(data));
