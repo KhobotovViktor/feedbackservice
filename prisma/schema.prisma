@@ -1,0 +1,38 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Question {
+  id        String   @id @default(cuid())
+  text      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SurveyResponse {
+  id           String   @id @default(cuid())
+  clientId     String   // Bitrix24 Lead/Contact ID
+  dealId       String   // Bitrix24 Deal ID
+  averageScore Float
+  answers      Json     // Back to Json for PostgreSQL support
+  comment      String?
+  createdAt    DateTime @default(now())
+  
+  @@index([clientId])
+}
+
+model Settings {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}

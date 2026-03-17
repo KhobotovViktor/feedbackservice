@@ -1,0 +1,39 @@
+import { NextRequest, NextResponse } from "next/server";
+import { verifySurveyToken } from "@/lib/auth-utils";
+import { prisma } from "@/lib/prisma";
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const token = searchParams.get("token");
+
+  if (!token) {
+    return NextResponse.json({ error: "Missing token" }, { status: 400 });
+  }
+
+  const payload = await verifySurveyToken(token);
+  if (!payload) {
+    return NextResponse.json({ error: "Недействительная ссылка" }, { status: 401 });
+  }
+
+  const { clientId } = payload;
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  const recentSurvey = await prisma.surveyResponse.findFirst({
+    where: {
+      clientId,
+      createdAt: {
+        gte: sixMonthsAgo,
+      },
+    },
+  });
+
+  if (recentSurvey) {
+    return NextResponse.json(
+      { error: "Вы уже проходили опрос в последние 6 месяцев. Спасибо!" },
+      { status: 429 }
+    );
+  }
+
+  return NextResponse.json({ success: true });
+}
