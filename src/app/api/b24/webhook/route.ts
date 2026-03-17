@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSurveyToken } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(req: NextRequest) {
+async function handleWebhook(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const clientId = searchParams.get("clientId");
   const dealId = searchParams.get("dealId");
@@ -19,6 +19,11 @@ export async function GET(req: NextRequest) {
       { error: "Missing identity parameters" },
       { status: 400 }
     );
+  }
+
+  // Handle placeholders like "{{DEAL_ID}}" which means B24 didn't replace them
+  if (effectiveDealId.includes("{") || effectiveClientId.includes("{")) {
+    console.warn("Detected unresolved Bitrix24 placeholders. Please check Robot configuration.");
   }
 
   const token = await createSurveyToken(effectiveClientId, effectiveDealId);
@@ -72,4 +77,12 @@ export async function GET(req: NextRequest) {
     surveyUrl,
     token,
   });
+}
+
+export async function GET(req: NextRequest) {
+  return handleWebhook(req);
+}
+
+export async function POST(req: NextRequest) {
+  return handleWebhook(req);
 }
