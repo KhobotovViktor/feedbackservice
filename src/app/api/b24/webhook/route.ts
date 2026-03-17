@@ -57,35 +57,42 @@ async function handleWebhook(req: NextRequest) {
 
       // 1. Try to send via Open Channel (Direct Chat)
       try {
-        console.log(`Open Channel Delivery attempt for Deal ${effectiveDealId}`);
-        const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
+        const cleanBaseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
+        console.log(`Open Channel Delivery attempt for Deal ${effectiveDealId} via ${cleanBaseUrl}`);
 
         // Get Lead/Contact info for better targeting
-        const dealRes = await fetch(`${baseUrl}/crm.deal.get.json?id=${effectiveDealId}`);
+        const dealUrl = `${cleanBaseUrl}/crm.deal.get.json?id=${effectiveDealId}`;
+        const dealRes = await fetch(dealUrl);
         const dealDataRaw = await dealRes.json();
         const contactId = dealDataRaw.result?.CONTACT_ID;
         const leadId = dealDataRaw.result?.LEAD_ID;
 
         const sendMessage = async (type: string, id: string) => {
           const entityType = type.toLowerCase();
-          console.log(`Sending direct message via imopenlines.crm.message.add to ${entityType} ${id}...`);
+          console.log(`Attempting message to ${entityType} ${id}...`);
           try {
-            // 1. First get the Chat ID linked to the entity (lead or deal)
-            const chatUrl = `${baseUrl}/imopenlines.crm.chat.get.json?CRM_ENTITY_TYPE=${entityType}&CRM_ENTITY=${id}&ACTIVE_ONLY=N`;
+            // 1. First get the Chat ID
+            const chatUrl = `${cleanBaseUrl}/imopenlines.crm.chat.get.json?CRM_ENTITY_TYPE=${entityType}&CRM_ENTITY=${id}&ACTIVE_ONLY=N`;
+            console.log(`Chat lookup URL: ${chatUrl}`);
             const chatRes = await fetch(chatUrl);
             const chatData = await chatRes.json();
-            console.log(`Chat lookup for ${entityType} ${id}:`, JSON.stringify(chatData));
+            console.log(`Chat lookup result for ${entityType} ${id}:`, JSON.stringify(chatData));
+            
+            // Extract numerical CHAT_ID from response
+            let chatId = null;
+            if (Array.isArray(chatData.result)) {
+              chatId = chatData.result[0]?.CHAT_ID || chatData.result[0];
+            } else {
+              chatId = chatData.result?.CHAT_ID || chatData.result;
+            }
 
-            // Result is an array of objects like [{"CHAT_ID": "178513", ...}]
-            let chatIdRaw = chatData.result;
-            const chatId = Array.isArray(chatIdRaw) 
-              ? (chatIdRaw[0]?.CHAT_ID || chatIdRaw[0]) 
-              : (chatIdRaw?.CHAT_ID || chatIdRaw);
-              
-            if (!chatId) return false;
+            if (!chatId) {
+              console.log(`No chat found for ${entityType} ${id}`);
+              return false;
+            }
 
             // 2. Use the webhook owner ID as USER_ID
-            const webhookUserId = baseUrl.match(/\/rest\/(\d+)\//)?.[1] || "1";
+            const webhookUserId = cleanBaseUrl.match(/\/rest\/(\d+)\//)?.[1] || "1";
 
             const payload = {
               CRM_ENTITY_TYPE: entityType,
@@ -95,15 +102,17 @@ async function handleWebhook(req: NextRequest) {
               MESSAGE: message
             };
             
-            const res = await fetch(`${baseUrl}/imopenlines.crm.message.add.json`, {
+            console.log(`Sending message to Chat ${chatId} (Entity: ${entityType} ${id})...`);
+            const res = await fetch(`${cleanBaseUrl}/imopenlines.crm.message.add.json`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload)
             });
             const data = await res.json();
-            console.log(`Message Result for ${entityType} ${id}:`, JSON.stringify(data));
+            console.log(`Message delivery result:`, JSON.stringify(data));
             return !!data.result;
           } catch (e) {
+            console.error(`Error in sendMessage for ${entityType} ${id}:`, e);
             return false;
           }
         };
@@ -116,10 +125,10 @@ async function handleWebhook(req: NextRequest) {
         if (sent) {
           console.log("SUCCESS: Message delivered to Open Channel.");
         } else {
-          console.log("No active Open Channel session could be targeted via available methods.");
+          console.log("No active Open Channel session could be targeted.");
         }
       } catch (ocError) {
-        console.error("Error in Open Channel delivery logic:", ocError);
+        console.error("FATAL: Open Channel block error:", ocError);
       }
 
       // 2. Log to Deal Timeline (Standard Fallback)
