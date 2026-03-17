@@ -42,7 +42,7 @@ async function handleWebhook(req: NextRequest) {
   // Outbound notification to Bitrix24
   try {
     const settings = await prisma.settings.findMany({
-      where: { key: { in: ["b24_webhook_url", "b24_message_template"] } }
+      where: { key: { in: ["b24_webhook_url", "b24_message_template", "b24_link_field"] } }
     });
     
     const settingsMap = settings.reduce((acc: Record<string, string>, curr: any) => {
@@ -50,18 +50,48 @@ async function handleWebhook(req: NextRequest) {
       return acc;
     }, {});
 
-    console.log("Integration Settings Found:", !!settingsMap.b24_webhook_url);
-
     if (settingsMap.b24_webhook_url) {
       const template = settingsMap.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}";
       const message = template.replace("{surveyUrl}", surveyUrl);
-
       const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
-      
-      // 1. Log to Deal Timeline
+
+      // 1. Try to send via Open Channel (Direct Chat)
+      try {
+        console.log(`Checking for active Open Channel session for Deal ${effectiveDealId}`);
+        // First, get deal data to find if there's a chat ID or contact
+        const dealUrl = `${baseUrl}/crm.deal.get?id=${effectiveDealId}`;
+        const dealRes = await fetch(dealUrl);
+        const dealData = await dealRes.json();
+        
+        // Find session in Open Channels
+        const sessionUrl = `${baseUrl}/imopenlines.session.list?filter[CRM_ENTITY_TYPE]=DEAL&filter[CRM_ENTITY_ID]=${effectiveDealId}&order[ID]=DESC&limit=1`;
+        const sessionRes = await fetch(sessionUrl);
+        const sessionData = await sessionRes.json();
+
+        if (sessionData.result && sessionData.result.length > 0) {
+          const sessionId = sessionData.result[0].ID;
+          console.log(`Found active Open Channel session: ${sessionId}`);
+          
+          const chatMsgUrl = `${baseUrl}/imopenlines.operator.message.add`;
+          const chatMsgRes = await fetch(chatMsgUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              SESSION_ID: sessionId,
+              MESSAGE: message
+            })
+          });
+          const chatMsgData = await chatMsgRes.json();
+          console.log("Open Channel Message Status:", chatMsgRes.status, chatMsgData);
+        } else {
+          console.log("No active Open Channel session found for this deal.");
+        }
+      } catch (ocError) {
+        console.error("Error attempting Open Channel delivery:", ocError);
+      }
+
+      // 2. Log to Deal Timeline (Standard Fallback)
       const timelineUrl = baseUrl + "/crm.timeline.comment.add";
-      console.log(`Sending timeline comment to B24: ${timelineUrl}`);
-      
       await fetch(timelineUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -74,12 +104,10 @@ async function handleWebhook(req: NextRequest) {
         })
       });
 
-      // 2. Update the custom field for automated delivery (SMS/WhatsApp robots)
-      const linkField = settingsMap.b24_link_field || "UF_CRM_1773746121"; // User provided ID
+      // 3. Update the custom field for automated delivery (SMS/WhatsApp robots)
+      const linkField = settingsMap.b24_link_field || "UF_CRM_1773746121";
       const updateUrl = baseUrl + "/crm.deal.update";
-      console.log(`Updating deal field ${linkField} at: ${updateUrl}`);
-
-      const updateResponse = await fetch(updateUrl, {
+      await fetch(updateUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,9 +117,6 @@ async function handleWebhook(req: NextRequest) {
           }
         })
       });
-
-      const updateData = await updateResponse.json();
-      console.log("B24 Deal Update Status:", updateResponse.status, updateData);
     } else {
       console.warn("b24_webhook_url is NOT configured in settings.");
     }
