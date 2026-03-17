@@ -57,62 +57,47 @@ async function handleWebhook(req: NextRequest) {
 
       // 1. Try to send via Open Channel (Direct Chat)
       try {
-        console.log(`Deep Search for Open Channel: Deal ${effectiveDealId}`);
+        console.log(`Open Channel Delivery attempt for Deal ${effectiveDealId}`);
         const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
 
-        // DIAGNOSTIC: Log exact IM methods
-        const methodsRes = await fetch(`${baseUrl}/methods.json`);
-        const methodsData = await methodsRes.json();
-        const imMethods = methodsData.result?.filter((m: string) => m.startsWith("imopenlines."));
-        console.log(`AVAILABLE IM METHODS: ${JSON.stringify(imMethods)}`);
-
-        // DIAGNOSTIC: Log full Deal object
+        // Get Lead/Contact info for better targeting
         const dealRes = await fetch(`${baseUrl}/crm.deal.get.json?id=${effectiveDealId}`);
         const dealDataRaw = await dealRes.json();
         const contactId = dealDataRaw.result?.CONTACT_ID;
         const leadId = dealDataRaw.result?.LEAD_ID;
-        console.log(`DEAL ENTITIES: Contact=${contactId}, Lead=${leadId}`);
 
-        let sessionId = null;
-
-        const tryGetSession = async (type: string, id: string) => {
-          console.log(`Attempting to find session for ${type} ${id}...`);
+        const sendMessage = async (type: string, id: string) => {
+          console.log(`Sending direct message via imopenlines.crm.message.add to ${type} ${id}...`);
           try {
-            const res = await fetch(`${baseUrl}/imopenlines.crm.session.get.json?CRM_ENTITY_TYPE=${type}&CRM_ENTITY_ID=${id}`);
+            const res = await fetch(`${baseUrl}/imopenlines.crm.message.add.json`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                CRM_ENTITY_TYPE: type,
+                CRM_ENTITY_ID: id,
+                MESSAGE: message
+              })
+            });
             const data = await res.json();
-            if (data.result?.ID) return data.result.ID;
-            
-            // Fallback to list
-            const listRes = await fetch(`${baseUrl}/imopenlines.session.list.json?filter[CRM_ENTITY_TYPE]=${type}&filter[CRM_ENTITY_ID]=${id}&order[ID]=DESC&limit=1`);
-            const listData = await listRes.json();
-            return listData.result?.[0]?.ID;
+            console.log(`Result for ${type} ${id}:`, JSON.stringify(data));
+            return !!data.result;
           } catch (e) {
-            return null;
+            return false;
           }
         };
 
-        // Execution order: Deal -> Contact -> Lead
-        sessionId = await tryGetSession("DEAL", effectiveDealId);
-        if (!sessionId && contactId) sessionId = await tryGetSession("CONTACT", contactId);
-        if (!sessionId && leadId) sessionId = await tryGetSession("LEAD", leadId);
+        // Try Deal first, then Lead, then Contact
+        let sent = await sendMessage("DEAL", effectiveDealId);
+        if (!sent && leadId) sent = await sendMessage("LEAD", leadId);
+        if (!sent && contactId) sent = await sendMessage("CONTACT", contactId);
 
-        if (sessionId) {
-          console.log(`SUCCESS: Found session ID ${sessionId}. Sending message...`);
-          const chatMsgRes = await fetch(`${baseUrl}/imopenlines.operator.message.add.json`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              SESSION_ID: sessionId,
-              MESSAGE: message
-            })
-          });
-          const chatMsgData = await chatMsgRes.json();
-          console.log("Message Add Response:", JSON.stringify(chatMsgData));
+        if (sent) {
+          console.log("SUCCESS: Message delivered to Open Channel.");
         } else {
-          console.error("No Open Channel session found after deep search (Deal/Contact/Lead).");
+          console.log("No active Open Channel session could be targeted via available methods.");
         }
       } catch (ocError) {
-        console.error("Error in diagnostic OC logic:", ocError);
+        console.error("Error in Open Channel delivery logic:", ocError);
       }
 
       // 2. Log to Deal Timeline (Standard Fallback)
