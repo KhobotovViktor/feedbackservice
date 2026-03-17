@@ -27,7 +27,15 @@ async function handleWebhook(req: NextRequest) {
   }
 
   const token = await createSurveyToken(effectiveClientId, effectiveDealId);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  
+  // Get base URL from env or request headers
+  let appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl || appUrl.includes("localhost")) {
+    const host = req.headers.get("host");
+    const protocol = host?.includes("localhost") ? "http" : "https";
+    appUrl = `${protocol}://${host}`;
+  }
+  
   const surveyUrl = `${appUrl}/survey/${token}`;
   console.log(`Generated Survey URL: ${surveyUrl}`);
 
@@ -49,7 +57,13 @@ async function handleWebhook(req: NextRequest) {
       const message = template.replace("{surveyUrl}", surveyUrl);
 
       // Log to Deal Timeline
-      const timelineUrl = settingsMap.b24_webhook_url.replace(/\/$/, "") + "/crm.timeline.item.add";
+      // Robust URL cleaning: remove trailing slashes AND accidental method names like profile.json
+      let baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "");
+      if (baseUrl.endsWith("/profile.json") || baseUrl.endsWith("/profile")) {
+        baseUrl = baseUrl.replace(/\/(profile\.json|profile)$/, "");
+      }
+      
+      const timelineUrl = baseUrl.replace(/\/$/, "") + "/crm.timeline.item.add";
       console.log(`Sending outbound to B24: ${timelineUrl}`);
       
       const response = await fetch(timelineUrl, {
