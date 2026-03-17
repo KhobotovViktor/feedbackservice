@@ -55,6 +55,14 @@ async function handleWebhook(req: NextRequest) {
       const message = template.replace("{surveyUrl}", surveyUrl);
       const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
 
+      // Diagnostic: List available methods
+      try {
+        const methodsRes = await fetch(`${baseUrl}/methods.json`);
+        const methodsData = await methodsRes.json();
+        const imMethods = (methodsData.result || []).filter((m: string) => m.startsWith("im"));
+        console.log("AVAILABLE IM METHODS:", JSON.stringify(imMethods));
+      } catch (e) {}
+
       // 1. Try to send via Open Channel (Direct Chat)
       try {
         const cleanBaseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
@@ -95,7 +103,6 @@ async function handleWebhook(req: NextRequest) {
               const webhookUserId = cleanBaseUrl.match(/\/rest\/(\d+)\//)?.[1] || "1";
               
               // Try Method 1: imopenlines.message.add (Direct by Chat ID)
-              // This is often more reliable than the CRM version
               console.log(`Attempting direct message (imopenlines.message.add) to Chat ${chatId}...`);
               const directPayload = {
                 CHAT_ID: parseInt(chatId),
@@ -129,6 +136,22 @@ async function handleWebhook(req: NextRequest) {
               const crmData = await crmRes.json();
               console.log(`CRM Method Result:`, JSON.stringify(crmData));
               if (crmData.result) return true;
+
+              // Try Method 3: im.message.add (Common IM Method)
+              console.log(`Attempting IM message (im.message.add) to Chat ${chatId}...`);
+              const imPayload = {
+                DIALOG_ID: `chat${chatId}`,
+                MESSAGE: message
+              };
+              
+              const imRes = await fetch(`${cleanBaseUrl}/im.message.add.json`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(imPayload)
+              });
+              const imData = await imRes.json();
+              console.log(`IM Method Result:`, JSON.stringify(imData));
+              if (imData.result) return true;
             }
           } catch (e) {
             console.error(`Error in sendMessage logic:`, e);
