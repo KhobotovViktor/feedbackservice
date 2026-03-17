@@ -60,39 +60,45 @@ async function handleWebhook(req: NextRequest) {
         console.log(`Deep Search for Open Channel: Deal ${effectiveDealId}`);
         const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
 
-        // DIAGNOSTIC: Check available methods
-        const methodsRes = await fetch(`${baseUrl}/methods`);
+        // DIAGNOSTIC: Log exact IM methods
+        const methodsRes = await fetch(`${baseUrl}/methods.json`);
         const methodsData = await methodsRes.json();
-        const hasImOpenlines = methodsData.result?.some((m: string) => m.startsWith("imopenlines."));
-        console.log(`B24 Webhook Permissions: hasImOpenlines=${hasImOpenlines}`);
-        if (!hasImOpenlines) {
-          console.warn("WARNING: imopenlines methods NOT listed in available methods for this webhook.");
-        }
+        const imMethods = methodsData.result?.filter((m: string) => m.startsWith("imopenlines."));
+        console.log(`AVAILABLE IM METHODS: ${JSON.stringify(imMethods)}`);
 
         // DIAGNOSTIC: Log full Deal object
-        const dealRes = await fetch(`${baseUrl}/crm.deal.get?id=${effectiveDealId}`);
+        const dealRes = await fetch(`${baseUrl}/crm.deal.get.json?id=${effectiveDealId}`);
         const dealDataRaw = await dealRes.json();
-        console.log("FULL DEAL DATA:", JSON.stringify(dealDataRaw));
-
         const contactId = dealDataRaw.result?.CONTACT_ID;
+        const leadId = dealDataRaw.result?.LEAD_ID;
+        console.log(`DEAL ENTITIES: Contact=${contactId}, Lead=${leadId}`);
+
         let sessionId = null;
 
-        if (hasImOpenlines) {
-          // Attempt using standard OC getter
-          const sessionRes = await fetch(`${baseUrl}/imopenlines.crm.session.get?CRM_ENTITY_TYPE=DEAL&CRM_ENTITY_ID=${effectiveDealId}`);
-          const sessionData = await sessionRes.json();
-          sessionId = sessionData.result?.ID;
-
-          if (!sessionId && contactId) {
-            const contactSessionRes = await fetch(`${baseUrl}/imopenlines.crm.session.get?CRM_ENTITY_TYPE=CONTACT&CRM_ENTITY_ID=${contactId}`);
-            const contactSessionData = await contactSessionRes.json();
-            sessionId = contactSessionData.result?.ID;
+        const tryGetSession = async (type: string, id: string) => {
+          console.log(`Attempting to find session for ${type} ${id}...`);
+          try {
+            const res = await fetch(`${baseUrl}/imopenlines.crm.session.get.json?CRM_ENTITY_TYPE=${type}&CRM_ENTITY_ID=${id}`);
+            const data = await res.json();
+            if (data.result?.ID) return data.result.ID;
+            
+            // Fallback to list
+            const listRes = await fetch(`${baseUrl}/imopenlines.session.list.json?filter[CRM_ENTITY_TYPE]=${type}&filter[CRM_ENTITY_ID]=${id}&order[ID]=DESC&limit=1`);
+            const listData = await listRes.json();
+            return listData.result?.[0]?.ID;
+          } catch (e) {
+            return null;
           }
-        }
+        };
+
+        // Execution order: Deal -> Contact -> Lead
+        sessionId = await tryGetSession("DEAL", effectiveDealId);
+        if (!sessionId && contactId) sessionId = await tryGetSession("CONTACT", contactId);
+        if (!sessionId && leadId) sessionId = await tryGetSession("LEAD", leadId);
 
         if (sessionId) {
           console.log(`SUCCESS: Found session ID ${sessionId}. Sending message...`);
-          const chatMsgRes = await fetch(`${baseUrl}/imopenlines.operator.message.add`, {
+          const chatMsgRes = await fetch(`${baseUrl}/imopenlines.operator.message.add.json`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -103,7 +109,7 @@ async function handleWebhook(req: NextRequest) {
           const chatMsgData = await chatMsgRes.json();
           console.log("Message Add Response:", JSON.stringify(chatMsgData));
         } else {
-          console.error("No Open Channel session found or methods restricted.");
+          console.error("No Open Channel session found after deep search (Deal/Contact/Lead).");
         }
       } catch (ocError) {
         console.error("Error in diagnostic OC logic:", ocError);
