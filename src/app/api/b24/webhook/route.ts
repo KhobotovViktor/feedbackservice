@@ -57,21 +57,34 @@ async function handleWebhook(req: NextRequest) {
 
       // 1. Try to send via Open Channel (Direct Chat)
       try {
-        console.log(`Checking for active Open Channel session for Deal ${effectiveDealId}`);
-        // First, get deal data to find if there's a chat ID or contact
-        const dealUrl = `${baseUrl}/crm.deal.get?id=${effectiveDealId}`;
-        const dealRes = await fetch(dealUrl);
-        const dealData = await dealRes.json();
-        
-        // Find session in Open Channels
-        const sessionUrl = `${baseUrl}/imopenlines.session.list?filter[CRM_ENTITY_TYPE]=DEAL&filter[CRM_ENTITY_ID]=${effectiveDealId}&order[ID]=DESC&limit=1`;
+        console.log(`Searching for active Open Channel session for Deal ${effectiveDealId}`);
+        const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
+
+        // Step A: Search by Deal ID directly
+        const sessionUrl = `${baseUrl}/imopenlines.session.list?filter[CRM_ENTITY_TYPE]=DEAL&filter[CRM_ENTITY_ID]=${effectiveDealId}&order[ID]=DESC&limit=5`;
         const sessionRes = await fetch(sessionUrl);
         const sessionData = await sessionRes.json();
+        
+        let sessionId = sessionData.result?.[0]?.ID;
 
-        if (sessionData.result && sessionData.result.length > 0) {
-          const sessionId = sessionData.result[0].ID;
+        // Step B: If not found, try common fallback: Search by Contact ID linked to the deal
+        if (!sessionId) {
+          console.log(`Session not found for Deal. Fetching contact info for Deal ${effectiveDealId}...`);
+          const dealRes = await fetch(`${baseUrl}/crm.deal.get?id=${effectiveDealId}`);
+          const dealData = await dealRes.json();
+          const contactId = dealData.result?.CONTACT_ID;
+
+          if (contactId) {
+            console.log(`Found Contact ID ${contactId}. Searching session for Contact...`);
+            const contactSessionUrl = `${baseUrl}/imopenlines.session.list?filter[CRM_ENTITY_TYPE]=CONTACT&filter[CRM_ENTITY_ID]=${contactId}&order[ID]=DESC&limit=1`;
+            const contactSessionRes = await fetch(contactSessionUrl);
+            const contactSessionData = await contactSessionRes.json();
+            sessionId = contactSessionData.result?.[0]?.ID;
+          }
+        }
+
+        if (sessionId) {
           console.log(`Found active Open Channel session: ${sessionId}`);
-          
           const chatMsgUrl = `${baseUrl}/imopenlines.operator.message.add`;
           const chatMsgRes = await fetch(chatMsgUrl, {
             method: "POST",
@@ -84,7 +97,7 @@ async function handleWebhook(req: NextRequest) {
           const chatMsgData = await chatMsgRes.json();
           console.log("Open Channel Message Status:", chatMsgRes.status, chatMsgData);
         } else {
-          console.log("No active Open Channel session found for this deal.");
+          console.log("No active Open Channel session found for this deal or contact.");
         }
       } catch (ocError) {
         console.error("Error attempting Open Channel delivery:", ocError);
