@@ -56,17 +56,13 @@ async function handleWebhook(req: NextRequest) {
       const template = settingsMap.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}";
       const message = template.replace("{surveyUrl}", surveyUrl);
 
-      // Log to Deal Timeline
-      // Robust URL cleaning: remove trailing slashes AND accidental method names like profile.json
-      let baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "");
-      if (baseUrl.endsWith("/profile.json") || baseUrl.endsWith("/profile")) {
-        baseUrl = baseUrl.replace(/\/(profile\.json|profile)$/, "");
-      }
+      const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
       
-      const timelineUrl = baseUrl.replace(/\/$/, "") + "/crm.timeline.comment.add";
-      console.log(`Sending outbound to B24: ${timelineUrl}`);
+      // 1. Log to Deal Timeline
+      const timelineUrl = baseUrl + "/crm.timeline.comment.add";
+      console.log(`Sending timeline comment to B24: ${timelineUrl}`);
       
-      const response = await fetch(timelineUrl, {
+      await fetch(timelineUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -77,9 +73,25 @@ async function handleWebhook(req: NextRequest) {
           }
         })
       });
-      
-      const resData = await response.json();
-      console.log("B24 Response Status:", response.status, resData);
+
+      // 2. Update the custom field for automated delivery (SMS/WhatsApp robots)
+      const linkField = settingsMap.b24_link_field || "UF_CRM_1773746121"; // User provided ID
+      const updateUrl = baseUrl + "/crm.deal.update";
+      console.log(`Updating deal field ${linkField} at: ${updateUrl}`);
+
+      const updateResponse = await fetch(updateUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: effectiveDealId,
+          fields: {
+            [linkField]: surveyUrl
+          }
+        })
+      });
+
+      const updateData = await updateResponse.json();
+      console.log("B24 Deal Update Status:", updateResponse.status, updateData);
     } else {
       console.warn("b24_webhook_url is NOT configured in settings.");
     }
