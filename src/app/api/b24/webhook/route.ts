@@ -73,8 +73,10 @@ async function handleWebhook(req: NextRequest) {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                CRM_ENTITY_TYPE: type,
-                CRM_ENTITY_ID: id,
+                // Try multiple common parameter names that B24 expects
+                ENTITY_TYPE: type,
+                ENTITY_ID: id,
+                CRM_ENTITY: `${type}|${id}`, // Some versions expect this combined format
                 MESSAGE: message
               })
             });
