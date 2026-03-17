@@ -24,7 +24,7 @@ export default async function ResultsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {responses.map((res: any) => (
+            {responses.map((res) => (
               <tr key={res.id} className="hover:bg-slate-50 transition-colors">
                 <td className="px-6 py-4 text-sm text-slate-500">
                   {new Date(res.createdAt).toLocaleDateString()} {new Date(res.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
       where: { key: { in: ["b24_webhook_url", "b24_message_template"] } }
     });
     
-    const settingsMap = settings.reduce((acc: Record<string, string>, curr: { key: string, value: string }) => {
+    const settingsMap = settings.reduce<Record<string, string>>((acc, curr) => {
       acc[curr.key] = curr.value;
       return acc;
     }, {});
