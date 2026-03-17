@@ -67,15 +67,26 @@ async function handleWebhook(req: NextRequest) {
         const leadId = dealDataRaw.result?.LEAD_ID;
 
         const sendMessage = async (type: string, id: string) => {
-          console.log(`Sending direct message via imopenlines.crm.message.add to ${type} ${id}...`);
+          const entityType = type.toLowerCase();
+          console.log(`Sending direct message via imopenlines.crm.message.add to ${entityType} ${id}...`);
           try {
+            // 1. First get the Chat ID linked to the entity (LEAD or DEAL)
+            const chatUrl = `${baseUrl}/imopenlines.crm.chat.get.json?CRM_ENTITY_TYPE=${entityType}&CRM_ENTITY_ID=${id}`;
+            const chatRes = await fetch(chatUrl);
+            const chatData = await chatRes.json();
+            console.log(`Chat lookup for ${entityType} ${id}:`, JSON.stringify(chatData));
+            
+            const chatId = chatData.result;
+            if (!chatId) return false;
+
+            // 2. Use the webhook owner ID as USER_ID
+            const webhookUserId = baseUrl.match(/\/rest\/(\d+)\//)?.[1] || "1";
+
             const payload = {
-              // Bitrix24 is inconsistent, so we provide every possible variation of the entity ID/Type
-              CRM_ENTITY_TYPE: type,
-              CRM_ENTITY_ID: id,
-              CRM_ENTITY: `${type}|${id}`,
-              ENTITY_TYPE: type,
-              ENTITY_ID: id,
+              CRM_ENTITY_TYPE: entityType,
+              CRM_ENTITY: id,
+              CHAT_ID: chatId,
+              USER_ID: webhookUserId,
               MESSAGE: message
             };
             
@@ -85,7 +96,7 @@ async function handleWebhook(req: NextRequest) {
               body: JSON.stringify(payload)
             });
             const data = await res.json();
-            console.log(`Result for ${type} ${id}:`, JSON.stringify(data));
+            console.log(`Message Result for ${entityType} ${id}:`, JSON.stringify(data));
             return !!data.result;
           } catch (e) {
             return false;
