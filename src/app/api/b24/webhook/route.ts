@@ -67,51 +67,71 @@ async function handleWebhook(req: NextRequest) {
         const dealContactId = dealDataRaw.result?.CONTACT_ID;
         const dealLeadId = dealDataRaw.result?.LEAD_ID;
 
-        // Also fetch Lead details to see if it has its own contact
+        // Also fetch Lead details
         let leadContactId = null;
         if (dealLeadId) {
-          const leadRes = await fetch(`${cleanBaseUrl}/crm.lead.get.json?id=${dealLeadId}`);
-          const leadData = await leadRes.json();
-          leadContactId = leadData.result?.CONTACT_ID;
+          try {
+            const leadRes = await fetch(`${cleanBaseUrl}/crm.lead.get.json?id=${dealLeadId}`);
+            const leadData = await leadRes.json();
+            leadContactId = leadData.result?.CONTACT_ID;
+          } catch (e) {}
         }
 
         const sendMessage = async (type: string, id: string) => {
-          const typesToTry = [type.toLowerCase(), type.toUpperCase()];
-          for (const entityType of typesToTry) {
-            console.log(`Attempting message to ${entityType} ${id}...`);
-            try {
-              const chatUrl = `${cleanBaseUrl}/imopenlines.crm.chat.get.json?CRM_ENTITY_TYPE=${entityType}&CRM_ENTITY=${id}&ACTIVE_ONLY=N`;
-              const chatRes = await fetch(chatUrl);
-              const chatData = await chatRes.json();
-              
-              let chats = chatData.result;
-              if (!Array.isArray(chats)) chats = chats ? [chats] : [];
-              
-              for (const chat of chats) {
-                const chatId = chat.CHAT_ID || chat;
-                if (!chatId) continue;
+          const entityType = type.toLowerCase();
+          console.log(`Searching for chat bound to ${entityType} ${id}...`);
+          try {
+            const chatUrl = `${cleanBaseUrl}/imopenlines.crm.chat.get.json?CRM_ENTITY_TYPE=${entityType}&CRM_ENTITY=${id}&ACTIVE_ONLY=N`;
+            const chatRes = await fetch(chatUrl);
+            const chatData = await chatRes.json();
+            
+            let chats = chatData.result;
+            if (!Array.isArray(chats)) chats = chats ? [chats] : [];
+            
+            for (const chat of chats) {
+              const chatId = chat.CHAT_ID || chat;
+              if (!chatId) continue;
 
-                const webhookUserId = cleanBaseUrl.match(/\/rest\/(\d+)\//)?.[1] || "1";
-                const payload = {
-                  CRM_ENTITY_TYPE: entityType,
-                  CRM_ENTITY: parseInt(id),
-                  CHAT_ID: parseInt(chatId),
-                  USER_ID: parseInt(webhookUserId),
-                  MESSAGE: message
-                };
-                
-                const res = await fetch(`${cleanBaseUrl}/imopenlines.crm.message.add.json`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                console.log(`Result for ${entityType} ${id} (Chat ${chatId}):`, JSON.stringify(data));
-                if (data.result) return true;
-              }
-            } catch (e) {
-              console.error(`Error in sendMessage step:`, e);
+              const webhookUserId = cleanBaseUrl.match(/\/rest\/(\d+)\//)?.[1] || "1";
+              
+              // Try Method 1: imopenlines.message.add (Direct by Chat ID)
+              // This is often more reliable than the CRM version
+              console.log(`Attempting direct message (imopenlines.message.add) to Chat ${chatId}...`);
+              const directPayload = {
+                CHAT_ID: parseInt(chatId),
+                MESSAGE: message
+              };
+              
+              const directRes = await fetch(`${cleanBaseUrl}/imopenlines.message.add.json`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(directPayload)
+              });
+              const directData = await directRes.json();
+              console.log(`Direct Method Result:`, JSON.stringify(directData));
+              if (directData.result) return true;
+
+              // Try Method 2: imopenlines.crm.message.add (CRM Bound)
+              console.log(`Attempting CRM-bound message (imopenlines.crm.message.add) for ${entityType} ${id}...`);
+              const crmPayload = {
+                CRM_ENTITY_TYPE: entityType,
+                CRM_ENTITY: parseInt(id),
+                CHAT_ID: parseInt(chatId),
+                USER_ID: parseInt(webhookUserId),
+                MESSAGE: message
+              };
+              
+              const crmRes = await fetch(`${cleanBaseUrl}/imopenlines.crm.message.add.json`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(crmPayload)
+              });
+              const crmData = await crmRes.json();
+              console.log(`CRM Method Result:`, JSON.stringify(crmData));
+              if (crmData.result) return true;
             }
+          } catch (e) {
+            console.error(`Error in sendMessage logic:`, e);
           }
           return false;
         };
