@@ -7,6 +7,10 @@ export default function IntegrationPage() {
   const [settings, setSettings] = useState({
     b24_webhook_url: "",
     b24_message_template: "Оцените качество обслуживания по ссылке: {surveyUrl}",
+    b24_field_quality: "",
+    b24_field_support: "",
+    b24_field_average: "",
+    b24_field_comment: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -18,12 +22,14 @@ export default function IntegrationPage() {
     fetch("/api/settings")
       .then((res) => res.json())
       .then((data) => {
-        if (data.b24_webhook_url || data.b24_message_template) {
-          setSettings({
-            b24_webhook_url: data.b24_webhook_url || "",
-            b24_message_template: data.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}",
-          });
-        }
+        setSettings({
+          b24_webhook_url: data.b24_webhook_url || "",
+          b24_message_template: data.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}",
+          b24_field_quality: data.b24_field_quality || "",
+          b24_field_support: data.b24_field_support || "",
+          b24_field_average: data.b24_field_average || "",
+          b24_field_comment: data.b24_field_comment || "",
+        });
         setLoading(false);
       });
   }, []);
@@ -95,6 +101,67 @@ export default function IntegrationPage() {
                 />
                 <p className="text-xs text-slate-400 mt-2">
                   Используйте тег <code className="bg-slate-100 px-1 rounded">{"{surveyUrl}"}</code> для вставки ссылки на опрос.
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100">
+                <div className="flex items-center gap-2 text-indigo-600 mb-4">
+                  <Terminal className="w-5 h-5" />
+                  <h3 className="font-bold">Маппинг полей CRM (ID полей UF_...)</h3>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Качество обслуживания
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="UF_CRM_..."
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+                      value={settings.b24_field_quality}
+                      onChange={(e) => setSettings({ ...settings, b24_field_quality: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Работа сотрудника
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="UF_CRM_..."
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+                      value={settings.b24_field_support}
+                      onChange={(e) => setSettings({ ...settings, b24_field_support: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Средняя оценка
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="UF_CRM_..."
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+                      value={settings.b24_field_average}
+                      onChange={(e) => setSettings({ ...settings, b24_field_average: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Комментарий
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="UF_CRM_..."
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+                      value={settings.b24_field_comment}
+                      onChange={(e) => setSettings({ ...settings, b24_field_comment: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2">
+                  Укажите ID пользовательских полей из Битрикс24 (Настройки → Настройки CRM → Настройки форм и отчетов → Пользовательские поля).
                 </p>
               </div>
 

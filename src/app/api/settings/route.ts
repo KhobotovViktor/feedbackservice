@@ -19,28 +19,36 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { b24_webhook_url, b24_message_template } = body;
+    const { 
+      b24_webhook_url, 
+      b24_message_template,
+      b24_field_quality,
+      b24_field_support,
+      b24_field_average,
+      b24_field_comment
+    } = body;
 
     const updates = [];
 
-    if (b24_webhook_url !== undefined) {
-      updates.push(
-        prisma.settings.upsert({
-          where: { key: "b24_webhook_url" },
-          update: { value: b24_webhook_url },
-          create: { key: "b24_webhook_url", value: b24_webhook_url },
-        })
-      );
-    }
+    const keys = [
+      "b24_webhook_url", 
+      "b24_message_template",
+      "b24_field_quality",
+      "b24_field_support",
+      "b24_field_average",
+      "b24_field_comment"
+    ];
 
-    if (b24_message_template !== undefined) {
-      updates.push(
-        prisma.settings.upsert({
-          where: { key: "b24_message_template" },
-          update: { value: b24_message_template },
-          create: { key: "b24_message_template", value: b24_message_template },
-        })
-      );
+    for (const key of keys) {
+      if (body[key] !== undefined) {
+        updates.push(
+          prisma.settings.upsert({
+            where: { key },
+            update: { value: String(body[key]) },
+            create: { key, value: String(body[key]) },
+          })
+        );
+      }
     }
 
     await Promise.all(updates);

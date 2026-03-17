@@ -36,8 +36,25 @@ async function handleWebhook(req: NextRequest) {
     appUrl = `${protocol}://${host}`;
   }
   
-  const surveyUrl = `${appUrl}/survey/${token}`;
-  console.log(`Generated Survey URL: ${surveyUrl}`);
+  const fullSurveyUrl = `${appUrl}/survey/${token}`;
+  console.log(`Generated Full Survey URL: ${fullSurveyUrl}`);
+
+  // Generate Short Link
+  let surveyUrl = fullSurveyUrl;
+  try {
+    const crypto = require("crypto");
+    const code = crypto.randomBytes(4).toString("hex"); // 8 chars
+    await prisma.shortLink.create({
+      data: {
+        code,
+        url: fullSurveyUrl
+      }
+    });
+    surveyUrl = `${appUrl}/s/${code}`;
+    console.log(`Generated Short Survey URL: ${surveyUrl}`);
+  } catch (shortError) {
+    console.error("Shortening failed, using full URL:", shortError);
+  }
 
   // Outbound notification to Bitrix24
   try {
@@ -55,13 +72,6 @@ async function handleWebhook(req: NextRequest) {
       const message = template.replace("{surveyUrl}", surveyUrl);
       const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
 
-      // Diagnostic: List available methods
-      try {
-        const methodsRes = await fetch(`${baseUrl}/methods.json`);
-        const methodsData = await methodsRes.json();
-        const imMethods = (methodsData.result || []).filter((m: string) => m.startsWith("im"));
-        console.log("AVAILABLE IM METHODS:", JSON.stringify(imMethods));
-      } catch (e) {}
 
       // 1. Try to send via Open Channel (Direct Chat)
       try {
@@ -102,24 +112,24 @@ async function handleWebhook(req: NextRequest) {
 
               const webhookUserId = cleanBaseUrl.match(/\/rest\/(\d+)\//)?.[1] || "1";
               
-              // Try Method 1: imopenlines.message.add (Direct by Chat ID)
-              console.log(`Attempting direct message (imopenlines.message.add) to Chat ${chatId}...`);
-              const directPayload = {
-                CHAT_ID: parseInt(chatId),
+              // Method 1: im.message.add (Winning Method - Most reliable for Open Lines)
+              console.log(`Attempting message (im.message.add) to Chat ${chatId}...`);
+              const imPayload = {
+                DIALOG_ID: `chat${chatId}`,
                 MESSAGE: message
               };
               
-              const directRes = await fetch(`${cleanBaseUrl}/imopenlines.message.add.json`, {
+              const imRes = await fetch(`${cleanBaseUrl}/im.message.add.json`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(directPayload)
+                body: JSON.stringify(imPayload)
               });
-              const directData = await directRes.json();
-              console.log(`Direct Method Result:`, JSON.stringify(directData));
-              if (directData.result) return true;
+              const imData = await imRes.json();
+              console.log(`IM Result:`, JSON.stringify(imData));
+              if (imData.result) return true;
 
-              // Try Method 2: imopenlines.crm.message.add (CRM Bound)
-              console.log(`Attempting CRM-bound message (imopenlines.crm.message.add) for ${entityType} ${id}...`);
+              // Method 2: imopenlines.crm.message.add (Original CRM Fallback)
+              console.log(`Attempting CRM fallback (imopenlines.crm.message.add) for ${entityType} ${id}...`);
               const crmPayload = {
                 CRM_ENTITY_TYPE: entityType,
                 CRM_ENTITY: parseInt(id),
@@ -134,24 +144,7 @@ async function handleWebhook(req: NextRequest) {
                 body: JSON.stringify(crmPayload)
               });
               const crmData = await crmRes.json();
-              console.log(`CRM Method Result:`, JSON.stringify(crmData));
               if (crmData.result) return true;
-
-              // Try Method 3: im.message.add (Common IM Method)
-              console.log(`Attempting IM message (im.message.add) to Chat ${chatId}...`);
-              const imPayload = {
-                DIALOG_ID: `chat${chatId}`,
-                MESSAGE: message
-              };
-              
-              const imRes = await fetch(`${cleanBaseUrl}/im.message.add.json`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(imPayload)
-              });
-              const imData = await imRes.json();
-              console.log(`IM Method Result:`, JSON.stringify(imData));
-              if (imData.result) return true;
             }
           } catch (e) {
             console.error(`Error in sendMessage logic:`, e);

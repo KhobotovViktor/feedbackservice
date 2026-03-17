@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Feedback Service
 
-## Getting Started
+Профессиональный сервис для сбора обратной связи от клиентов, интегрированный с Битрикс24 CRM.
 
-First, run the development server:
+## Стек технологий
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Фреймворк**: Next.js (App Router)
+- **Стилизация**: Tailwind CSS + Framer Motion
+- **База данных**: PostgreSQL (Supabase) + Prisma ORM
+- **Деплой**: Vercel
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Быстрый старт (Локально)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Установите зависимости: `npm install`
+2. Настройте `.env` (используйте строки подключения из Supabase)
+3. Синхронизируйте базу: `npx prisma db push`
+4. Запустите: `npm run dev`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Деплой на Vercel
 
-## Learn More
+1. Создайте новый репозиторий на GitHub и загрузите туда содержимое папки `feedback-service`.
+2. В Vercel нажмите **Add New Project** и выберите ваш репозиторий.
+3. В разделе **Environment Variables** добавьте следующие переменные:
+   - `DATABASE_URL`: Строка подключения Supabase (Transaction mode, порт 6543)
+   - `DIRECT_URL`: Строка подключения Supabase (Session mode, порт 5432)
+   - `NEXT_PUBLIC_APP_URL`: Публичный адрес вашего проекта (после деплоя)
+   - `JWT_SECRET`: Любая секретная строка для подписи ссылок
+4. Нажмите **Deploy**.
+5. После завершения деплоя, не забудьте обновить `NEXT_PUBLIC_APP_URL` значением реального адреса вашего сайта.
 
-To learn more about Next.js, take a look at the following resources:
+## Интеграция с Битрикс24
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. В админ-панели сервиса (`/admin/integration`) укажите ваш **Входящий вебхук** из Битрикс24.
+2. В Битрикс24 настройте Робота на стадию "Завершено", используя URL вебхука нашего сервиса: `https://ваша-ссылка.vercel.app/api/b24/webhook?clientId={{ID}}&dealId={{DEAL_ID}}`
