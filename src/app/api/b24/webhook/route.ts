@@ -70,13 +70,15 @@ async function handleWebhook(req: NextRequest) {
           const entityType = type.toLowerCase();
           console.log(`Sending direct message via imopenlines.crm.message.add to ${entityType} ${id}...`);
           try {
-            // 1. First get the Chat ID linked to the entity (LEAD or DEAL)
-            const chatUrl = `${baseUrl}/imopenlines.crm.chat.get.json?CRM_ENTITY_TYPE=${entityType}&CRM_ENTITY_ID=${id}`;
+            // 1. First get the Chat ID linked to the entity (lead or deal)
+            // Documentation says CRM_ENTITY is the correct parameter name, not CRM_ENTITY_ID
+            const chatUrl = `${baseUrl}/imopenlines.crm.chat.get.json?CRM_ENTITY_TYPE=${entityType}&CRM_ENTITY=${id}&ACTIVE_ONLY=N`;
             const chatRes = await fetch(chatUrl);
             const chatData = await chatRes.json();
             console.log(`Chat lookup for ${entityType} ${id}:`, JSON.stringify(chatData));
             
-            const chatId = chatData.result;
+            // Result can be an array or a single ID depending on the portal version
+            const chatId = Array.isArray(chatData.result) ? chatData.result[0] : chatData.result;
             if (!chatId) return false;
 
             // 2. Use the webhook owner ID as USER_ID
