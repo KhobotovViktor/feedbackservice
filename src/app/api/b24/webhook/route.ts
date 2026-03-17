@@ -63,7 +63,7 @@ async function handleWebhook(req: NextRequest) {
         baseUrl = baseUrl.replace(/\/(profile\.json|profile)$/, "");
       }
       
-      const timelineUrl = baseUrl.replace(/\/$/, "") + "/crm.timeline.item.add";
+      const timelineUrl = baseUrl.replace(/\/$/, "") + "/crm.timeline.comment.add";
       console.log(`Sending outbound to B24: ${timelineUrl}`);
       
       const response = await fetch(timelineUrl, {
