@@ -28,6 +28,7 @@ export default function BranchesPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [saving, setSaving] = useState(false);
   const [newBranch, setNewBranch] = useState({
     name: "",
@@ -68,17 +69,35 @@ export default function BranchesPage() {
     }
   };
 
-  const handleAddBranch = async () => {
+  const handleEditClick = (branch: Branch) => {
+    setEditingBranch(branch);
+    setNewBranch({
+      name: branch.name,
+      city: branch.city || "",
+      yandexUrl: branch.yandexUrl || "",
+      dgisUrl: branch.dgisUrl || "",
+      googleUrl: branch.googleUrl || "",
+      externalId: branch.externalId || "",
+      templateId: branch.templateId || ""
+    });
+    setShowAdd(true);
+  };
+
+  const handleSaveBranch = async () => {
     if (!newBranch.name) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/branches", {
-        method: "POST",
+      const url = editingBranch ? `/api/branches/${editingBranch.id}` : "/api/branches";
+      const method = editingBranch ? "PATCH" : "POST";
+      
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newBranch),
       });
       if (res.ok) {
         setShowAdd(false);
+        setEditingBranch(null);
         setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", externalId: "", templateId: "" });
         fetchBranches();
       }
@@ -86,6 +105,20 @@ export default function BranchesPage() {
       console.error(err);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteBranch = async (id: string, name: string) => {
+    if (!confirm(`Вы уверены, что хотите удалить филиал "${name}"? Это удалит все связанные вопросы и отзывы.`)) return;
+    
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/branches/${id}`, { method: "DELETE" });
+      if (res.ok) fetchBranches();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -97,7 +130,11 @@ export default function BranchesPage() {
           <p className="text-slate-500 text-lg font-medium">Управление точками продаж и их настройками</p>
         </div>
         <button 
-          onClick={() => setShowAdd(true)}
+          onClick={() => {
+            setEditingBranch(null);
+            setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", externalId: "", templateId: "" });
+            setShowAdd(true);
+          }}
           className="flex items-center justify-center gap-2 px-8 py-4 premium-gradient text-white rounded-[1.5rem] font-bold shadow-xl shadow-indigo-500/20 hover:scale-[1.03] active:scale-[0.98] transition-all w-full sm:w-auto"
         >
           <Plus className="w-6 h-6" />
@@ -111,10 +148,12 @@ export default function BranchesPage() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="glass p-8 md:p-12 rounded-[3rem] border-white/60 shadow-2xl space-y-8 relative overflow-hidden"
+            className="glass p-8 md:p-12 rounded-[3.5rem] border-white/60 shadow-2xl space-y-8 relative overflow-hidden"
           >
             <div className="flex items-center justify-between relative z-10">
-              <h3 className="text-2xl font-black text-slate-900 tracking-tight">Новый филиал</h3>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                {editingBranch ? "Редактировать филиал" : "Новый филиал"}
+              </h3>
               <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><X className="w-8 h-8" /></button>
             </div>
             
@@ -183,7 +222,7 @@ export default function BranchesPage() {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Шаблон вопросов</label>
                 <select 
                   className="w-full px-5 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold appearance-none cursor-pointer"
-                  value={newBranch.templateId}
+                  value={newBranch.templateId || ""}
                   onChange={e => setNewBranch({...newBranch, templateId: e.target.value})}
                 >
                   <option value="">Без шаблона (свои вопросы)</option>
@@ -202,11 +241,11 @@ export default function BranchesPage() {
                 Отмена
               </button>
               <button 
-                onClick={handleAddBranch}
+                onClick={handleSaveBranch}
                 disabled={saving || !newBranch.name}
                 className="order-1 sm:order-2 px-10 py-4 premium-gradient text-white rounded-2xl font-black shadow-2xl shadow-indigo-500/20 disabled:opacity-50 flex items-center justify-center gap-3 text-sm"
               >
-                {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : "Сохранить филиал"}
+                {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : (editingBranch ? "Обновить филиал" : "Сохранить филиал")}
               </button>
             </div>
 
@@ -237,11 +276,19 @@ export default function BranchesPage() {
                 <div className="space-y-2 flex-1 min-w-0 pr-4">
                   <div className="flex items-center gap-3 flex-wrap">
                     <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter truncate leading-none">{branch.name}</h3>
-                    {branch.externalId && (
-                      <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-[10px] font-black rounded-lg uppercase tracking-widest border border-slate-200/50">
-                        {branch.externalId}
-                      </span>
-                    )}
+                    <div className="flex gap-2">
+                      {branch.externalId && (
+                        <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-[10px] font-black rounded-lg uppercase tracking-widest border border-slate-200/50">
+                          {branch.externalId}
+                        </span>
+                      )}
+                      <button 
+                        onClick={() => handleEditClick(branch)}
+                        className="p-1 px-2.5 bg-indigo-50 text-indigo-500 text-[10px] font-black rounded-lg uppercase tracking-widest border border-indigo-100/50 hover:bg-indigo-500 hover:text-white transition-all"
+                      >
+                        Редактировать
+                      </button>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 text-slate-500 font-bold text-sm">
                     <MapPin className="w-4 h-4 text-indigo-400" />
@@ -254,8 +301,16 @@ export default function BranchesPage() {
                     </div>
                   )}
                 </div>
-                <div className="w-14 h-14 premium-gradient text-white rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/20 group-hover:rotate-12 transition-transform duration-500 shrink-0">
-                  <Building2 className="w-7 h-7" />
+                <div className="flex flex-col items-end gap-3 shrink-0">
+                  <div className="w-14 h-14 premium-gradient text-white rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/20 group-hover:rotate-12 transition-transform duration-500">
+                    <Building2 className="w-7 h-7" />
+                  </div>
+                  <button 
+                    onClick={() => handleDeleteBranch(branch.id, branch.name)}
+                    className="p-3 bg-white/50 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all shadow-sm border border-rose-50/50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
@@ -288,10 +343,10 @@ export default function BranchesPage() {
                     Контроль QR
                   </button>
                   <div className="flex gap-3 shrink-0">
-                    <a href={branch.yandexUrl || "#"} target="_blank" className={cn("p-4 rounded-2xl flex items-center justify-center transition-all border", branch.yandexUrl ? "glass border-rose-100 text-rose-500 hover:bg-rose-50" : "bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed")} title="Яндекс.Карты">
+                    <a href={branch.yandexUrl || "#"} target={branch.yandexUrl ? "_blank" : undefined} className={cn("p-4 rounded-2xl flex items-center justify-center transition-all border", branch.yandexUrl ? "glass border-rose-100 text-rose-500 hover:bg-rose-50" : "bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed")} title="Яндекс.Карты">
                       <Search className="w-5 h-5" />
                     </a>
-                    <a href={branch.dgisUrl || "#"} target="_blank" className={cn("p-4 rounded-2xl flex items-center justify-center transition-all border", branch.dgisUrl ? "glass border-emerald-100 text-emerald-500 hover:bg-emerald-50" : "bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed")} title="2GIS">
+                    <a href={branch.dgisUrl || "#"} target={branch.dgisUrl ? "_blank" : undefined} className={cn("p-4 rounded-2xl flex items-center justify-center transition-all border", branch.dgisUrl ? "glass border-emerald-100 text-emerald-500 hover:bg-emerald-50" : "bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed")} title="2GIS">
                       <ExternalLink className="w-5 h-5" />
                     </a>
                   </div>

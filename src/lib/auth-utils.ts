@@ -12,6 +12,14 @@ export async function createSurveyToken(clientId: string, dealId: string, branch
   return token;
 }
 
+export async function createQRToken(branchId?: string | null) {
+  // Generic token for QR source
+  return await new SignJWT({ clientId: "QR_GUEST", dealId: "QR_GUEST", branchId })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .sign(JWT_SECRET);
+}
+
 export async function verifySurveyToken(token: string) {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);

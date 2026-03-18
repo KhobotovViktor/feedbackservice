@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Star, MessageSquare, Users, TrendingUp, QrCode, Eye, MousePointer2, AlertCircle, ArrowRight } from "lucide-react";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { cn } from "@/lib/utils";
 
 interface BentoCardProps {
   label: string;
@@ -55,40 +56,76 @@ export default async function AdminDashboard({
 
   const whereWithDate = Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
 
+  // Fetch Previous Period for Trends (if 30d is selected)
+  let prevDateFilter: any = {};
+  if (period === "30d") {
+    const startOfPrev30 = new Date();
+    startOfPrev30.setDate(startOfPrev30.getDate() - 60);
+    const endOfPrev30 = new Date();
+    endOfPrev30.setDate(endOfPrev30.getDate() - 30);
+    prevDateFilter = { gte: startOfPrev30, lt: endOfPrev30 };
+  } else if (period === "custom" && from && to) {
+    const f = new Date(from);
+    const t = new Date(to);
+    const diff = t.getTime() - f.getTime();
+    prevDateFilter = { 
+      gte: new Date(f.getTime() - diff), 
+      lt: f 
+    };
+  }
+
   const [
     totalResponses,
     totalViews,
     totalClicks,
     negativeResponses,
-    branchesRaw
+    branchesRaw,
+    prevResponsesCount
   ] = await Promise.all([
     prisma.surveyResponse.count({ where: whereWithDate }),
-    prisma.analyticsEvent.count({ where: { ...whereWithDate, type: "VIEW" } }),
-    prisma.analyticsEvent.count({ where: { ...whereWithDate, type: "CLICK" } }),
+    (prisma as any).analyticsEvent.count({ where: { ...whereWithDate, type: "VIEW" } }),
+    (prisma as any).analyticsEvent.count({ where: { ...whereWithDate, type: "CLICK" } }),
     prisma.surveyResponse.count({ where: { ...whereWithDate, averageScore: { lt: 4 } } }),
-    prisma.branch.findMany({
+    (prisma as any).branch.findMany({
       include: {
         surveyResponses: { 
           where: whereWithDate,
           select: { averageScore: true } 
         }
       }
-    })
+    }),
+    Object.keys(prevDateFilter).length > 0 ? prisma.surveyResponse.count({ where: { createdAt: prevDateFilter } }) : Promise.resolve(0)
   ]);
 
-  const branchStats = branchesRaw.map((branch: any) => {
+  let allScores: number[] = [];
+  const branchStats = (branchesRaw as any[]).map((branch: any) => {
     const scores = (branch.surveyResponses as { averageScore: number }[]).map(r => r.averageScore);
+    allScores = [...allScores, ...scores];
     const avg = scores.length > 0 ? (scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : 0;
     return { id: branch.id, name: branch.name, avg, count: scores.length };
   });
 
-  const globalMean = branchStats.length > 0 
-    ? (branchStats.reduce((acc: number, curr: any) => acc + curr.avg, 0) / branchStats.length).toFixed(1)
-    : "0.0";
+  const totalMeanValue = allScores.length > 0 
+    ? (allScores.reduce((a, b) => a + b, 0) / allScores.length)
+    : 0;
+
+  const globalMean = totalMeanValue.toFixed(1);
+  const excellenceStatusMap: { [key: string]: string } = {
+    "Excellent": "Отлично",
+    "Very Good": "Очень хорошо",
+    "Good": "Хорошо",
+    "Needs Review": "Требует внимания"
+  };
+  const statusLabel = totalMeanValue >= 4.5 ? "Excellent" : totalMeanValue >= 4 ? "Very Good" : totalMeanValue >= 3 ? "Good" : "Needs Review";
+  const excellenceStatus = excellenceStatusMap[statusLabel];
+  
+  const trend = prevResponsesCount > 0 
+    ? Math.round(((totalResponses - prevResponsesCount) / prevResponsesCount) * 100) 
+    : 0;
 
   // Conversion calculations
-  const openRate = totalViews > 0 ? ((totalResponses / totalViews) * 100).toFixed(1) : "0";
-  const clickThroughRate = totalResponses > 0 ? ((totalClicks / totalResponses) * 100).toFixed(1) : "0";
+  const openRate = totalViews > 0 ? Math.round((totalResponses / totalViews) * 100) : 0;
+  const clickThroughRate = totalResponses > 0 ? Math.round((totalClicks / totalResponses) * 100) : 0;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-1000">
@@ -97,10 +134,7 @@ export default async function AdminDashboard({
           <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter">Дашборд</h1>
           <p className="text-slate-500 text-base md:text-lg font-medium">Аналитика качества сервиса в режиме реального времени</p>
         </div>
-        <div className="flex gap-2 p-1.5 glass rounded-2xl w-fit border-white/50">
-          <button className="whitespace-nowrap px-6 py-2.5 bg-white shadow-xl shadow-indigo-500/10 rounded-xl text-sm font-black text-indigo-600 transition-all">Всё время</button>
-          <button className="whitespace-nowrap px-6 py-2.5 text-sm font-bold text-slate-400 hover:text-slate-600 transition-all">30 дней</button>
-        </div>
+        <PeriodFilter />
       </div>
 
       {/* Bento Grid Layout */}
@@ -197,10 +231,14 @@ export default async function AdminDashboard({
                 </div>
                 <div className="p-6 rounded-[2rem] bg-slate-900 text-white flex-1 relative overflow-hidden group">
                    <div className="relative z-10">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Общий рейтинг</p>
-                      <p className="text-3xl font-black text-white tracking-tighter">Excellent</p>
-                      <p className="text-[10px] font-bold text-emerald-400 mt-2 flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" /> +12% к прошлому месяцу
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Общий статус</p>
+                      <p className="text-3xl font-black text-white tracking-tighter">{excellenceStatus}</p>
+                      <p className={cn(
+                        "text-[10px] font-bold mt-2 flex items-center gap-1",
+                        trend >= 0 ? "text-emerald-400" : "text-rose-400"
+                      )}>
+                        <TrendingUp className={cn("w-3 h-3", trend < 0 && "rotate-180")} /> 
+                        {trend > 0 ? `+${trend}%` : `${trend}%`} к прошлому периоду
                       </p>
                    </div>
                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[40px] rounded-full group-hover:bg-indigo-500/20 transition-all" />
@@ -237,44 +275,10 @@ export default async function AdminDashboard({
           </div>
         </div>
 
-        {/* Row 4: QR Access */}
-        <div className="md:col-span-2 lg:col-span-4 lg:row-span-2 bg-slate-900 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden group min-h-[400px]">
-          <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
-            <div className="flex-1 space-y-6 text-center md:text-left">
-              <div className="inline-flex items-center gap-3 px-5 py-2 glass-dark rounded-full text-[10px] font-black uppercase tracking-[0.25em] text-white/80 border-white/5">
-                <QrCode className="w-4 h-4 text-indigo-400" />
-                System QR Control
-              </div>
-              <h2 className="text-3xl md:text-4xl font-black text-white leading-tight tracking-tighter">Масштабируйте сбор <br className="hidden md:block"/> лояльности мгновенно</h2>
-              <p className="text-slate-400 text-lg font-medium max-w-lg">Единый QR-код для всей сети. Просто разместите его на видном месте.</p>
-              <div className="flex flex-col sm:flex-row gap-4 pt-2">
-                <a 
-                  href={`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL || "https://alleyafeedbackservice.vercel.app"}/survey/qr`)}`}
-                  target="_blank"
-                  className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-black hover:scale-[1.03] active:scale-[0.98] transition-all text-center shadow-xl shadow-white/10"
-                >
-                  Скачать QR
-                </a>
-                <CopyLinkButton url={`https://alleyafeedbackservice.vercel.app/survey/qr`} />
-              </div>
-            </div>
-            
-            <div className="relative">
-              <div className="absolute inset-0 bg-indigo-500/20 blur-[80px] rounded-full animate-pulse"></div>
-              <div className="relative w-48 h-48 md:w-64 md:h-64 bg-white p-6 rounded-[2.5rem] shadow-2xl transform hover:rotate-2 transition-transform duration-700">
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL || "https://alleyafeedbackservice.vercel.app"}/survey/qr`)}`}
-                  alt="Main QR"
-                  className="w-full h-full rounded-2xl"
-                />
-              </div>
-            </div>
-          </div>
-          
-          <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[120px] rounded-full"></div>
-          <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[120px] rounded-full"></div>
         </div>
       </div>
     </div>
+  );
+}
   );
 }
