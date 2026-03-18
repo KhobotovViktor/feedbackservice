@@ -137,21 +137,33 @@ export async function POST(req: NextRequest) {
           
           // List ratings
           alertMessage += `[b]Оценки:[/b]\n`;
-          // Use the correct questions for this branch
           let displayQuestions = questions;
+          
           if (branchId) {
             const branchData = await prisma.branch.findUnique({
               where: { id: branchId },
-              include: { template: true }
+              include: { 
+                questions: { orderBy: { order: 'asc' } },
+                template: { include: { questions: { orderBy: { order: 'asc' } } } }
+              }
             });
-            if (branchData?.template?.questions) {
-              displayQuestions = JSON.parse(branchData.template.questions as string).map((text: string, i: number) => ({ id: i.toString(), text }));
+            
+            if (branchData) {
+              const templateQs = branchData.template?.questions;
+              const branchQs = branchData.questions;
+              
+              if (templateQs && templateQs.length > 0) {
+                displayQuestions = templateQs as any;
+              } else if (branchQs && branchQs.length > 0) {
+                displayQuestions = branchQs as any;
+              }
             }
           }
 
           for (const q of displayQuestions) {
-            if (answersMap[q.id || q.text]) {
-              alertMessage += `- ${q.text}: ${answersMap[q.id || q.text]}\n`;
+            const score = answersMap[q.id];
+            if (score !== undefined) {
+              alertMessage += `- ${q.text}: ${score}\n`;
             }
           }
           
