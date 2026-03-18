@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { Star, Building2, Calendar, User, MessageCircle, TrendingUp, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export default async function ResultsPage({ searchParams }: { searchParams: { branchId?: string } }) {
-  const branchId = searchParams.branchId;
+export default async function ResultsPage({ searchParams }: { searchParams: Promise<{ branchId?: string }> }) {
+  const { branchId } = await searchParams;
 
   const responses = await prisma.surveyResponse.findMany({
     where: branchId && branchId !== "all" ? { branchId } : {},

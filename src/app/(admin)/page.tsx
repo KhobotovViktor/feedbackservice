@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Star, MessageSquare, Users, TrendingUp, QrCode, Eye, MousePointer2, AlertCircle, ArrowRight } from "lucide-react";
+import { CopyLinkButton } from "@/components/copy-link-button";
 
 interface BentoCardProps {
   label: string;
@@ -49,14 +50,14 @@ export default async function AdminDashboard() {
     })
   ]);
 
-  const branchStats = branchesRaw.map(branch => {
-    const scores = branch.surveyResponses.map(r => r.averageScore);
-    const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+  const branchStats = branchesRaw.map((branch: any) => {
+    const scores = (branch.surveyResponses as { averageScore: number }[]).map(r => r.averageScore);
+    const avg = scores.length > 0 ? (scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : 0;
     return { id: branch.id, name: branch.name, avg, count: scores.length };
   });
 
   const globalMean = branchStats.length > 0 
-    ? (branchStats.reduce((acc, curr) => acc + curr.avg, 0) / branchStats.length).toFixed(1)
+    ? (branchStats.reduce((acc: number, curr: any) => acc + curr.avg, 0) / branchStats.length).toFixed(1)
     : "0.0";
 
   // Conversion calculations
@@ -185,7 +186,7 @@ export default async function AdminDashboard() {
           </div>
           
           <div className="space-y-3 overflow-y-auto pr-2 flex-1 custom-scrollbar">
-            {branchStats.map((branch) => (
+            {branchStats.map((branch: any) => (
               <div key={branch.id} className="p-5 glass rounded-2xl hover:scale-[1.02] transition-all border-white/60 mb-1">
                 <div className="flex justify-between items-start mb-2">
                   <p className="font-bold text-slate-800 text-sm truncate pr-2">{branch.name}</p>
@@ -223,15 +224,7 @@ export default async function AdminDashboard() {
                 >
                   Скачать QR
                 </a>
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(`https://alleyafeedbackservice.vercel.app/survey/qr`);
-                    alert("Ссылка скопирована!");
-                  }}
-                  className="px-8 py-4 glass-dark text-white border-white/10 rounded-2xl font-bold hover:bg-white/10 transition-all"
-                >
-                  Копировать прямую ссылку
-                </button>
+                <CopyLinkButton url={`https://alleyafeedbackservice.vercel.app/survey/qr`} />
               </div>
             </div>
             

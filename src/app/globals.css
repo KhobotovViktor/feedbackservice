@@ -52,8 +52,7 @@ body {
   --color-brand-end: var(--color-brand-end);
 }
 
-/* Glassmorphism Classes */
-.glass {
+@utility glass {
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(12px) saturate(180%);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
@@ -61,7 +60,7 @@ body {
   box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
 }
 
-.glass-dark {
+@utility glass-dark {
   background: rgba(15, 23, 42, 0.8);
   backdrop-filter: blur(12px) saturate(180%);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
@@ -69,19 +68,18 @@ body {
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
 }
 
-/* Bento Grid Card */
-.bento-card {
+@utility bento-card {
   @apply glass rounded-[2.5rem] p-8 transition-all duration-300;
   border: 1px solid rgba(255, 255, 255, 0.4);
+
+  &:hover {
+    @apply shadow-2xl shadow-indigo-500/10 -translate-y-1;
+    background: rgba(255, 255, 255, 0.8);
+    border-color: rgba(99, 102, 241, 0.2);
+  }
 }
 
-.bento-card:hover {
-  @apply shadow-2xl shadow-indigo-500/10 -translate-y-1;
-  background: rgba(255, 255, 255, 0.8);
-  border-color: rgba(99, 102, 241, 0.2);
-}
-
-.premium-gradient {
+@utility premium-gradient {
   background: linear-gradient(135deg, var(--color-brand-start) 0%, var(--color-brand-mid) 50%, var(--color-brand-end) 100%);
   @apply shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all;
 }
