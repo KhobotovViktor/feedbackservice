@@ -11,18 +11,51 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-model Question {
+model Branch {
+  id               String           @id @default(cuid())
+  name             String
+  city             String?
+  yandexUrl        String?
+  dgisUrl          String?
+  googleUrl        String?
+  externalId       String?          // ID from B24 or other system
+  templateId       String?
+  template         QuestionTemplate? @relation(fields: [templateId], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  questions        Question[]
+  surveyResponses SurveyResponse[]
+  shortLinks       ShortLink[]
+  analyticsEvents AnalyticsEvent[]
+}
+
+model QuestionTemplate {
   id        String   @id @default(cuid())
-  text      String
-  order     Int      @default(0)
+  name      String
+  questions Question[]
+  branches  Branch[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Question {
+  id         String            @id @default(cuid())
+  text       String
+  order      Int               @default(0)
+  branchId   String?  
+  branch     Branch?           @relation(fields: [branchId], references: [id])
+  templateId String?
+  template   QuestionTemplate? @relation(fields: [templateId], references: [id])
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 }
 
 model SurveyResponse {
   id           String   @id @default(cuid())
   clientId     String   // Bitrix24 Lead/Contact ID
   dealId       String   // Bitrix24 Deal ID
+  branchId     String?  
+  branch       Branch?  @relation(fields: [branchId], references: [id])
   averageScore Float
   answers      Json     // Back to Json for PostgreSQL support
   comment      String?
@@ -41,7 +74,32 @@ model ShortLink {
   id        String   @id @default(cuid())
   code      String   @unique
   url       String   @db.Text
+  branchId  String?  
+  branch    Branch?  @relation(fields: [branchId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([code])
+}
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+}
+
+enum AnalyticsType {
+  VIEW
+  CLICK
+}
+
+model AnalyticsEvent {
+  id        String        @id @default(cuid())
+  type      AnalyticsType
+  target    String?       // e.g., "YANDEX", "2GIS", "GOOGLE"
+  branchId  String?
+  branch    Branch?       @relation(fields: [branchId], references: [id])
+  createdAt DateTime      @default(now())
+
+  @@index([type])
+  @@index([branchId])
 }

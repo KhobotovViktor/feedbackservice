@@ -36,7 +36,11 @@ export async function POST(req: NextRequest) {
       "b24_field_quality",
       "b24_field_support",
       "b24_field_average",
-      "b24_field_comment"
+      "b24_field_comment",
+      "review_yandex",
+      "review_2gis",
+      "review_google_maps",
+      "b24_group_chat_id"
     ];
 
     for (const key of keys) {

@@ -6,8 +6,9 @@ async function handleWebhook(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const clientId = searchParams.get("clientId");
   const dealId = searchParams.get("dealId");
+  const branchId = searchParams.get("branchId");
 
-  console.log(`Incoming B24 Webhook: clientId=${clientId}, dealId=${dealId}`);
+  console.log(`Incoming B24 Webhook: clientId=${clientId}, dealId=${dealId}, branchId=${branchId}`);
 
   // Resilience: if clientId is missing but dealId is present, use dealId as clientId
   const effectiveClientId = clientId || dealId;
@@ -26,7 +27,7 @@ async function handleWebhook(req: NextRequest) {
     console.warn("Detected unresolved Bitrix24 placeholders. Please check Robot configuration.");
   }
 
-  const token = await createSurveyToken(effectiveClientId, effectiveDealId);
+  const token = await createSurveyToken(effectiveClientId, effectiveDealId, branchId);
   
   // Get base URL from env or request headers
   let appUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -47,7 +48,8 @@ async function handleWebhook(req: NextRequest) {
     await prisma.shortLink.create({
       data: {
         code,
-        url: fullSurveyUrl
+        url: fullSurveyUrl,
+        branchId: branchId || null
       }
     });
     surveyUrl = `${appUrl}/s/${code}`;
@@ -73,17 +75,23 @@ async function handleWebhook(req: NextRequest) {
       const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
 
 
+      // 0. Fetch Deal data once to use for both Open Channel and Field Protection
+      let dealData: any = null;
+      try {
+        const dealRes = await fetch(`${baseUrl}/crm.deal.get.json?id=${effectiveDealId}`);
+        const dealDataRaw = await dealRes.json();
+        dealData = dealDataRaw.result;
+      } catch (e) {
+        console.error("Failed to fetch deal data for protection check:", e);
+      }
+
       // 1. Try to send via Open Channel (Direct Chat)
       try {
-        const cleanBaseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
+        const cleanBaseUrl = baseUrl;
         console.log(`Open Channel Delivery attempt for Deal ${effectiveDealId}`);
 
-        // Get Deal/Lead/Contact info recursively
-        const dealUrl = `${cleanBaseUrl}/crm.deal.get.json?id=${effectiveDealId}`;
-        const dealRes = await fetch(dealUrl);
-        const dealDataRaw = await dealRes.json();
-        const dealContactId = dealDataRaw.result?.CONTACT_ID;
-        const dealLeadId = dealDataRaw.result?.LEAD_ID;
+        const dealContactId = dealData?.CONTACT_ID;
+        const dealLeadId = dealData?.LEAD_ID;
 
         // Also fetch Lead details
         let leadContactId = null;
@@ -183,17 +191,24 @@ async function handleWebhook(req: NextRequest) {
 
       // 3. Update the custom field for automated delivery (SMS/WhatsApp robots)
       const linkField = settingsMap.b24_link_field || "UF_CRM_1773746121";
-      const updateUrl = baseUrl + "/crm.deal.update";
-      await fetch(updateUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: effectiveDealId,
-          fields: {
-            [linkField]: surveyUrl
-          }
-        })
-      });
+      const existingValue = dealData ? dealData[linkField] : null;
+
+      if (!existingValue || String(existingValue).trim() === "") {
+        console.log(`Field ${linkField} is empty. Updating with survey link.`);
+        const updateUrl = baseUrl + "/crm.deal.update";
+        await fetch(updateUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: effectiveDealId,
+            fields: {
+              [linkField]: surveyUrl
+            }
+          })
+        });
+      } else {
+        console.log(`Field ${linkField} already contains data ("${existingValue}"). Skipping update to prevent overwriting.`);
+      }
     } else {
       console.warn("b24_webhook_url is NOT configured in settings.");
     }

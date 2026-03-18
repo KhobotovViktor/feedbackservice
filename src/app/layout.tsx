@@ -16,7 +16,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body className={`${inter.className} bg-slate-50 text-slate-900 antialiased`}>
+      <body className={`${inter.className} antialiased noise-overlay min-h-screen bg-slate-50 text-slate-900`}>
+        <div className="mesh-gradient" />
         {children}
       </body>
     </html>

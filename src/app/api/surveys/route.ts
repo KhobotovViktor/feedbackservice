@@ -115,6 +115,37 @@ export async function POST(req: NextRequest) {
             })
           });
         }
+
+        // 5. SEND GROUP CHAT NOTIFICATION FOR NEGATIVE FEEDBACK
+        if (averageScore < 4 && settingsMap.b24_group_chat_id) {
+          console.log(`Negative feedback detected (Score: ${averageScore}). Sending notification to group chat ${settingsMap.b24_group_chat_id}`);
+          
+          let alertMessage = `⚠️ *ОТРИЦАТЕЛЬНЫЙ ОТЗЫВ*\n\n`;
+          alertMessage += `👤 Клиент: ${clientId}\n`;
+          alertMessage += `🏢 Сделка: [${dealId}](${cleanBaseUrl.replace('/rest/', '/crm/deal/details/')}${dealId}/)\n`;
+          alertMessage += `⭐ Средняя оценка: ${averageScore.toFixed(1)}\n\n`;
+          
+          // List ratings
+          alertMessage += `*Оценки:*\n`;
+          for (const q of questions) {
+            if (answersMap[q.id]) {
+              alertMessage += `- ${q.text}: ${answersMap[q.id]}\n`;
+            }
+          }
+          
+          if (comment) {
+            alertMessage += `\n💬 *Комментарий:* ${comment}`;
+          }
+
+          await fetch(`${cleanBaseUrl}/im.message.add.json`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              DIALOG_ID: `chat${settingsMap.b24_group_chat_id}`,
+              MESSAGE: alertMessage
+            })
+          });
+        }
       }
     } catch (b24Error) {
       console.error("Failed to update B24 fields:", b24Error);

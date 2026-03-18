@@ -15,7 +15,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Недействительная ссылка" }, { status: 401 });
   }
 
-  const { clientId } = payload;
+  const { clientId, branchId } = payload;
+  
+  // Fetch branch info if present
+  let branchInfo = null;
+  if (branchId) {
+    branchInfo = await prisma.branch.findUnique({
+      where: { id: branchId },
+      include: {
+        template: {
+          include: {
+            questions: {
+              orderBy: { order: "asc" }
+            }
+          }
+        }
+      }
+    });
+  }
+
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
@@ -35,5 +53,9 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ 
+    success: true,
+    branchId: branchId || null,
+    branch: branchInfo || null
+  });
 }

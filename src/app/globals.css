@@ -1,28 +1,102 @@
 @import "tailwindcss";
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --foreground-rgb: 15, 23, 42;
+  --background-rgb: 248, 250, 252;
+  
+  /* Brand Colors */
+  --color-brand-start: #6366f1;
+  --color-brand-mid: #8b5cf6;
+  --color-brand-end: #d946ef;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: white;
+  background: rgb(var(--background-rgb));
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Mesh Gradient Background */
+.mesh-gradient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(217, 70, 239, 0.1) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(139, 92, 246, 0.05) 0px, transparent 50%);
+  filter: blur(80px);
+}
+
+/* Noise Texture Overlay */
+.noise-overlay::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3Insight%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 @theme {
-  --color-brand-start: #6366f1;
-  --color-brand-end: #a855f7;
+  --color-brand-start: var(--color-brand-start);
+  --color-brand-mid: var(--color-brand-mid);
+  --color-brand-end: var(--color-brand-end);
 }
 
+/* Glassmorphism Classes */
 .glass {
-  background-color: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
+
+.glass-dark {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* Bento Grid Card */
+.bento-card {
+  @apply glass rounded-[2.5rem] p-8 transition-all duration-300;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.bento-card:hover {
+  @apply shadow-2xl shadow-indigo-500/10 -translate-y-1;
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(99, 102, 241, 0.2);
 }
 
 .premium-gradient {
-  background: linear-gradient(135deg, var(--color-brand-start) 0%, var(--color-brand-end) 100%);
+  background: linear-gradient(135deg, var(--color-brand-start) 0%, var(--color-brand-mid) 50%, var(--color-brand-end) 100%);
+  @apply shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.2);
 }
