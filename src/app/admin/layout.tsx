@@ -70,9 +70,9 @@ export default function AdminLayout({
 
       {/* Floating Navigation (Desktop) */}
       <nav className="fixed left-8 top-1/2 -translate-y-1/2 z-50 hidden lg:block">
-        <div className="glass-dark rounded-[2.5rem] p-3 flex flex-col gap-2 shadow-2xl border-white/5">
-          <div className="p-4 mb-2 flex justify-center">
-             <div className="w-10 h-10 premium-gradient rounded-2xl flex items-center justify-center shadow-lg transform -rotate-12">
+        <div className="glass-dark rounded-[2.5rem] p-3 flex flex-col gap-3 shadow-2xl border-white/5">
+          <div className="py-4 mb-2 flex justify-center">
+             <div className="w-10 h-10 premium-gradient rounded-2xl flex items-center justify-center shadow-lg transform -rotate-12 shrink-0">
                 <Star className="w-6 h-6 text-white" />
              </div>
           </div>
@@ -84,25 +84,25 @@ export default function AdminLayout({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "p-4 rounded-2xl transition-all relative group",
+                  "w-12 h-12 rounded-2xl transition-all relative group flex items-center justify-center shrink-0 mx-auto",
                   isActive 
                     ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/30" 
                     : "text-slate-400 hover:text-white hover:bg-white/10"
                 )}
                 title={item.label}
               >
-                <Icon className="w-6 h-6" />
+                <Icon className="w-6 h-6 shrink-0" />
                 <span className="absolute left-full ml-4 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg opacity-0 transition-all pointer-events-none group-hover:opacity-100 whitespace-nowrap shadow-xl">
                     {item.label}
                 </span>
               </Link>
             );
           })}
-          <div className="mt-8 p-4 border-t border-white/5 flex justify-center">
+          <div className="mt-8 pt-6 border-t border-white/5 flex justify-center">
              <button 
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                className="p-4 text-rose-400 hover:bg-rose-500/10 rounded-2xl transition-all disabled:opacity-50"
+                className="w-12 h-12 flex items-center justify-center text-rose-400 hover:bg-rose-500/10 rounded-2xl transition-all disabled:opacity-50 shrink-0 mx-auto"
              >
                 {isLoggingOut ? <Loader2 className="w-6 h-6 animate-spin" /> : <LogOut className="w-6 h-6" />}
              </button>

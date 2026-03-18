@@ -31,7 +31,30 @@ function BentoMetricCard({ label, value, icon: Icon, color, bg, desc, className 
   );
 }
 
-export default async function AdminDashboard() {
+import { PeriodFilter } from "@/components/dashboard/period-filter";
+
+export default async function AdminDashboard({ 
+  searchParams 
+}: { 
+  searchParams: Promise<{ period?: string; from?: string; to?: string }> 
+}) {
+  const { period, from, to } = await searchParams;
+  
+  let dateFilter: any = {};
+  if (period === "30d") {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    dateFilter = { gte: d };
+  } else if (period === "custom") {
+    if (from || to) {
+      dateFilter = {};
+      if (from) dateFilter.gte = new Date(from);
+      if (to) dateFilter.lte = new Date(to);
+    }
+  }
+
+  const whereWithDate = Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
+
   const [
     totalResponses,
     totalViews,
@@ -39,13 +62,16 @@ export default async function AdminDashboard() {
     negativeResponses,
     branchesRaw
   ] = await Promise.all([
-    prisma.surveyResponse.count(),
-    prisma.analyticsEvent.count({ where: { type: "VIEW" } }),
-    prisma.analyticsEvent.count({ where: { type: "CLICK" } }),
-    prisma.surveyResponse.count({ where: { averageScore: { lt: 4 } } }),
+    prisma.surveyResponse.count({ where: whereWithDate }),
+    prisma.analyticsEvent.count({ where: { ...whereWithDate, type: "VIEW" } }),
+    prisma.analyticsEvent.count({ where: { ...whereWithDate, type: "CLICK" } }),
+    prisma.surveyResponse.count({ where: { ...whereWithDate, averageScore: { lt: 4 } } }),
     prisma.branch.findMany({
       include: {
-        surveyResponses: { select: { averageScore: true } }
+        surveyResponses: { 
+          where: whereWithDate,
+          select: { averageScore: true } 
+        }
       }
     })
   ]);
@@ -78,7 +104,8 @@ export default async function AdminDashboard() {
       </div>
 
       {/* Bento Grid Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 auto-rows-[200px]">
+      {/* Bento Grid Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 auto-rows-min">
         {/* Row 1: Key Metrics */}
         <BentoMetricCard 
           label="Охват" 
@@ -87,6 +114,7 @@ export default async function AdminDashboard() {
           color="text-indigo-600" 
           bg="bg-indigo-50" 
           desc="Общее кол-во уникальных просмотров опроса через QR или ссылки."
+          className="md:row-span-1"
         />
         <BentoMetricCard 
           label="Отклики" 
@@ -95,6 +123,7 @@ export default async function AdminDashboard() {
           color="text-emerald-600" 
           bg="bg-emerald-50" 
           desc={`${openRate}% клиентов завершили опрос до конца.`}
+          className="md:row-span-1"
         />
         <BentoMetricCard 
           label="Конверсия" 
@@ -103,6 +132,7 @@ export default async function AdminDashboard() {
           color="text-amber-600" 
           bg="bg-amber-50" 
           desc={`${clickThroughRate}% перешли на карты после оценки.`}
+          className="md:row-span-1"
         />
         <BentoMetricCard 
           label="Критично" 
@@ -111,10 +141,11 @@ export default async function AdminDashboard() {
           color="text-rose-600" 
           bg="bg-rose-50" 
           desc="Количество отзывов с оценкой ниже 4 звезд."
+          className="md:row-span-1"
         />
 
         {/* Row 2 & 3: Main Funnel Visual & Branch Sidebar */}
-        <div className="md:col-span-2 lg:col-span-3 lg:row-span-2 bento-card relative overflow-hidden flex flex-col">
+        <div className="md:col-span-2 lg:col-span-3 lg:row-span-2 bento-card relative overflow-hidden flex flex-col min-h-[500px]">
           <div className="relative z-10 flex flex-col h-full">
             <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3 mb-10">
               <TrendingUp className="w-8 h-8 text-indigo-500" />
@@ -179,7 +210,7 @@ export default async function AdminDashboard() {
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/5 blur-[120px] -mr-64 -mt-64 rounded-full"></div>
         </div>
 
-        <div className="lg:row-span-2 bento-card flex flex-col h-full bg-white/40">
+        <div className="lg:row-span-2 bento-card flex flex-col h-full bg-white/40 min-h-[500px]">
           <div className="flex items-center justify-between mb-8">
              <h3 className="text-xl font-black text-slate-900">По филиалам</h3>
              <Users className="w-6 h-6 text-slate-300" />
@@ -207,7 +238,7 @@ export default async function AdminDashboard() {
         </div>
 
         {/* Row 4: QR Access */}
-        <div className="md:col-span-2 lg:col-span-4 bg-slate-900 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden group">
+        <div className="md:col-span-2 lg:col-span-4 lg:row-span-2 bg-slate-900 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden group min-h-[400px]">
           <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
             <div className="flex-1 space-y-6 text-center md:text-left">
               <div className="inline-flex items-center gap-3 px-5 py-2 glass-dark rounded-full text-[10px] font-black uppercase tracking-[0.25em] text-white/80 border-white/5">
