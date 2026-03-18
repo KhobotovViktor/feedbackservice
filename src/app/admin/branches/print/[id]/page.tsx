@@ -46,7 +46,7 @@ export default function QRPrintPage() {
   const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(qrUrl)}`;
 
   return (
-    <div className="min-h-screen bg-slate-50 py-12 md:py-20 flex flex-col items-center">
+    <div className="min-h-screen bg-slate-50 py-12 md:py-20 flex flex-col items-center print:py-0 print:bg-white">
       {/* Print Button (Hidden on Print) */}
       <div className="mb-12 print:hidden flex gap-4">
         <button 
@@ -55,7 +55,10 @@ export default function QRPrintPage() {
         >
           <Printer className="w-6 h-6" />
           Печать шаблона
-           {/* A4 Template Container */}
+        </button>
+      </div>
+
+      {/* A4 Template Container */}
       <div className="w-[210mm] h-[297mm] bg-white shadow-2xl p-[15mm] flex flex-col items-center relative overflow-hidden print:shadow-none print:p-[15mm] print:m-0 print:border-none">
         
         {/* Decorative Top Accent */}
@@ -141,14 +144,6 @@ export default function QRPrintPage() {
             box-shadow: none !important;
             border: none !important;
             margin: 0 !important;
-          }
-        }
-      `}</style>
-           margin: 0;
-          }
-          .min-h-screen {
-            min-height: 0 !important;
-            padding: 0 !important;
           }
         }
       `}</style>
