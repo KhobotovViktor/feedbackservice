@@ -220,11 +220,11 @@ export default function SurveyPage() {
               className="space-y-12"
             >
               <div className="text-center space-y-3">
-                <div className="w-14 h-14 premium-gradient rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-500/20 transform rotate-3">
-                   <Star className="w-8 h-8 text-white fill-white/20" />
+                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-100 border border-slate-50 overflow-hidden p-2 transform rotate-3">
+                   <img src="/logo_alleya.png" alt="Logo" className="w-full h-full object-contain" />
                 </div>
                 <h1 className="text-3xl md:text-4xl font-black text-slate-900 leading-none tracking-tighter">Ваше мнение <br/> имеет значение</h1>
-                <p className="text-slate-500 font-medium">Это займет не более минуты</p>
+                <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px]">«Аллея Мебели»</p>
               </div>
 
               <div className="space-y-10">

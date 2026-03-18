@@ -85,9 +85,15 @@ export default function QuestionsPage() {
     try {
       const res = await fetch("/api/branches");
       const data = await res.json();
-      setBranches(data);
+      if (Array.isArray(data)) {
+        setBranches(data);
+      } else {
+        console.error("Branches API error:", data);
+        setBranches([]);
+      }
     } catch (err) {
       console.error(err);
+      setBranches([]);
     }
   };
 

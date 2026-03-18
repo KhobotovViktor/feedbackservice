@@ -5,7 +5,16 @@ export async function GET() {
   try {
     const branchesRaw = await prisma.branch.findMany({
       orderBy: { createdAt: "desc" },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        yandexUrl: true,
+        dgisUrl: true,
+        googleUrl: true,
+        externalId: true,
+        templateId: true,
+        createdAt: true,
         _count: {
           select: { questions: true, surveyResponses: true }
         },
@@ -27,9 +36,13 @@ export async function GET() {
     });
 
     return NextResponse.json(branches);
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Failed to fetch branches" }, { status: 500 });
+  } catch (error: any) {
+    console.error("FETCH_BRANCHES_ERROR:", error);
+    return NextResponse.json({ 
+      error: "Failed to fetch branches", 
+      details: error.message,
+      code: error.code 
+    }, { status: 500 });
   }
 }
 

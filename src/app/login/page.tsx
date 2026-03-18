@@ -53,12 +53,12 @@ export default function LoginPage() {
 
           <div className="relative z-10 space-y-8">
             <div className="text-center space-y-4">
-              <div className="w-16 h-16 premium-gradient rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-indigo-200">
-                <Star className="w-8 h-8 text-white" />
+              <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto shadow-xl shadow-indigo-100 border border-slate-50 overflow-hidden p-2">
+                <img src="/logo_alleya.png" alt="Logo" className="w-full h-full object-contain" />
               </div>
               <div className="space-y-1">
-                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Alleya Feedback Admin</h1>
-                <p className="text-slate-400 font-medium">Вход в систему управления</p>
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight">Сервис обратной связи</h1>
+                <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px]">«Аллея Мебели»</p>
               </div>
             </div>
 
@@ -114,7 +114,7 @@ export default function LoginPage() {
             </form>
 
             <p className="text-center text-slate-400 text-xs font-medium pt-4">
-              &copy; {new Date().getFullYear()} Feedback Service. Доступ только для сотрудников компании.
+              &copy; {new Date().getFullYear()} ИП Шевелёв Е.Н. Доступ только для сотрудников компании.
             </p>
           </div>
         </div>

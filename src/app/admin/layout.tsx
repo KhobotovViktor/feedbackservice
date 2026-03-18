@@ -53,11 +53,14 @@ export default function AdminLayout({
       {/* Floating Header / Brand (Mobile) */}
       <header className="md:hidden sticky top-0 z-[60] p-4">
         <div className="glass rounded-2xl p-4 flex items-center justify-between border-white/40 shadow-xl">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 premium-gradient rounded-lg flex items-center justify-center">
-              <Star className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg p-1">
+              <img src="/logo_alleya.png" alt="Logo" className="w-full h-full object-contain" />
             </div>
-            <span className="font-bold text-lg tracking-tight">Alleya Feedback</span>
+            <div className="flex flex-col">
+              <span className="font-black text-sm tracking-tight leading-none text-slate-900">Аллея Мебели</span>
+              <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest mt-0.5">Feedback Service</span>
+            </div>
           </div>
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -72,8 +75,8 @@ export default function AdminLayout({
       <nav className="fixed left-8 top-1/2 -translate-y-1/2 z-50 hidden lg:block">
         <div className="glass-dark rounded-[2.5rem] p-3 flex flex-col gap-3 shadow-2xl border-white/5">
           <div className="py-4 mb-2 flex justify-center">
-             <div className="w-10 h-10 premium-gradient rounded-2xl flex items-center justify-center shadow-lg transform -rotate-12 shrink-0">
-                <Star className="w-6 h-6 text-white" />
+             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg transform -rotate-6 shrink-0 p-1.5 border border-white/10">
+                <img src="/logo_alleya.png" alt="Logo" className="w-full h-full object-contain" />
              </div>
           </div>
           {navItems.map((item) => {
@@ -128,11 +131,14 @@ export default function AdminLayout({
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
               className="fixed inset-y-4 left-4 w-72 glass-dark z-[80] md:hidden rounded-[2.5rem] p-6 border-white/10 shadow-2xl flex flex-col"
             >
-              <div className="flex items-center gap-3 mb-10 px-4">
-                <div className="w-10 h-10 premium-gradient rounded-xl flex items-center justify-center">
-                  <Star className="w-6 h-6 text-white" />
+              <div className="flex items-center gap-4 mb-10 px-4">
+                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-xl p-1.5">
+                  <img src="/logo_alleya.png" alt="Logo" className="w-full h-full object-contain" />
                 </div>
-                <span className="font-bold text-2xl text-white tracking-tight">Alleya Feedback</span>
+                <div className="flex flex-col">
+                  <span className="font-black text-xl text-white tracking-tight leading-none">Аллея Мебели</span>
+                  <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mt-1">Feedback Service</span>
+                </div>
               </div>
               
               <nav className="space-y-2 flex-1">
