@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /privacy
+Allow: /survey/
+Disallow: /admin/
+Disallow: /api/
+
+Sitemap: https://alleyafeedbackservice.vercel.app/sitemap.xml

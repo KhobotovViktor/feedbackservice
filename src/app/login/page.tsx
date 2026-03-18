@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Star, Lock, User, Loader2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -113,9 +114,17 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <p className="text-center text-slate-400 text-xs font-medium pt-4">
-              &copy; {new Date().getFullYear()} ИП Шевелёв Е.Н. Доступ только для сотрудников компании.
-            </p>
+            <div className="flex flex-col items-center gap-2 pt-4">
+              <p className="text-center text-slate-400 text-xs font-medium">
+                &copy; {new Date().getFullYear()} ИП Шевелёв Е.Н. Доступ только для сотрудников компании.
+              </p>
+              <Link 
+                href="/privacy" 
+                className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-600 transition-colors"
+              >
+                Политика конфиденциальности
+              </Link>
+            </div>
           </div>
         </div>
       </motion.div>

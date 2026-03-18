@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Feedback Service",
-  description: "Оставьте отзыв о нашей работе",
+  title: "Аллея Мебели — Сервис сбора отзывов",
+  description: "Официальный сервис сбора отзывов компании «Аллея Мебели». Ваше мнение помогает нам становиться лучше.",
 };
 
 export default function RootLayout({

@@ -1,18 +1,24 @@
 import { prisma } from "@/lib/prisma";
-import { Building2, MessageCircle, Star, Calendar, User, TrendingUp } from "lucide-react";
+import { Building2, MessageCircle, Star, Calendar, User, TrendingUp, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BranchFilter } from "@/components/results/branch-filter";
+import { TypeFilter } from "@/components/results/type-filter";
 
-export default async function ResultsPage({ searchParams }: { searchParams: Promise<{ branchId?: string }> }) {
-  const { branchId } = await searchParams;
+export default async function ResultsPage({ searchParams }: { searchParams: Promise<{ branchId?: string; type?: string }> }) {
+  const { branchId, type = "all" } = await searchParams;
 
   let responses: any[] = [];
   let branches: any[] = [];
 
   try {
+    const where: any = {};
+    if (branchId && branchId !== "all") where.branchId = branchId;
+    if (type === "positive") where.averageScore = { gte: 4 };
+    if (type === "negative") where.averageScore = { lt: 4 };
+
     const results = await Promise.all([
       prisma.surveyResponse.findMany({
-        where: branchId && branchId !== "all" ? { branchId: branchId as string } : {},
+        where,
         orderBy: { createdAt: "desc" },
         include: { branch: true }
       }),
@@ -34,13 +40,28 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter">Результаты</h1>
           <p className="text-slate-500 text-lg font-medium">История и анализ всех полученных отзывов</p>
         </div>
-        <div className="flex items-center gap-2 p-1.5 glass rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
-          <div className="flex-1 sm:flex-none flex items-center gap-3 px-6 py-3">
-            <Building2 className="w-5 h-5 text-indigo-400" />
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xs:inline">Филиал:</span>
+        
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+          {/* Branch Filter */}
+          <div className="flex items-center gap-2 p-1.5 glass rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
+            <div className="flex-1 sm:flex-none flex items-center gap-3 px-6 py-3">
+              <Building2 className="w-5 h-5 text-indigo-400" />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xs:inline">Филиал:</span>
+            </div>
+            <div className="flex-1 sm:flex-none">
+              <BranchFilter branches={branches} defaultValue={branchId || "all"} />
+            </div>
           </div>
-          <div className="flex-1 sm:flex-none">
-            <BranchFilter branches={branches} defaultValue={branchId || "all"} />
+
+          {/* Type Filter */}
+          <div className="flex items-center gap-2 p-1.5 glass rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
+            <div className="flex-1 sm:flex-none flex items-center gap-3 px-6 py-3">
+              <Filter className="w-5 h-5 text-indigo-400" />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xs:inline">Тип:</span>
+            </div>
+            <div className="flex-1 sm:flex-none">
+              <TypeFilter defaultValue={type} />
+            </div>
           </div>
         </div>
       </div>

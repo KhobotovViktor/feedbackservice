@@ -10,6 +10,7 @@ export async function middleware(req: NextRequest) {
   // Define public paths
   const isPublicPath = 
     path === "/login" || 
+    path === "/privacy" || 
     path.startsWith("/survey") || 
     path.startsWith("/s/") || 
     path.startsWith("/api/auth") ||

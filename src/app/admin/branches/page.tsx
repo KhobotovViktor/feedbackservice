@@ -353,13 +353,13 @@ export default function BranchesPage() {
                   </button>
                   <div className="flex gap-2 shrink-0">
                     <a href={branch.yandexUrl || "#"} target={branch.yandexUrl ? "_blank" : undefined} className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all border overflow-hidden", branch.yandexUrl ? "glass border-rose-100 hover:bg-rose-50" : "bg-slate-50 opacity-20 border-slate-100 cursor-not-allowed")} title="Яндекс.Карты">
-                      <img src="/icons/yandex.jpg" alt="Yandex" className="w-full h-full object-cover" />
+                      <img src="/icons/yandex.png" alt="Yandex" className="w-full h-full object-cover" />
                     </a>
                     <a href={branch.dgisUrl || "#"} target={branch.dgisUrl ? "_blank" : undefined} className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all border overflow-hidden", branch.dgisUrl ? "glass border-emerald-100 hover:bg-emerald-50" : "bg-slate-50 opacity-20 border-slate-100 cursor-not-allowed")} title="2GIS">
-                      <img src="/icons/2gis.jpg" alt="2GIS" className="w-full h-full object-cover" />
+                      <img src="/icons/2gis.png" alt="2GIS" className="w-full h-full object-cover" />
                     </a>
                     <a href={branch.googleUrl || "#"} target={branch.googleUrl ? "_blank" : undefined} className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all border overflow-hidden", branch.googleUrl ? "glass border-blue-100 hover:bg-blue-50" : "bg-slate-50 opacity-20 border-slate-100 cursor-not-allowed")} title="Google Maps">
-                      <img src="/icons/google.jpg" alt="Google" className="w-full h-full object-cover" />
+                      <img src="/icons/googlemaps.png" alt="Google" className="w-full h-full object-cover" />
                     </a>
                   </div>
                 </div>
