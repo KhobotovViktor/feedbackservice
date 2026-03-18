@@ -3,9 +3,9 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { code: string } }
+  { params }: { params: Promise<{ code: string }> }
 ) {
-  const { code } = params;
+  const { code } = await params;
 
   try {
     const shortLink = await prisma.shortLink.findUnique({
