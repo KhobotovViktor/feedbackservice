@@ -1,18 +1,20 @@
 import { prisma } from "@/lib/prisma";
-import { Star, Building2, Calendar, User, MessageCircle, TrendingUp, Search } from "lucide-react";
+import { Building2, MessageCircle, Star, Calendar, User, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BranchFilter } from "@/components/results/branch-filter";
 
 export default async function ResultsPage({ searchParams }: { searchParams: Promise<{ branchId?: string }> }) {
   const { branchId } = await searchParams;
 
   const responses = await prisma.surveyResponse.findMany({
-    where: branchId && branchId !== "all" ? { branchId } : {},
+    where: branchId && branchId !== "all" ? { branchId: branchId as string } : {},
     orderBy: { createdAt: "desc" },
     include: { branch: true }
   });
 
-  const branches = await prisma.branch.findMany({
-    orderBy: { name: "asc" }
+  const branches = await (prisma as any).branch.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true }
   });
 
   return (
@@ -27,19 +29,9 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
             <Building2 className="w-5 h-5 text-indigo-400" />
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xs:inline">Филиал:</span>
           </div>
-          <form method="get" className="flex-1 sm:flex-none">
-            <select 
-              name="branchId"
-              className="w-full bg-white border-none px-6 py-3 rounded-xl font-black outline-none shadow-sm text-xs md:text-sm appearance-none cursor-pointer hover:bg-slate-50 transition-all font-black"
-              defaultValue={branchId || "all"}
-              onChange={(e) => e.target.form?.submit()}
-            >
-              <option value="all">Все филиалы</option>
-              {branches.map(b => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          </form>
+          <div className="flex-1 sm:flex-none">
+            <BranchFilter branches={branches} defaultValue={branchId || "all"} />
+          </div>
         </div>
       </div>
 
