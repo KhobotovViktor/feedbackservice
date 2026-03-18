@@ -1,11 +1,9 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
-import { Calendar as CalendarIcon, ChevronDown, Check } from "lucide-react";
+import { useState } from "react";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
-import { ru } from "date-fns/locale";
 
 const periods = [
   { label: "Всё время", value: "all" },
@@ -16,7 +14,6 @@ const periods = [
 export function PeriodFilter() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isOpen, setIsOpen] = useState(false);
   
   const currentPeriod = searchParams.get("period") || "all";
   const from = searchParams.get("from");
@@ -32,9 +29,10 @@ export function PeriodFilter() {
       params.delete("from");
       params.delete("to");
       router.push(`?${params.toString()}`);
-      setIsOpen(false);
     } else {
-      setIsOpen(true);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("period", "custom");
+      router.push(`?${params.toString()}`);
     }
   };
 
@@ -47,17 +45,18 @@ export function PeriodFilter() {
     if (endDate) params.set("to", endDate);
     else params.delete("to");
     router.push(`?${params.toString()}`);
-    setIsOpen(false);
   };
 
-  const getActiveLabel = () => {
-    if (currentPeriod === "custom") {
-      if (from && to) return `${format(new Date(from), "dd.MM.yy")} - ${format(new Date(to), "dd.MM.yy")}`;
-      if (from) return `С ${format(new Date(from), "dd.MM.yy")}`;
-      if (to) return `По ${format(new Date(to), "dd.MM.yy")}`;
-      return "Свой период";
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Intl.DateTimeFormat("ru-RU", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "2-digit",
+      }).format(new Date(dateStr));
+    } catch (e) {
+      return dateStr;
     }
-    return periods.find(p => p.value === currentPeriod)?.label || "Всё время";
   };
 
   return (
