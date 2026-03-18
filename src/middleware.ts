@@ -15,7 +15,10 @@ export async function middleware(req: NextRequest) {
     path.startsWith("/api/auth") ||
     path.startsWith("/api/surveys") ||
     path.startsWith("/api/b24/webhook") ||
-    path === "/favicon.ico";
+    path === "/favicon.ico" ||
+    path === "/icon.png" ||
+    path === "/logoalleya.png" ||
+    path.startsWith("/icons/");
 
   if (isPublicPath) {
     return NextResponse.next();

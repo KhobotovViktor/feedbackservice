@@ -57,8 +57,8 @@ export default function LoginPage() {
                 <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
               </div>
               <div className="space-y-1">
-                <h1 className="text-2xl font-black text-slate-900 tracking-tight">Сервис обратной связи</h1>
-                <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px]">«Аллея Мебели»</p>
+                <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px] leading-none mb-1">Сервис обратной связи</p>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none">«Аллея Мебели»</h1>
               </div>
             </div>
 
