@@ -39,24 +39,32 @@ export default async function AdminDashboard({
 }: { 
   searchParams: Promise<{ period?: string; from?: string; to?: string }> 
 }) {
-  const { period, from, to } = await searchParams;
+  const { period, from, to } = (await searchParams) || {};
   
+  const safeDate = (dateStr: string | undefined) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
   let dateFilter: any = {};
   if (period === "30d") {
     const d = new Date();
     d.setDate(d.getDate() - 30);
     dateFilter = { gte: d };
   } else if (period === "custom") {
-    if (from || to) {
+    const fromDate = safeDate(from);
+    const toDate = safeDate(to);
+    if (fromDate || toDate) {
       dateFilter = {};
-      if (from) dateFilter.gte = new Date(from);
-      if (to) dateFilter.lte = new Date(to);
+      if (fromDate) dateFilter.gte = fromDate;
+      if (toDate) dateFilter.lte = toDate;
     }
   }
 
   const whereWithDate = Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
 
-  // Fetch Previous Period for Trends (if 30d is selected)
+  // Fetch Previous Period for Trends
   let prevDateFilter: any = {};
   if (period === "30d") {
     const startOfPrev30 = new Date();
@@ -64,42 +72,55 @@ export default async function AdminDashboard({
     const endOfPrev30 = new Date();
     endOfPrev30.setDate(endOfPrev30.getDate() - 30);
     prevDateFilter = { gte: startOfPrev30, lt: endOfPrev30 };
-  } else if (period === "custom" && from && to) {
-    const f = new Date(from);
-    const t = new Date(to);
-    const diff = t.getTime() - f.getTime();
-    prevDateFilter = { 
-      gte: new Date(f.getTime() - diff), 
-      lt: f 
-    };
+  } else if (period === "custom") {
+    const fromDate = safeDate(from);
+    const toDate = safeDate(to);
+    if (fromDate && toDate) {
+      const diff = toDate.getTime() - fromDate.getTime();
+      prevDateFilter = { 
+        gte: new Date(fromDate.getTime() - diff), 
+        lt: fromDate 
+      };
+    }
   }
 
-  const [
-    totalResponses,
-    totalViews,
-    totalClicks,
-    negativeResponses,
-    branchesRaw,
-    prevResponsesCount
-  ] = await Promise.all([
-    prisma.surveyResponse.count({ where: whereWithDate }),
-    (prisma as any).analyticsEvent.count({ where: { ...whereWithDate, type: "VIEW" } }),
-    (prisma as any).analyticsEvent.count({ where: { ...whereWithDate, type: "CLICK" } }),
-    prisma.surveyResponse.count({ where: { ...whereWithDate, averageScore: { lt: 4 } } }),
-    (prisma as any).branch.findMany({
-      include: {
-        surveyResponses: { 
-          where: whereWithDate,
-          select: { averageScore: true } 
+  let totalResponses = 0;
+  let totalViews = 0;
+  let totalClicks = 0;
+  let negativeResponses = 0;
+  let branchesRaw: any[] = [];
+  let prevResponsesCount = 0;
+
+  try {
+    const results = await Promise.all([
+      prisma.surveyResponse.count({ where: whereWithDate }),
+      (prisma as any).analyticsEvent?.count({ where: { ...whereWithDate, type: "VIEW" } }) || Promise.resolve(0),
+      (prisma as any).analyticsEvent?.count({ where: { ...whereWithDate, type: "CLICK" } }) || Promise.resolve(0),
+      prisma.surveyResponse.count({ where: { ...whereWithDate, averageScore: { lt: 4 } } }),
+      (prisma as any).branch.findMany({
+        include: {
+          surveyResponses: { 
+            where: whereWithDate,
+            select: { averageScore: true } 
+          }
         }
-      }
-    }),
-    Object.keys(prevDateFilter).length > 0 ? prisma.surveyResponse.count({ where: { createdAt: prevDateFilter } }) : Promise.resolve(0)
-  ]);
+      }),
+      Object.keys(prevDateFilter).length > 0 ? prisma.surveyResponse.count({ where: { createdAt: prevDateFilter } }) : Promise.resolve(0)
+    ]);
+
+    totalResponses = results[0];
+    totalViews = results[1];
+    totalClicks = results[2];
+    negativeResponses = results[3];
+    branchesRaw = results[4];
+    prevResponsesCount = results[5];
+  } catch (err) {
+    console.error("Dashboard data fetch error:", err);
+  }
 
   let allScores: number[] = [];
-  const branchStats = (branchesRaw as any[]).map((branch: any) => {
-    const scores = (branch.surveyResponses as { averageScore: number }[]).map(r => r.averageScore);
+  const branchStats = (branchesRaw || []).map((branch: any) => {
+    const scores = (branch.surveyResponses || []).map((r: any) => r.averageScore);
     allScores = [...allScores, ...scores];
     const avg = scores.length > 0 ? (scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : 0;
     return { id: branch.id, name: branch.name, avg, count: scores.length };

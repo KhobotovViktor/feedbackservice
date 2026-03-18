@@ -6,16 +6,26 @@ import { BranchFilter } from "@/components/results/branch-filter";
 export default async function ResultsPage({ searchParams }: { searchParams: Promise<{ branchId?: string }> }) {
   const { branchId } = await searchParams;
 
-  const responses = await prisma.surveyResponse.findMany({
-    where: branchId && branchId !== "all" ? { branchId: branchId as string } : {},
-    orderBy: { createdAt: "desc" },
-    include: { branch: true }
-  });
+  let responses: any[] = [];
+  let branches: any[] = [];
 
-  const branches = await (prisma as any).branch.findMany({
-    orderBy: { name: "asc" },
-    select: { id: true, name: true }
-  });
+  try {
+    const results = await Promise.all([
+      prisma.surveyResponse.findMany({
+        where: branchId && branchId !== "all" ? { branchId: branchId as string } : {},
+        orderBy: { createdAt: "desc" },
+        include: { branch: true }
+      }),
+      (prisma as any).branch.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true }
+      })
+    ]);
+    responses = results[0];
+    branches = results[1];
+  } catch (err) {
+    console.error("Results page data fetch error:", err);
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700 pb-12">
