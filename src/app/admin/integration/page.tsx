@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2 } from "lucide-react";
+import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Plus, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 export default function IntegrationPage() {
   const [settings, setSettings] = useState({
@@ -16,6 +17,8 @@ export default function IntegrationPage() {
     review_2gis: "",
     review_google_maps: "",
     b24_group_chat_id: "",
+    review_min_score: "4",
+    survey_questions: JSON.stringify(["Насколько вы довольны качеством обслуживания?"]),
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,10 +41,18 @@ export default function IntegrationPage() {
           review_2gis: data.review_2gis || "",
           review_google_maps: data.review_google_maps || "",
           b24_group_chat_id: data.b24_group_chat_id || "",
+          review_min_score: data.review_min_score || "4",
+          survey_questions: data.survey_questions || JSON.stringify(["Насколько вы довольны качеством обслуживания?"]),
         });
         setLoading(false);
       });
   }, []);
+
+  const questions: string[] = JSON.parse(settings.survey_questions);
+
+  const updateQuestions = (newQuestions: string[]) => {
+    setSettings({ ...settings, survey_questions: JSON.stringify(newQuestions) });
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -255,6 +266,73 @@ export default function IntegrationPage() {
                   <p className="text-[10px] text-slate-400 font-medium mt-2 px-1">
                     В этот чат будут приходить мгновенные уведомления о <span className="font-bold text-rose-500">негативных</span> оценках.
                   </p>
+                </div>
+              </div>
+
+              <div className="pt-8 border-t border-slate-100/50 pb-2">
+                <div className="flex items-center gap-3 text-indigo-500 mb-6">
+                  <Star className="w-6 h-6" />
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight">Настройка опроса</h3>
+                </div>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Минимальный балл для показа ссылок на отзывы
+                    </label>
+                    <div className="flex items-center gap-4">
+                      {[1, 2, 3, 4, 5].map((score) => (
+                        <button
+                          key={score}
+                          onClick={() => setSettings({ ...settings, review_min_score: score.toString() })}
+                          className={cn(
+                            "w-12 h-12 rounded-xl font-black transition-all border",
+                            settings.review_min_score === score.toString()
+                              ? "bg-indigo-500 text-white border-indigo-500 shadow-lg shadow-indigo-500/20"
+                              : "bg-white text-slate-400 border-slate-200 hover:border-indigo-300"
+                          )}
+                        >
+                          {score}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium mt-2 px-1">
+                      Ссылки на Яндекс.Карты, 2GIS и Google будут показаны только если средний балл &ge; {settings.review_min_score}.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4 pt-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Вопросы опроса ({questions.length})
+                    </label>
+                    <div className="space-y-3">
+                      {questions.map((q, idx) => (
+                        <div key={idx} className="flex gap-3">
+                          <input
+                            type="text"
+                            value={q}
+                            onChange={(e) => {
+                              const newQs = [...questions];
+                              newQs[idx] = e.target.value;
+                              updateQuestions(newQs);
+                            }}
+                            className="flex-1 px-5 py-3 rounded-xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-bold"
+                          />
+                          <button
+                            onClick={() => updateQuestions(questions.filter((_, i) => i !== idx))}
+                            className="p-3 text-rose-400 hover:bg-rose-50 rounded-xl transition-all"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => updateQuestions([...questions, ""])}
+                      className="flex items-center gap-2 text-xs font-black text-indigo-500 hover:text-indigo-600 transition-colors uppercase tracking-widest mt-2 ml-1"
+                    >
+                      <Plus size={14} /> Добавить вопрос
+                    </button>
+                  </div>
                 </div>
               </div>
 
