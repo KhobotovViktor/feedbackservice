@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Plus, Trash2 } from "lucide-react";
+import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Plus, Trash2, Play, ExternalLink, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -23,29 +23,38 @@ export default function IntegrationPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<null | "success" | "error">(null);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [testBranchId, setTestBranchId] = useState("");
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult] = useState<any>(null);
 
   const webhookUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/api/b24/webhook?clientId={{ID}}&dealId={{DEAL_ID}}`;
 
   useEffect(() => {
-    fetch("/api/settings")
-      .then((res) => res.json())
-      .then((data) => {
+    Promise.all([
+      fetch("/api/settings").then(res => res.json()),
+      fetch("/api/branches").then(res => res.json())
+    ]).then(([settingsData, branchesData]) => {
         setSettings({
-          b24_webhook_url: data.b24_webhook_url || "",
-          b24_message_template: data.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}",
-          b24_field_quality: data.b24_field_quality || "",
-          b24_field_support: data.b24_field_support || "",
-          b24_field_average: data.b24_field_average || "",
-          b24_field_comment: data.b24_field_comment || "",
-          review_yandex: data.review_yandex || "",
-          review_2gis: data.review_2gis || "",
-          review_google_maps: data.review_google_maps || "",
-          b24_group_chat_id: data.b24_group_chat_id || "",
-          review_min_score: data.review_min_score || "4",
-          survey_questions: data.survey_questions || JSON.stringify(["Насколько вы довольны качеством обслуживания?"]),
+          b24_webhook_url: settingsData.b24_webhook_url || "",
+          b24_message_template: settingsData.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}",
+          b24_field_quality: settingsData.b24_field_quality || "",
+          b24_field_support: settingsData.b24_field_support || "",
+          b24_field_average: settingsData.b24_field_average || "",
+          b24_field_comment: settingsData.b24_field_comment || "",
+          review_yandex: settingsData.review_yandex || "",
+          review_2gis: settingsData.review_2gis || "",
+          review_google_maps: settingsData.review_google_maps || "",
+          b24_group_chat_id: settingsData.b24_group_chat_id || "",
+          review_min_score: settingsData.review_min_score || "4",
+          survey_questions: settingsData.survey_questions || JSON.stringify(["Насколько вы довольны качеством обслуживания?"]),
         });
+        if (Array.isArray(branchesData)) {
+          setBranches(branchesData);
+          if (branchesData.length > 0) setTestBranchId(branchesData[0].id);
+        }
         setLoading(false);
-      });
+    });
   }, []);
 
   const questions: string[] = JSON.parse(settings.survey_questions);
@@ -73,6 +82,25 @@ export default function IntegrationPage() {
       setStatus("error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSimulateWorkflow = async () => {
+    if (!testBranchId) return;
+    setTestLoading(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/admin/test/simulate-b24-workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId: testBranchId }),
+      });
+      const data = await res.json();
+      setTestResult(data);
+    } catch (e) {
+      setTestResult({ error: "Ошибка соединения" });
+    } finally {
+      setTestLoading(false);
     }
   };
 
@@ -191,6 +219,90 @@ export default function IntegrationPage() {
                 </div>
                 <p className="text-[10px] text-slate-400 font-medium mt-4 leading-relaxed px-1">
                   Укажите ID пользовательских полей из Битрикс24 (Настройки → Настройки CRM → Настройки форм → Пользовательские поля).
+                </p>
+              </div>
+
+              {/* End-to-End Test Simulation */}
+              <div className="pt-8 border-t border-slate-100/50">
+                <div className="flex items-center gap-3 text-indigo-600 mb-6">
+                  <Play className="w-6 h-6" />
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight">Имитация рабочего процесса</h3>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row items-end gap-4 p-6 bg-slate-50/50 rounded-2xl border border-slate-100">
+                  <div className="flex-1 space-y-2 w-full">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Тестовый филиал
+                    </label>
+                    <div className="flex-1">
+                      <select 
+                        value={testBranchId}
+                        onChange={(e) => setTestBranchId(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
+                      >
+                        {branches.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleSimulateWorkflow}
+                    disabled={testLoading || !testBranchId}
+                    className="px-6 py-4 premium-gradient text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-lg shadow-indigo-500/20 disabled:opacity-50 h-[46px]"
+                  >
+                    {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap size={16} />}
+                    Запустить тест
+                  </button>
+                </div>
+
+                {testResult && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={cn(
+                      "mt-6 p-6 rounded-2xl border flex flex-col gap-4",
+                      testResult.error ? "bg-rose-50 border-rose-100" : "bg-emerald-50 border-emerald-100"
+                    )}
+                  >
+                    <div className="flex items-start gap-4">
+                      {testResult.error ? (
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-rose-500 shadow-sm shrink-0">
+                          <X size={20} />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-500 shadow-sm shrink-0">
+                          <CheckCircle2 size={20} />
+                        </div>
+                      )}
+                      <div className="space-y-1 py-1">
+                        <p className={cn("text-xs font-black uppercase tracking-widest", testResult.error ? "text-rose-500" : "text-emerald-600")}>
+                          {testResult.error ? "Ошибка симуляции" : "Успешная имитация"}
+                        </p>
+                        <p className="text-sm font-medium text-slate-600 leading-relaxed">
+                          {testResult.error || testResult.message}
+                        </p>
+                      </div>
+                    </div>
+                    {testResult.link && (
+                      <div className="flex items-center gap-3 p-4 bg-white rounded-xl border border-emerald-200/50">
+                        <div className="flex-1 truncate text-[10px] font-mono font-bold text-slate-400">
+                          {testResult.link}
+                        </div>
+                        <button 
+                          onClick={() => window.open(testResult.link, '_blank')}
+                          className="px-4 py-2 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-600 transition-all flex items-center gap-2"
+                        >
+                          <ExternalLink size={12} />
+                          Открыть
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+                
+                <p className="text-[10px] text-slate-400 font-medium mt-4 leading-relaxed px-1">
+                  Нажмите кнопку, чтобы имитировать завершение сделки в Битрикс24. Система сгенерирует ссылку и попытается отправить её через вебхук.
                 </p>
               </div>
 

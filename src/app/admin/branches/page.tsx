@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { 
   Plus, Building2, MapPin, ExternalLink, Trash2, Loader2, Search, 
-  QrCode, X, Copy, Download, LayoutDashboard, Star, Printer 
+  QrCode, X, Copy, Download, LayoutDashboard, Star, Printer, Play
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -129,6 +129,21 @@ export default function BranchesPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTestSurvey = async (branchId: string) => {
+    try {
+      const res = await fetch(`/api/admin/test/generate-survey-token?branchId=${branchId}`);
+      if (res.ok) {
+        const data = await res.json();
+        window.open(data.url, '_blank');
+      } else {
+        alert("Ошибка генерации тестовой ссылки");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Ошибка при попытке запустить тест");
     }
   };
 
@@ -292,6 +307,14 @@ export default function BranchesPage() {
                         </span>
                       )}
                       <button 
+                        onClick={() => handleTestSurvey(branch.id)}
+                        className="p-1 px-2.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-lg uppercase tracking-widest border border-emerald-100/50 hover:bg-emerald-500 hover:text-white transition-all flex items-center gap-1"
+                        title="Пройти тест опраса для этого филиала"
+                      >
+                        <Play className="w-3 h-3" />
+                        Тест
+                      </button>
+                      <button 
                         onClick={() => handleEditClick(branch)}
                         className="p-1 px-2.5 bg-indigo-50 text-indigo-500 text-[10px] font-black rounded-lg uppercase tracking-widest border border-indigo-100/50 hover:bg-indigo-500 hover:text-white transition-all"
                       >
@@ -351,17 +374,47 @@ export default function BranchesPage() {
                     <QrCode className="w-5 h-5" />
                     Контроль QR
                   </button>
-                  <div className="flex gap-2 shrink-0">
-                    <a href={branch.yandexUrl || "#"} target={branch.yandexUrl ? "_blank" : undefined} className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all border overflow-hidden", branch.yandexUrl ? "glass border-rose-100 hover:bg-rose-50" : "bg-slate-50 opacity-20 border-slate-100 cursor-not-allowed")} title="Яндекс.Карты">
-                      <img src="/icons/yandex.png" alt="Yandex" className="w-full h-full object-cover" />
-                    </a>
-                    <a href={branch.dgisUrl || "#"} target={branch.dgisUrl ? "_blank" : undefined} className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all border overflow-hidden", branch.dgisUrl ? "glass border-emerald-100 hover:bg-emerald-50" : "bg-slate-50 opacity-20 border-slate-100 cursor-not-allowed")} title="2GIS">
-                      <img src="/icons/2gis.png" alt="2GIS" className="w-full h-full object-cover" />
-                    </a>
-                    <a href={branch.googleUrl || "#"} target={branch.googleUrl ? "_blank" : undefined} className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all border overflow-hidden", branch.googleUrl ? "glass border-blue-100 hover:bg-blue-50" : "bg-slate-50 opacity-20 border-slate-100 cursor-not-allowed")} title="Google Maps">
-                      <img src="/icons/googlemaps.png" alt="Google" className="w-full h-full object-cover" />
-                    </a>
-                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <a 
+                    href={branch.yandexUrl || "#"} 
+                    target={branch.yandexUrl ? "_blank" : undefined} 
+                    className={cn(
+                      "flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs transition-all border",
+                      branch.yandexUrl 
+                        ? "bg-white border-rose-100 text-rose-600 hover:bg-rose-50 shadow-sm" 
+                        : "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed opacity-40"
+                    )}
+                  >
+                    <img src="/icons/yandex.png" alt="" className="w-4 h-4 object-contain" />
+                    Яндекс
+                  </a>
+                  <a 
+                    href={branch.dgisUrl || "#"} 
+                    target={branch.dgisUrl ? "_blank" : undefined} 
+                    className={cn(
+                      "flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs transition-all border",
+                      branch.dgisUrl 
+                        ? "bg-white border-emerald-100 text-emerald-600 hover:bg-emerald-50 shadow-sm" 
+                        : "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed opacity-40"
+                    )}
+                  >
+                    <img src="/icons/2gis.png" alt="" className="w-4 h-4 object-contain" />
+                    2ГИС
+                  </a>
+                  <a 
+                    href={branch.googleUrl || "#"} 
+                    target={branch.googleUrl ? "_blank" : undefined} 
+                    className={cn(
+                      "flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs transition-all border",
+                      branch.googleUrl 
+                        ? "bg-white border-blue-100 text-blue-600 hover:bg-blue-50 shadow-sm" 
+                        : "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed opacity-40"
+                    )}
+                  >
+                    <img src="/icons/googlemaps.png" alt="" className="w-4 h-4 object-contain" />
+                    Google
+                  </a>
                 </div>
               </div>
             </div>
