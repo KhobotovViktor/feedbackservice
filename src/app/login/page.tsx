@@ -54,7 +54,7 @@ export default function LoginPage() {
           <div className="relative z-10 space-y-8">
             <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto shadow-xl shadow-indigo-100 border border-slate-50 overflow-hidden p-2">
-                <img src="/logo_alleya.png" alt="Logo" className="w-full h-full object-contain" />
+                <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
               </div>
               <div className="space-y-1">
                 <h1 className="text-2xl font-black text-slate-900 tracking-tight">Сервис обратной связи</h1>

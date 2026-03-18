@@ -55,7 +55,7 @@ export default function AdminLayout({
         <div className="glass rounded-2xl p-4 flex items-center justify-between border-white/40 shadow-xl">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg p-1">
-              <img src="/logo_alleya.png" alt="Logo" className="w-full h-full object-contain" />
+              <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
             </div>
             <div className="flex flex-col">
               <span className="font-black text-sm tracking-tight leading-none text-slate-900">Аллея Мебели</span>
@@ -76,7 +76,7 @@ export default function AdminLayout({
         <div className="glass-dark rounded-[2.5rem] p-3 flex flex-col gap-3 shadow-2xl border-white/5">
           <div className="py-4 mb-2 flex justify-center">
              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg transform -rotate-6 shrink-0 p-1.5 border border-white/10">
-                <img src="/logo_alleya.png" alt="Logo" className="w-full h-full object-contain" />
+                <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
              </div>
           </div>
           {navItems.map((item) => {
@@ -133,7 +133,7 @@ export default function AdminLayout({
             >
               <div className="flex items-center gap-4 mb-10 px-4">
                 <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-xl p-1.5">
-                  <img src="/logo_alleya.png" alt="Logo" className="w-full h-full object-contain" />
+                  <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex flex-col">
                   <span className="font-black text-xl text-white tracking-tight leading-none">Аллея Мебели</span>
