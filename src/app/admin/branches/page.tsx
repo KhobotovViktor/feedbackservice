@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Building2, MapPin, ExternalLink, Trash2, Loader2, Search, QrCode, X, Copy, Download, LayoutDashboard, Star } from "lucide-react";
+import { 
+  Plus, Building2, MapPin, ExternalLink, Trash2, Loader2, Search, 
+  QrCode, X, Copy, Download, LayoutDashboard, Star, Printer 
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -429,6 +432,13 @@ export default function BranchesPage() {
                   <Download className="w-5 h-5" />
                   PNG
                 </a>
+                <button 
+                  onClick={() => window.open(`/admin/branches/print/${selectedForQR.id}`, '_blank')}
+                  className="sm:col-span-2 flex items-center justify-center gap-3 px-6 py-4 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-2xl font-black hover:bg-indigo-100 transition-all text-sm shadow-sm"
+                >
+                  <Printer className="w-5 h-5" />
+                  Распечатать шаблон (A4)
+                </button>
               </div>
 
               <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-[80px] -mr-32 -mt-32 rounded-full" />

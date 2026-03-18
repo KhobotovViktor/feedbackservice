@@ -117,31 +117,56 @@ export async function POST(req: NextRequest) {
         }
 
         // 5. SEND GROUP CHAT NOTIFICATION FOR NEGATIVE FEEDBACK
-        if (averageScore < 4 && settingsMap.b24_group_chat_id) {
-          console.log(`Negative feedback detected (Score: ${averageScore}). Sending notification to group chat ${settingsMap.b24_group_chat_id}`);
+        const notifyThreshold = 4;
+        if (averageScore < notifyThreshold && settingsMap.b24_group_chat_id) {
+          const branchId = payload.branchId;
+          let branchName = "Неизвестный филиал";
           
-          let alertMessage = `⚠️ *ОТРИЦАТЕЛЬНЫЙ ОТЗЫВ*\n\n`;
-          alertMessage += `👤 Клиент: ${clientId}\n`;
-          alertMessage += `🏢 Сделка: [${dealId}](${cleanBaseUrl.replace('/rest/', '/crm/deal/details/')}${dealId}/)\n`;
-          alertMessage += `⭐ Средняя оценка: ${averageScore.toFixed(1)}\n\n`;
+          if (branchId) {
+            const b = await prisma.branch.findUnique({ where: { id: branchId } });
+            if (b) branchName = b.name;
+          }
+
+          console.log(`Negative feedback detected (Score: ${averageScore}) for ${branchName}. Sending notification to group chat ${settingsMap.b24_group_chat_id}`);
+          
+          let alertMessage = `⚠️ [b]ОТРИЦАТЕЛЬНЫЙ ОТЗЫВ[/b]\n\n`;
+          alertMessage += `🏢 [b]Филиал:[/b] ${branchName}\n`;
+          alertMessage += `👤 [b]Клиент:[/b] ${clientId}\n`;
+          alertMessage += `🔗 [b]Сделка:[/b] [url=${cleanBaseUrl.replace('/rest/', '/crm/deal/details/')}${dealId}/]${dealId}[/url]\n`;
+          alertMessage += `⭐ [b]Средняя оценка:[/b] ${averageScore.toFixed(1)}\n\n`;
           
           // List ratings
-          alertMessage += `*Оценки:*\n`;
-          for (const q of questions) {
-            if (answersMap[q.id]) {
-              alertMessage += `- ${q.text}: ${answersMap[q.id]}\n`;
+          alertMessage += `[b]Оценки:[/b]\n`;
+          // Use the correct questions for this branch
+          let displayQuestions = questions;
+          if (branchId) {
+            const branchData = await prisma.branch.findUnique({
+              where: { id: branchId },
+              include: { template: true }
+            });
+            if (branchData?.template?.questions) {
+              displayQuestions = JSON.parse(branchData.template.questions as string).map((text: string, i: number) => ({ id: i.toString(), text }));
+            }
+          }
+
+          for (const q of displayQuestions) {
+            if (answersMap[q.id || q.text]) {
+              alertMessage += `- ${q.text}: ${answersMap[q.id || q.text]}\n`;
             }
           }
           
           if (comment) {
-            alertMessage += `\n💬 *Комментарий:* ${comment}`;
+            alertMessage += `\n💬 [b]Комментарий:[/b] ${comment}`;
           }
+
+          const rawChatId = settingsMap.b24_group_chat_id.trim();
+          const dialogId = rawChatId.startsWith('chat') ? rawChatId : `chat${rawChatId}`;
 
           await fetch(`${cleanBaseUrl}/im.message.add.json`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              DIALOG_ID: `chat${settingsMap.b24_group_chat_id}`,
+              DIALOG_ID: dialogId,
               MESSAGE: alertMessage
             })
           });
