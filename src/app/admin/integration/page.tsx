@@ -201,9 +201,12 @@ export default function IntegrationPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-rose-500 uppercase tracking-widest ml-1">
-                      Яндекс.Карты
-                    </label>
+                    <div className="flex items-center justify-between ml-1">
+                      <label className="text-[10px] font-black text-rose-500 uppercase tracking-widest">
+                        Яндекс.Карты
+                      </label>
+                      <img src="/icons/yandex.jpg" alt="Yandex" className="w-4 h-4 rounded-sm object-cover" />
+                    </div>
                     <input
                       type="text"
                       placeholder="https://yandex.ru/maps/..."
@@ -213,9 +216,12 @@ export default function IntegrationPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest ml-1">
-                      2GIS
-                    </label>
+                    <div className="flex items-center justify-between ml-1">
+                      <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                        2GIS
+                      </label>
+                      <img src="/icons/2gis.jpg" alt="2GIS" className="w-4 h-4 rounded-sm object-cover" />
+                    </div>
                     <input
                       type="text"
                       placeholder="https://2gis.ru/..."
@@ -225,9 +231,12 @@ export default function IntegrationPage() {
                     />
                   </div>
                   <div className="space-y-2 sm:col-span-2 md:col-span-1">
-                    <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest ml-1">
-                      Google Maps
-                    </label>
+                    <div className="flex items-center justify-between ml-1">
+                      <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest">
+                        Google Maps
+                      </label>
+                      <img src="/icons/google.jpg" alt="Google" className="w-4 h-4 rounded-sm object-cover" />
+                    </div>
                     <input
                       type="text"
                       placeholder="https://goo.gl/maps/..."
@@ -279,13 +288,13 @@ export default function IntegrationPage() {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                       Минимальный балл для показа ссылок на отзывы
                     </label>
-                    <div className="flex items-center gap-4">
-                      {[1, 2, 3, 4, 5].map((score) => (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map((score) => (
                         <button
                           key={score}
                           onClick={() => setSettings({ ...settings, review_min_score: score.toString() })}
                           className={cn(
-                            "w-12 h-12 rounded-xl font-black transition-all border",
+                            "w-12 h-12 rounded-xl font-black transition-all border text-xs",
                             settings.review_min_score === score.toString()
                               ? "bg-indigo-500 text-white border-indigo-500 shadow-lg shadow-indigo-500/20"
                               : "bg-white text-slate-400 border-slate-200 hover:border-indigo-300"
@@ -425,9 +434,12 @@ export default function IntegrationPage() {
           <div className="premium-gradient p-10 rounded-[3rem] text-white space-y-4 shadow-2xl shadow-indigo-500/30">
              <h3 className="text-xl font-black tracking-tight">Нужна помощь?</h3>
              <p className="text-white/80 font-medium text-sm leading-relaxed">Если у вас возникли трудности с настройкой роботов, напишите в нашу поддержку.</p>
-             <button className="w-full py-4 bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl font-black text-xs uppercase tracking-widest transition-all">
+             <a 
+               href="mailto:hobotov.viktor92@gmail.com"
+               className="w-full py-4 bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl font-black text-xs uppercase tracking-widest transition-all inline-flex items-center justify-center"
+             >
                 Связаться
-             </button>
+             </a>
           </div>
         </div>
       </div>

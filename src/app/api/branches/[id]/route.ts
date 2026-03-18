@@ -8,7 +8,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { name, city, yandexUrl, dgisUrl, googleUrl, externalId, templateId } = body;
+    const { name, city, yandexUrl, dgisUrl, googleUrl, externalId, templateId, minScore } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -23,7 +23,8 @@ export async function PATCH(
         dgisUrl,
         googleUrl,
         externalId,
-        templateId: templateId || null
+        templateId: templateId || null,
+        minScore: minScore !== undefined ? parseFloat(minScore) : undefined
       }
     });
 

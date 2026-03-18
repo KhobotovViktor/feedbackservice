@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 interface Branch {
   id: string;
@@ -11,8 +12,7 @@ export function BranchFilter({ branches, defaultValue }: { branches: Branch[], d
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
+  const handleBranchChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value === "all") {
       params.delete("branchId");
@@ -22,17 +22,19 @@ export function BranchFilter({ branches, defaultValue }: { branches: Branch[], d
     router.push(`?${params.toString()}`);
   };
 
+  const options = [
+    { value: "all", label: "Все филиалы" },
+    ...branches.map(b => ({ value: b.id, label: b.name }))
+  ];
+
   return (
-    <select 
-      name="branchId"
-      className="w-full bg-white border-none px-6 py-3 rounded-xl font-black outline-none shadow-sm text-xs md:text-sm appearance-none cursor-pointer hover:bg-slate-50 transition-all font-black"
-      defaultValue={defaultValue}
-      onChange={handleChange}
-    >
-      <option value="all">Все филиалы</option>
-      {branches.map(b => (
-        <option key={b.id} value={b.id}>{b.name}</option>
-      ))}
-    </select>
+    <div className="w-full">
+      <CustomSelect 
+        options={options}
+        value={defaultValue}
+        onChange={handleBranchChange}
+        placeholder="Выберите филиал"
+      />
+    </div>
   );
 }

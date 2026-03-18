@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Plus, Building2, MapPin, ExternalLink, Trash2, Loader2, Search, QrCode, X, Copy, Download, LayoutDashboard, Star } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 interface Branch {
   id: string;
@@ -220,16 +221,15 @@ export default function BranchesPage() {
               </div>
               <div className="space-y-2 sm:col-span-2 lg:col-span-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Шаблон вопросов</label>
-                <select 
-                  className="w-full px-5 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold appearance-none cursor-pointer"
+                <CustomSelect 
+                  options={[
+                    { value: "", label: "Без шаблона (свои вопросы)" },
+                    ...templates.map(t => ({ value: t.id, label: t.name }))
+                  ]}
                   value={newBranch.templateId || ""}
-                  onChange={e => setNewBranch({...newBranch, templateId: e.target.value})}
-                >
-                  <option value="">Без шаблона (свои вопросы)</option>
-                  {templates.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                  onChange={val => setNewBranch({...newBranch, templateId: val})}
+                  placeholder="Выберите шаблон"
+                />
               </div>
             </div>
             
@@ -342,12 +342,15 @@ export default function BranchesPage() {
                     <QrCode className="w-5 h-5" />
                     Контроль QR
                   </button>
-                  <div className="flex gap-3 shrink-0">
-                    <a href={branch.yandexUrl || "#"} target={branch.yandexUrl ? "_blank" : undefined} className={cn("p-4 rounded-2xl flex items-center justify-center transition-all border", branch.yandexUrl ? "glass border-rose-100 text-rose-500 hover:bg-rose-50" : "bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed")} title="Яндекс.Карты">
-                      <Search className="w-5 h-5" />
+                  <div className="flex gap-2 shrink-0">
+                    <a href={branch.yandexUrl || "#"} target={branch.yandexUrl ? "_blank" : undefined} className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all border overflow-hidden", branch.yandexUrl ? "glass border-rose-100 hover:bg-rose-50" : "bg-slate-50 opacity-20 border-slate-100 cursor-not-allowed")} title="Яндекс.Карты">
+                      <img src="/icons/yandex.jpg" alt="Yandex" className="w-full h-full object-cover" />
                     </a>
-                    <a href={branch.dgisUrl || "#"} target={branch.dgisUrl ? "_blank" : undefined} className={cn("p-4 rounded-2xl flex items-center justify-center transition-all border", branch.dgisUrl ? "glass border-emerald-100 text-emerald-500 hover:bg-emerald-50" : "bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed")} title="2GIS">
-                      <ExternalLink className="w-5 h-5" />
+                    <a href={branch.dgisUrl || "#"} target={branch.dgisUrl ? "_blank" : undefined} className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all border overflow-hidden", branch.dgisUrl ? "glass border-emerald-100 hover:bg-emerald-50" : "bg-slate-50 opacity-20 border-slate-100 cursor-not-allowed")} title="2GIS">
+                      <img src="/icons/2gis.jpg" alt="2GIS" className="w-full h-full object-cover" />
+                    </a>
+                    <a href={branch.googleUrl || "#"} target={branch.googleUrl ? "_blank" : undefined} className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all border overflow-hidden", branch.googleUrl ? "glass border-blue-100 hover:bg-blue-50" : "bg-slate-50 opacity-20 border-slate-100 cursor-not-allowed")} title="Google Maps">
+                      <img src="/icons/google.jpg" alt="Google" className="w-full h-full object-cover" />
                     </a>
                   </div>
                 </div>

@@ -21,6 +21,7 @@ model Branch {
   externalId       String?          // ID from B24 or other system
   templateId       String?
   template         QuestionTemplate? @relation(fields: [templateId], references: [id])
+  minScore         Float?           // Override global threshold
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   questions        Question[]

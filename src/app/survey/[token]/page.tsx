@@ -52,17 +52,27 @@ export default function SurveyPage() {
         setBranchId(bId);
         const branchInfo = data.branch;
         
+        // Fetch global settings for fallback questions and min score
+        const sRes = await fetch("/api/settings");
+        const sData = await sRes.json();
+        const minScoreThreshold = parseFloat(sData.review_min_score || "4");
+
         // If branch has a template, use template questions
         if (branchInfo?.template?.questions) {
           setQuestions(branchInfo.template.questions);
-        } else {
-          // Fallback to branch-specific or global questions
-          const qRes = await fetch(bId ? `/api/questions?branchId=${bId}` : "/api/questions");
-          const qData = await qRes.json();
-          setQuestions(qData);
+        } else if (sData.survey_questions) {
+          try {
+            const globalQs = JSON.parse(sData.survey_questions).map((text: string, i: number) => ({
+              id: `global-${i}`,
+              text
+            }));
+            if (globalQs.length > 0) setQuestions(globalQs);
+          } catch (e) {
+            console.error("Failed to parse global questions", e);
+          }
         }
 
-        // Set branch-specific links if they exist, otherwise use global settings
+        // Set review links and threshold
         if (data.branch) {
           setReviewLinks({
             yandex: data.branch.yandexUrl || "",
@@ -70,14 +80,15 @@ export default function SurveyPage() {
             google: data.branch.googleUrl || ""
           });
         } else {
-          const sRes = await fetch("/api/settings");
-          const sData = await sRes.json();
           setReviewLinks({
             yandex: sData.review_yandex || "",
             dgis: sData.review_2gis || "",
             google: sData.review_google_maps || ""
           });
         }
+        
+        // Use setting for positive threshold
+        setIsPositiveThreshold(minScoreThreshold);
 
         // Log view event
         fetch("/api/analytics", {
@@ -94,13 +105,14 @@ export default function SurveyPage() {
     init();
   }, [token]);
 
+  const [isPositiveThreshold, setIsPositiveThreshold] = useState(4);
+
   const handleSubmitRating = async () => {
     const scores = Object.values(answers);
     const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-    const allHigh = scores.every((s) => s >= 4);
     
-    // Positive if average is high OR all scores are high
-    const positive = avg >= 4 || allHigh;
+    // Positive if average is >= threshold
+    const positive = avg >= isPositiveThreshold;
     setIsPositive(positive);
     
     if (positive) {
@@ -302,9 +314,12 @@ export default function SurveyPage() {
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ type: "CLICK", target: "YANDEX", branchId }),
                         })}
-                        className="flex items-center justify-center gap-3 p-4 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-bold text-slate-700 shadow-sm"
+                        className="flex items-center gap-4 p-4 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-bold text-slate-700 shadow-sm"
                       >
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-lg shadow-rose-500/20"></span> Яндекс.Карты
+                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-slate-100">
+                          <img src="/icons/yandex.jpg" alt="Yandex" className="w-full h-full object-cover" />
+                        </div>
+                        Яндекс.Карты
                       </a>
                     )}
                     {reviewLinks.dgis && (
@@ -317,9 +332,12 @@ export default function SurveyPage() {
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ type: "CLICK", target: "2GIS", branchId }),
                         })}
-                        className="flex items-center justify-center gap-3 p-4 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-bold text-slate-700 shadow-sm"
+                        className="flex items-center gap-4 p-4 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-bold text-slate-700 shadow-sm"
                       >
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/20"></span> 2GIS
+                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-slate-100">
+                          <img src="/icons/2gis.jpg" alt="2GIS" className="w-full h-full object-cover" />
+                        </div>
+                        2GIS
                       </a>
                     )}
                     {reviewLinks.google && (
@@ -332,9 +350,12 @@ export default function SurveyPage() {
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ type: "CLICK", target: "GOOGLE", branchId }),
                         })}
-                        className="flex items-center justify-center gap-3 p-4 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-bold text-slate-700 shadow-sm"
+                        className="flex items-center gap-4 p-4 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-bold text-slate-700 shadow-sm"
                       >
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-lg shadow-blue-500/20"></span> Google Maps
+                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-slate-100">
+                          <img src="/icons/google.jpg" alt="Google" className="w-full h-full object-cover" />
+                        </div>
+                        Google Maps
                       </a>
                     )}
                   </div>

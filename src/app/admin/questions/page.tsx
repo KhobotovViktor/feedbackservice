@@ -24,6 +24,8 @@ export default function QuestionsPage() {
   const [loading, setLoading] = useState(true);
   const [newQuestion, setNewQuestion] = useState("");
   const [adding, setAdding] = useState(false);
+  const [minScore, setMinScore] = useState<number>(4);
+  const [thresholdLoading, setThresholdLoading] = useState(false);
 
   useEffect(() => {
     fetchBranches();
@@ -31,7 +33,53 @@ export default function QuestionsPage() {
 
   useEffect(() => {
     fetchQuestions();
+    fetchThreshold();
   }, [selectedBranch]);
+
+  const fetchThreshold = async () => {
+    setThresholdLoading(true);
+    try {
+      if (selectedBranch === "all") {
+        const res = await fetch("/api/settings");
+        const data = await res.json();
+        setMinScore(parseFloat(data.review_min_score || "4"));
+      } else {
+        const res = await fetch(`/api/branches?id=${selectedBranch}`);
+        const data = await res.json();
+        // Since api/branches usually returns an array, find the one
+        const branch = Array.isArray(data) ? data.find((b: any) => b.id === selectedBranch) : data;
+        setMinScore(parseFloat(branch?.minScore || "4"));
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setThresholdLoading(false);
+    }
+  };
+
+  const handleUpdateThreshold = async (score: number) => {
+    setThresholdLoading(true);
+    try {
+      if (selectedBranch === "all") {
+        await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ review_min_score: score.toString() })
+        });
+      } else {
+        await fetch(`/api/branches/${selectedBranch}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: branches.find(b => b.id === selectedBranch)?.name, minScore: score })
+        });
+      }
+      setMinScore(score);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setThresholdLoading(false);
+    }
+  };
 
   const fetchBranches = async () => {
     try {
@@ -96,6 +144,39 @@ export default function QuestionsPage() {
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* Threshold Setting */}
+      <div className="bento-card p-8 md:p-10 bg-white/40 border-white/60 shadow-sm space-y-6">
+        <div className="flex items-center gap-3 text-indigo-500 mb-2">
+          <Star className="w-6 h-6" />
+          <h3 className="text-lg font-black text-slate-900 tracking-tight">Порог оценки для этого контекста</h3>
+        </div>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map((score) => (
+              <button
+                key={score}
+                onClick={() => handleUpdateThreshold(score)}
+                disabled={thresholdLoading}
+                className={cn(
+                  "w-12 h-12 rounded-xl font-black transition-all border text-xs relative overflow-hidden",
+                  minScore === score
+                    ? "bg-indigo-500 text-white border-indigo-500 shadow-lg shadow-indigo-500/20"
+                    : "bg-white text-slate-400 border-slate-200 hover:border-indigo-300"
+                )}
+              >
+                {score}
+              </button>
+            ))}
+            {thresholdLoading && <Loader2 className="w-5 h-5 animate-spin text-indigo-500 ml-2" />}
+          </div>
+          <p className="text-[10px] text-slate-400 font-medium px-1">
+            {selectedBranch === "all" 
+              ? "Глобальная настройка: ссылки на карты будут показаны только если средний балл ≥ " + minScore
+              : "Настройка для филиала: переопределяет глобальный порог. Сейчас: ≥ " + minScore}
+          </p>
         </div>
       </div>
 
