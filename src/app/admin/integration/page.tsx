@@ -265,13 +265,42 @@ export default function IntegrationPage() {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                     ID группового чата Bitrix24
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Например: 123"
-                    className="w-full px-6 py-4 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-rose-500/10 focus:border-rose-500 focus:bg-white outline-none transition-all text-sm font-bold"
-                    value={settings.b24_group_chat_id || ""}
-                    onChange={(e) => setSettings({ ...settings, b24_group_chat_id: e.target.value })}
-                  />
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <input
+                      type="text"
+                      placeholder="Например: 123"
+                      className="flex-1 px-6 py-4 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-rose-500/10 focus:border-rose-500 focus:bg-white outline-none transition-all text-sm font-bold"
+                      value={settings.b24_group_chat_id || ""}
+                      onChange={(e) => setSettings({ ...settings, b24_group_chat_id: e.target.value })}
+                    />
+                    <button
+                      onClick={async () => {
+                        const loadingToast = setStatus;
+                        try {
+                          const res = await fetch("/api/test-b24-notification", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              chatId: settings.b24_group_chat_id,
+                              webhookUrl: settings.b24_webhook_url
+                            }),
+                          });
+                          const data = await res.json();
+                          if (res.ok) {
+                            alert("✅ Тестовое сообщение отправлено! Проверьте чат в Битрикс24.");
+                          } else {
+                            alert("❌ Ошибка: " + (data.error || "Неизвестная ошибка"));
+                          }
+                        } catch (err) {
+                          alert("❌ Ошибка при отправке теста");
+                        }
+                      }}
+                      className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Bell size={14} className="text-rose-500" />
+                      Проверить
+                    </button>
+                  </div>
                   <p className="text-[10px] text-slate-400 font-medium mt-2 px-1">
                     В этот чат будут приходить мгновенные уведомления о <span className="font-bold text-rose-500">негативных</span> оценках.
                   </p>
