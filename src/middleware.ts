@@ -18,7 +18,8 @@ export async function middleware(req: NextRequest) {
     path === "/favicon.ico" ||
     path === "/icon.png" ||
     path === "/logoalleya.png" ||
-    path.startsWith("/icons/");
+    path.startsWith("/icons/") ||
+    path.startsWith("/yandex_");
 
   if (isPublicPath) {
     return NextResponse.next();
