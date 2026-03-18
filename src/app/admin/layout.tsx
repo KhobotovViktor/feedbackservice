@@ -57,7 +57,7 @@ export default function AdminLayout({
             <div className="w-8 h-8 premium-gradient rounded-lg flex items-center justify-center">
               <Star className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg tracking-tight">Say-Say</span>
+            <span className="font-bold text-lg tracking-tight">Alleya Feedback</span>
           </div>
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -132,7 +132,7 @@ export default function AdminLayout({
                 <div className="w-10 h-10 premium-gradient rounded-xl flex items-center justify-center">
                   <Star className="w-6 h-6 text-white" />
                 </div>
-                <span className="font-bold text-2xl text-white tracking-tight">Say-Say</span>
+                <span className="font-bold text-2xl text-white tracking-tight">Alleya Feedback</span>
               </div>
               
               <nav className="space-y-2 flex-1">

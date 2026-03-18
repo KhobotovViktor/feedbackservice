@@ -57,7 +57,7 @@ export default function LoginPage() {
                 <Star className="w-8 h-8 text-white" />
               </div>
               <div className="space-y-1">
-                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Say-Say Admin</h1>
+                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Alleya Feedback Admin</h1>
                 <p className="text-slate-400 font-medium">Вход в систему управления</p>
               </div>
             </div>

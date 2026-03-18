@@ -154,7 +154,7 @@ export default function SurveyPage() {
           </div>
           <div className="pt-4">
              <div className="h-px bg-slate-200/50 w-full mb-6"></div>
-             <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.3em]">Say-Say Feedback</p>
+             <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.3em]">Alleya Feedback</p>
           </div>
         </div>
       </div>
