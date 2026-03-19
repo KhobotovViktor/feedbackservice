@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { 
   QrCode, X, Copy, Download, LayoutDashboard, Star, Printer, Play,
-  TrendingUp, RefreshCw, BarChart3, Plus as PlusIcon, Loader2, Building2, MapPin, Trash2
+  TrendingUp, RefreshCw, BarChart3, Plus, Loader2, Building2, MapPin, Trash2
 } from "lucide-react";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -161,6 +161,10 @@ export default function BranchesPage() {
     }
   };
 
+  const handleTestSurvey = (branchId: string) => {
+    window.open(`/survey/qr?branchId=${branchId}&test=true`, '_blank');
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
@@ -176,7 +180,7 @@ export default function BranchesPage() {
           }}
           className="flex items-center justify-center gap-2 px-8 py-4 premium-gradient text-white rounded-[1.5rem] font-bold shadow-xl shadow-indigo-500/20 hover:scale-[1.03] active:scale-[0.98] transition-all w-full sm:w-auto"
         >
-          <PlusIcon className="w-6 h-6" />
+          <Plus className="w-6 h-6" />
           Добавить филиал
         </button>
       </div>
