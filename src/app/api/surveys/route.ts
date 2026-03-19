@@ -150,19 +150,15 @@ export async function POST(req: NextRequest) {
             const branchData = await prisma.branch.findUnique({
               where: { id: branchId },
               include: { 
-                questions: { orderBy: { order: 'asc' } },
                 template: { include: { questions: { orderBy: { order: 'asc' } } } }
               }
             });
             
             if (branchData) {
               const templateQs = branchData.template?.questions;
-              const branchQs = branchData.questions;
               
               if (templateQs && templateQs.length > 0) {
                 displayQuestions = templateQs as any;
-              } else if (branchQs && branchQs.length > 0) {
-                displayQuestions = branchQs as any;
               }
             }
           }
