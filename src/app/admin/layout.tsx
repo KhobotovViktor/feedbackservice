@@ -40,7 +40,6 @@ export default function AdminLayout({
   const navItems = [
     { label: "Дашборд", href: "/admin", icon: LayoutDashboard },
     { label: "Интеграция", href: "/admin/integration", icon: LinkIcon },
-    { label: "Вопросы", href: "/admin/questions", icon: Settings },
     { label: "Результаты", href: "/admin/results", icon: MessageSquare },
     { label: "Филиалы", href: "/admin/branches", icon: Building2 },
     { label: "Шаблоны", href: "/admin/templates", icon: LayoutDashboard },

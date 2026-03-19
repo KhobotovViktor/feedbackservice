@@ -350,7 +350,7 @@ export default function BranchesPage() {
               <div className="grid grid-cols-3 gap-4 mb-auto">
                 <div className="p-5 glass border-white/40 rounded-2xl text-center group-hover:bg-white/80 transition-all">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-3">Вопросов</p>
-                  <p className="text-2xl font-black text-slate-900">{branch._count?.questions || 0}</p>
+                  <p className="text-2xl font-black text-slate-900">{(branch as any).template?._count?.questions || 0}</p>
                 </div>
                 <div className="p-5 glass border-white/40 rounded-2xl text-center group-hover:bg-white/80 transition-all">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-3">Отзывов</p>

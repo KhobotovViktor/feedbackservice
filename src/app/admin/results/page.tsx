@@ -1,11 +1,16 @@
 import { prisma } from "@/lib/prisma";
-import { Building2, MessageCircle, Star, Calendar, User, TrendingUp, Filter } from "lucide-react";
+import { Building2, MessageCircle, Star, Calendar, User, TrendingUp, Filter, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BranchFilter } from "@/components/results/branch-filter";
 import { TypeFilter } from "@/components/results/type-filter";
+import Link from "next/link";
 
-export default async function ResultsPage({ searchParams }: { searchParams: Promise<{ branchId?: string; type?: string }> }) {
-  const { branchId, type = "all" } = await searchParams;
+export default async function ResultsPage({ 
+  searchParams 
+}: { 
+  searchParams: Promise<{ branchId?: string; type?: string; sortBy?: string; order?: string }> 
+}) {
+  const { branchId, type = "all", sortBy = "date", order = "desc" } = await searchParams;
 
   let responses: any[] = [];
   let branches: any[] = [];
@@ -19,7 +24,7 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
     const results = await Promise.all([
       prisma.surveyResponse.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: sortBy === "date" ? { createdAt: order as any } : undefined,
         include: { branch: true }
       }),
       (prisma as any).branch.findMany({
@@ -29,6 +34,22 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
     ]);
     responses = results[0];
     branches = results[1];
+
+    // Helper to get source text for sorting
+    const getSourceText = (res: any) => {
+      if (res.branch?.name) return res.branch.name;
+      if (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL") return "Bitrix24 (CRM)";
+      return "Прямая ссылка / QR";
+    };
+
+    // In-memory sort for computed fields
+    if (sortBy === "source") {
+      responses.sort((a, b) => {
+        const textA = getSourceText(a);
+        const textB = getSourceText(b);
+        return order === "asc" ? textA.localeCompare(textB) : textB.localeCompare(textA);
+      });
+    }
   } catch (err) {
     console.error("Results page data fetch error:", err);
   }
@@ -84,8 +105,34 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
             <table className="w-full text-left">
               <thead className="bg-slate-900 text-white">
                 <tr>
-                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">Дата и время</th>
-                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">Филиал</th>
+                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">
+                    <Link 
+                      href={`/admin/results?${new URLSearchParams({ 
+                        branchId: branchId || "all", 
+                        type, 
+                        sortBy: "date", 
+                        order: sortBy === "date" && order === "desc" ? "asc" : "desc" 
+                      }).toString()}`}
+                      className="flex items-center gap-2 hover:text-indigo-400 transition-colors"
+                    >
+                      Дата и время
+                      {sortBy === "date" ? (order === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-20" />}
+                    </Link>
+                  </th>
+                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">
+                    <Link 
+                      href={`/admin/results?${new URLSearchParams({ 
+                        branchId: branchId || "all", 
+                        type, 
+                        sortBy: "source", 
+                        order: sortBy === "source" && order === "asc" ? "desc" : "asc" 
+                      }).toString()}`}
+                      className="flex items-center gap-2 hover:text-indigo-400 transition-colors"
+                    >
+                      Филиал / Источник
+                      {sortBy === "source" ? (order === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-20" />}
+                    </Link>
+                  </th>
                   <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">Клиент / Сделка</th>
                   <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">Средний балл</th>
                   <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">Комментарий</th>
@@ -102,8 +149,15 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <div className="text-sm font-black text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100/30 inline-block group-hover:scale-105 transition-transform">
-                        {res.branch?.name || "—"}
+                      <div className={cn(
+                        "text-[10px] font-black px-3 py-1.5 rounded-xl border uppercase tracking-widest inline-block group-hover:scale-105 transition-transform",
+                        res.branch?.name 
+                          ? "text-indigo-600 bg-indigo-50 border-indigo-100/30" 
+                          : (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL")
+                            ? "text-amber-600 bg-amber-50 border-amber-100/30"
+                            : "text-slate-400 bg-slate-50 border-slate-100/30"
+                      )}>
+                        {res.branch?.name || (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL" ? "Bitrix24 (CRM)" : "Прямая ссылка / QR")}
                       </div>
                     </td>
                     <td className="px-8 py-6">
@@ -141,8 +195,15 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
                            <Calendar className="w-3.5 h-3.5" />
                            {new Date(res.createdAt).toLocaleDateString()} {new Date(res.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
-                        <div className="text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100/30 inline-block">
-                           {res.branch?.name || "—"}
+                        <div className={cn(
+                          "text-[9px] font-black px-3 py-1 rounded-lg border uppercase tracking-widest inline-block",
+                          res.branch?.name 
+                            ? "text-indigo-600 bg-indigo-50 border-indigo-100/30" 
+                            : (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL")
+                              ? "text-amber-600 bg-amber-50 border-amber-100/30"
+                              : "text-slate-400 bg-slate-50 border-slate-100/30"
+                        )}>
+                           {res.branch?.name || (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL" ? "Bitrix24 (CRM)" : "Прямая ссылка / QR")}
                         </div>
                      </div>
                      <div className={cn("flex items-center gap-2 px-4 py-2 rounded-2xl border shadow-sm group-hover:scale-110 transition-transform", ratingColor)}>

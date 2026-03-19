@@ -54,24 +54,16 @@ export default function SurveyPage() {
         setBranchId(bId);
         const branchInfo = data.branch;
         
-        // Fetch global settings for fallback questions and min score
+        // Fetch global settings for fallback review links
         const sRes = await fetch("/api/settings");
         const sData = await sRes.json();
-        const minScoreThreshold = parseFloat(sData.review_min_score || "4");
+        
+        // Use template-specific min score or fallback to 4.0
+        const minScoreThreshold = branchInfo?.template?.minScore || 4.0;
 
         // If branch has a template, use template questions
         if (branchInfo?.template?.questions) {
           setQuestions(branchInfo.template.questions);
-        } else if (sData.survey_questions) {
-          try {
-            const globalQs = JSON.parse(sData.survey_questions).map((text: string, i: number) => ({
-              id: `global-${i}`,
-              text
-            }));
-            if (globalQs.length > 0) setQuestions(globalQs);
-          } catch (e) {
-            console.error("Failed to parse global questions", e);
-          }
         }
 
         // Set review links with fallback to global settings

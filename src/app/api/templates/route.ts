@@ -21,14 +21,17 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name } = body;
+    const { name, minScore } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
     const template = await prisma.questionTemplate.create({
-      data: { name }
+      data: { 
+        name,
+        minScore: minScore ? parseFloat(minScore) : 4.0
+      }
     });
 
     return NextResponse.json(template);

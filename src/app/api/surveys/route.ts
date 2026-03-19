@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
         averageScore,
         answers,
         comment,
+        branchId: payload.branchId || null,
       },
     });
 

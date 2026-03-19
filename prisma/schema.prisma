@@ -21,7 +21,6 @@ model Branch {
   updatedAt       DateTime          @updatedAt
   analyticsEvents AnalyticsEvent[]
   template        QuestionTemplate? @relation(fields: [templateId], references: [id])
-  questions       Question[]
   shortLinks      ShortLink[]
   surveyResponses SurveyResponse[]
 }
@@ -29,6 +28,7 @@ model Branch {
 model QuestionTemplate {
   id        String     @id @default(cuid())
   name      String
+  minScore  Float      @default(4.0)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   branches  Branch[]
@@ -41,9 +41,7 @@ model Question {
   order      Int               @default(0)
   createdAt  DateTime          @default(now())
   updatedAt  DateTime          @updatedAt
-  branchId   String?
   templateId String?
-  branch     Branch?           @relation(fields: [branchId], references: [id])
   template   QuestionTemplate? @relation(fields: [templateId], references: [id])
 }
 

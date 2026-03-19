@@ -29,11 +29,14 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { name } = body;
+    const { name, minScore } = body;
 
     const template = await prisma.questionTemplate.update({
       where: { id },
-      data: { name }
+      data: { 
+        name,
+        minScore: minScore ? parseFloat(minScore) : undefined
+      }
     });
 
     return NextResponse.json(template);

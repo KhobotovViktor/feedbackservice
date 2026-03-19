@@ -39,10 +39,10 @@ export function CustomSelect({ options, value, onChange, className, placeholder 
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full bg-white/50 border border-slate-200 flex items-center justify-between px-5 py-4 rounded-2xl shadow-sm hover:bg-white hover:border-indigo-300 transition-all font-bold text-sm text-slate-900 group"
+        className="w-full bg-white/50 border border-slate-200 flex items-center justify-between px-5 py-3 rounded-xl shadow-sm hover:bg-white hover:border-indigo-300 transition-all font-bold text-sm text-slate-900 group"
       >
         <span className="truncate">{selectedOption?.label || placeholder || "Выберите..."}</span>
-        <ChevronDown className={cn("w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-all", isOpen && "rotate-180")} />
+        <ChevronDown className={cn("w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500 transition-all", isOpen && "rotate-180")} />
       </button>
 
       <AnimatePresence>
@@ -51,9 +51,9 @@ export function CustomSelect({ options, value, onChange, className, placeholder 
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 4, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute top-full left-0 w-full mt-2 bg-white/90 backdrop-blur-xl border border-white/60 rounded-[2rem] shadow-2xl overflow-hidden py-3 z-[100]"
+            className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-100 rounded-xl shadow-2xl overflow-hidden py-1 z-[100]"
           >
-            <div className="max-h-64 overflow-y-auto custom-scrollbar px-2 space-y-1">
+            <div className="max-h-48 overflow-y-auto custom-scrollbar px-1.5 space-y-0.5">
               {options.map((option) => (
                 <button
                   key={option.value}
@@ -63,14 +63,14 @@ export function CustomSelect({ options, value, onChange, className, placeholder 
                     setIsOpen(false);
                   }}
                   className={cn(
-                    "w-full flex items-center justify-between px-5 py-3 rounded-xl transition-all text-left font-bold text-sm",
+                    "w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all text-left font-bold text-xs",
                     value === option.value 
                       ? "bg-indigo-500 text-white" 
-                      : "text-slate-600 hover:bg-slate-100"
+                      : "text-slate-600 hover:bg-slate-50"
                   )}
                 >
                   <span className="truncate">{option.label}</span>
-                  {value === option.value && <Check className="w-4 h-4" />}
+                  {value === option.value && <Check className="w-3.5 h-3.5" />}
                 </button>
               ))}
             </div>

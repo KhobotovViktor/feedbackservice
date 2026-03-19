@@ -11,25 +11,28 @@ export async function POST(req: NextRequest) {
     const adminPassword = "hymp512U64cp8";
     
     let user = await prisma.user.findUnique({
-      where: { username: adminUsername }
+      where: { username }
     });
 
     if (!user) {
-      const hashedPassword = await hashPassword(adminPassword);
-      user = await prisma.user.create({
-        data: {
-          username: adminUsername,
-          password: hashedPassword,
-        }
-      });
-      console.log("Admin user seeded successfully");
+      // Auto-seed original admin if it's the one trying to log in but missing
+      const adminUsername = "Хоботов Виктор";
+      if (username === adminUsername) {
+        const adminPassword = "hymp512U64cp8";
+        const hashedPassword = await hashPassword(adminPassword);
+        user = await prisma.user.create({
+          data: {
+            username: adminUsername,
+            password: hashedPassword,
+          }
+        });
+        console.log("Admin user seeded successfully");
+      } else {
+        return NextResponse.json({ error: "Неверное имя пользователя" }, { status: 401 });
+      }
     }
 
     // Verify credentials
-    if (username !== adminUsername) {
-      return NextResponse.json({ error: "Неверное имя пользователя" }, { status: 401 });
-    }
-
     const isValid = await verifyPassword(password, user.password);
     if (!isValid) {
       return NextResponse.json({ error: "Неверный пароль" }, { status: 401 });

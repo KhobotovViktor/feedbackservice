@@ -18,8 +18,6 @@ export default function IntegrationPage() {
     review_2gis: "",
     review_google_maps: "",
     b24_group_chat_id: "",
-    review_min_score: "4",
-    survey_questions: JSON.stringify(["Насколько вы довольны качеством обслуживания?"]),
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,8 +45,6 @@ export default function IntegrationPage() {
           review_2gis: settingsData.review_2gis || "",
           review_google_maps: settingsData.review_google_maps || "",
           b24_group_chat_id: settingsData.b24_group_chat_id || "",
-          review_min_score: settingsData.review_min_score || "4",
-          survey_questions: settingsData.survey_questions || JSON.stringify(["Насколько вы довольны качеством обслуживания?"]),
         });
         if (Array.isArray(branchesData)) {
           setBranches(branchesData);
@@ -58,11 +54,7 @@ export default function IntegrationPage() {
     });
   }, []);
 
-  const questions: string[] = JSON.parse(settings.survey_questions);
-
-  const updateQuestions = (newQuestions: string[]) => {
-    setSettings({ ...settings, survey_questions: JSON.stringify(newQuestions) });
-  };
+// No global questions anymore
 
   const handleSave = async () => {
     setSaving(true);
@@ -361,7 +353,7 @@ export default function IntegrationPage() {
                       <Star className="w-4 h-4 fill-current" />
                    </div>
                    <p className="text-[10px] text-slate-500 font-bold leading-none italic">
-                      Эти ссылки будут доступны клиенту только при оценке <span className="text-indigo-600">4-5 звезд</span>.
+                      Эти ссылки будут доступны клиенту только при достижении <span className="text-indigo-600">порога положительной оценки</span>, заданного в шаблоне.
                    </p>
                 </div>
               </div>
@@ -417,72 +409,7 @@ export default function IntegrationPage() {
                 </div>
               </div>
 
-              <div className="pt-8 border-t border-slate-100/50 pb-2">
-                <div className="flex items-center gap-3 text-indigo-500 mb-6">
-                  <Star className="w-6 h-6" />
-                  <h3 className="text-lg font-black text-slate-900 tracking-tight">Настройка опроса</h3>
-                </div>
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                      Минимальный балл для показа ссылок на отзывы
-                    </label>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map((score) => (
-                        <button
-                          key={score}
-                          onClick={() => setSettings({ ...settings, review_min_score: score.toString() })}
-                          className={cn(
-                            "w-12 h-12 rounded-xl font-black transition-all border text-xs",
-                            settings.review_min_score === score.toString()
-                              ? "bg-indigo-500 text-white border-indigo-500 shadow-lg shadow-indigo-500/20"
-                              : "bg-white text-slate-400 border-slate-200 hover:border-indigo-300"
-                          )}
-                        >
-                          {score}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-slate-400 font-medium mt-2 px-1">
-                      Ссылки на Яндекс.Карты, 2GIS и Google будут показаны только если средний балл &ge; {settings.review_min_score}.
-                    </p>
-                  </div>
-
-                  <div className="space-y-4 pt-4">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                      Вопросы опроса ({questions.length})
-                    </label>
-                    <div className="space-y-3">
-                      {questions.map((q, idx) => (
-                        <div key={idx} className="flex gap-3">
-                          <input
-                            type="text"
-                            value={q}
-                            onChange={(e) => {
-                              const newQs = [...questions];
-                              newQs[idx] = e.target.value;
-                              updateQuestions(newQs);
-                            }}
-                            className="flex-1 px-5 py-3 rounded-xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-bold"
-                          />
-                          <button
-                            onClick={() => updateQuestions(questions.filter((_, i) => i !== idx))}
-                            className="p-3 text-rose-400 hover:bg-rose-50 rounded-xl transition-all"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => updateQuestions([...questions, ""])}
-                      className="flex items-center gap-2 text-xs font-black text-indigo-500 hover:text-indigo-600 transition-colors uppercase tracking-widest mt-2 ml-1"
-                    >
-                      <Plus size={14} /> Добавить вопрос
-                    </button>
-                  </div>
-                </div>
-              </div>
+// Survey settings removed, moved to Templates
 
               <div className="pt-8 flex items-center gap-6">
                 <button

@@ -16,13 +16,19 @@ export async function GET() {
         templateId: true,
         createdAt: true,
         _count: {
-          select: { questions: true, surveyResponses: true }
+          select: { surveyResponses: true }
         },
         surveyResponses: {
           select: { averageScore: true }
         },
         template: {
-          select: { id: true, name: true }
+          select: { 
+            id: true, 
+            name: true,
+            _count: {
+              select: { questions: true }
+            }
+          }
         }
       }
     });

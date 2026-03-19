@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 interface Template {
   id: string;
   name: string;
+  minScore: number;
   _count?: { questions: number; branches: number };
 }
 
@@ -22,6 +23,7 @@ export default function TemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
+  const [newTemplateMinScore, setNewTemplateMinScore] = useState("4.0");
   const [saving, setSaving] = useState(false);
   
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
@@ -54,7 +56,10 @@ export default function TemplatesPage() {
       const res = await fetch("/api/templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newTemplateName }),
+        body: JSON.stringify({ 
+          name: newTemplateName,
+          minScore: parseFloat(newTemplateMinScore)
+        }),
       });
       if (res.ok) {
         setShowAdd(false);
@@ -157,15 +162,32 @@ export default function TemplatesPage() {
               </div>
               <h3 className="text-2xl font-black text-slate-900 tracking-tight">Новый шаблон</h3>
             </div>
-            <div className="space-y-2 relative z-10">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Название шаблона</label>
-              <input 
-                type="text" 
-                placeholder="Напр: Общий стандарт сервиса"
-                className="w-full px-6 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
-                value={newTemplateName}
-                onChange={e => setNewTemplateName(e.target.value)}
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Название шаблона</label>
+                <input 
+                  type="text" 
+                  placeholder="Напр: Общий стандарт сервиса"
+                  className="w-full px-6 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
+                  value={newTemplateName}
+                  onChange={e => setNewTemplateName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Порог положительной оценки (1-5)</label>
+                <div className="relative">
+                  <input 
+                    type="number" 
+                    step="0.1"
+                    min="1"
+                    max="5"
+                    className="w-full px-6 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold pr-10"
+                    value={newTemplateMinScore}
+                    onChange={e => setNewTemplateMinScore(e.target.value)}
+                  />
+                  <Star className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400" />
+                </div>
+              </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 justify-end pt-4 relative z-10">
               <button 
@@ -251,7 +273,13 @@ export default function TemplatesPage() {
                       Active Template
                    </div>
                   <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter truncate leading-tight">{selectedTemplate.name}</h2>
-                  <p className="text-slate-500 font-medium text-sm md:text-base">Управление вопросами для связанных филиалов</p>
+                  <div className="flex items-center gap-4 mt-2">
+                    <p className="text-slate-500 font-medium text-sm md:text-base">Управление вопросами для связанных филиалов</p>
+                    <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-lg border border-amber-100">
+                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                      <span className="text-xs font-black text-amber-700">{selectedTemplate.minScore.toFixed(1)}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
