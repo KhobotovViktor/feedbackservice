@@ -2,12 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { 
-  Plus, Building2, MapPin, ExternalLink, Trash2, Loader2, Search, 
-  QrCode, X, Copy, Download, LayoutDashboard, Star, Printer, Play
+  QrCode, X, Copy, Download, LayoutDashboard, Star, Printer, Play,
+  TrendingUp, RefreshCw, BarChart3
 } from "lucide-react";
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  AreaChart, Area
+} from 'recharts';
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
+
+interface RatingHistory {
+  id: string;
+  service: string;
+  rating: number;
+  reviewCount: number;
+  createdAt: string;
+}
 
 interface Branch {
   id: string;
@@ -20,6 +32,7 @@ interface Branch {
   templateId?: string | null;
   template?: { name: string } | null;
   averageScore?: string;
+  ratingHistory?: RatingHistory[];
   _count?: { questions: number; surveyResponses: number };
 }
 
@@ -132,18 +145,19 @@ export default function BranchesPage() {
     }
   };
 
-  const handleTestSurvey = async (branchId: string) => {
+  const handleSyncRatings = async (branchId: string) => {
     try {
-      const res = await fetch(`/api/admin/test/generate-survey-token?branchId=${branchId}`);
+      setLoading(true);
+      const res = await fetch(`/api/admin/rating-sync?branchId=${branchId}`);
       if (res.ok) {
-        const data = await res.json();
-        window.open(data.url, '_blank');
+        fetchBranches();
       } else {
-        alert("Ошибка генерации тестовой ссылки");
+        alert("Ошибка синхронизации рейтингов");
       }
     } catch (err) {
       console.error(err);
-      alert("Ошибка при попытке запустить тест");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -376,6 +390,96 @@ export default function BranchesPage() {
                     Контроль QR
                   </button>
                 </div>
+              </div>
+
+              {/* Rating Monitoring Section */}
+              <div className="mt-8 pt-8 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-500" />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Мониторинг отзовиков</p>
+                  </div>
+                  <button 
+                    onClick={() => handleSyncRatings(branch.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Обновить
+                  </button>
+                </div>
+
+                <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+                  {['yandex', '2gis', 'google'].map(service => {
+                    const latest = branch.ratingHistory?.filter(h => h.service === service).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+                    if (!latest && !(branch as any)[`${service}Url`]) return null;
+                    
+                    return (
+                      <div key={service} className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-100 rounded-xl shadow-sm shrink-0">
+                        <img src={`/icons/${service === '2gis' ? '2gis' : service === 'yandex' ? 'yandex' : 'googlemaps'}.png`} className="w-4 h-4 object-contain" alt="" />
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-xs font-black text-slate-900">{latest?.rating || '—'}</span>
+                          <span className="text-[9px] font-bold text-slate-400">/ {latest?.reviewCount || 0}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="h-40 w-full mb-6">
+                  {branch.ratingHistory && branch.ratingHistory.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart 
+                        data={branch.ratingHistory.map(h => ({
+                          date: new Date(h.createdAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
+                          rating: h.rating,
+                          service: h.service === 'yandex' ? 'Яндекс' : h.service === '2gis' ? '2ГИС' : 'Google'
+                        }))}
+                      >
+                        <defs>
+                          <linearGradient id="colorRating" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis 
+                          dataKey="date" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fontSize: 9, fontWeight: 700, fill: '#94a3b8' }}
+                          dy={10}
+                        />
+                        <YAxis 
+                          hide={true} 
+                          domain={['dataMin - 0.5', 'dataMax + 0.5']} 
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            borderRadius: '1rem', 
+                            border: 'none', 
+                            boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                            fontSize: '11px',
+                            fontWeight: 'bold'
+                          }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="rating" 
+                          stroke="#6366f1" 
+                          strokeWidth={3} 
+                          fillOpacity={1} 
+                          fill="url(#colorRating)" 
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                      <BarChart3 className="w-8 h-8 text-slate-200 mb-2" />
+                      <p className="text-[10px] uppercase tracking-widest font-black text-slate-300">Данные отсутствуют</p>
+                    </div>
+                  )}
+                </div>
+                
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <a 
                     href={branch.yandexUrl || "#"} 

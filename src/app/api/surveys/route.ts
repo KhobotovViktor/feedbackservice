@@ -39,6 +39,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let responsibleName = (payload as any).responsibleName || null;
+    if (!responsibleName && dealId) {
+      try {
+        const sent = await prisma.sentSurvey.findUnique({ where: { dealId } });
+        if (sent?.responsibleName) responsibleName = sent.responsibleName;
+      } catch (e) {}
+    }
+
     // Save response
     await prisma.surveyResponse.create({
       data: {
@@ -48,7 +56,7 @@ export async function POST(req: NextRequest) {
         answers,
         comment,
         branchId: payload.branchId || null,
-        responsibleName: (payload as any).responsibleName || null,
+        responsibleName: responsibleName || null,
       },
     });
 
@@ -192,6 +200,17 @@ export async function POST(req: NextRequest) {
       console.error("Failed to update B24 fields:", b24Error);
     }
 
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    await prisma.surveyResponse.deleteMany({});
+    await prisma.sentSurvey.deleteMany({});
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);

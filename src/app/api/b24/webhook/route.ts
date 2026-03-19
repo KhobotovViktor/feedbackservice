@@ -28,6 +28,17 @@ async function handleWebhook(req: NextRequest) {
   if (effectiveDealId.includes("{") || effectiveClientId.includes("{")) {
     console.warn("Detected unresolved Bitrix24 placeholders. Please check Robot configuration.");
   }
+  
+  // DEDUPLICATION: Check if survey was already sent for this deal
+  if (!isTest) {
+    const existingDispatch = await prisma.sentSurvey.findUnique({
+      where: { dealId: effectiveDealId }
+    });
+    if (existingDispatch) {
+      console.log(`Survey already dispatched for deal ${effectiveDealId}. Skipping to prevent duplicates.`);
+      return NextResponse.json({ message: "Survey already sent for this deal", skip: true });
+    }
+  }
 
   const settings = await prisma.settings.findMany({
     where: { key: { in: ["b24_webhook_url", "b24_message_template", "b24_link_field", "b24_template_id"] } }
@@ -67,8 +78,17 @@ async function handleWebhook(req: NextRequest) {
       });
       surveyUrl = `${appUrl}/s/${code}`;
       console.log(`Generated Short Survey URL: ${surveyUrl}`);
+      
+      // Record dispatch to prevent duplicates
+      await prisma.sentSurvey.create({
+        data: {
+          dealId: effectiveDealId,
+          clientId: effectiveClientId,
+          responsibleName: responsibleName || null
+        }
+      });
     } catch (shortError) {
-      console.error("Shortening failed, using full URL:", shortError);
+      console.error("Shortening/Recording failed, using full URL:", shortError);
     }
   }
 

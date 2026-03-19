@@ -40,7 +40,13 @@ export default async function ResultsPage({
     const results = await Promise.all([
       prisma.surveyResponse.findMany({
         where,
-        orderBy: sortBy === "date" ? { createdAt: order as any } : undefined,
+        orderBy: sortBy === "date" 
+          ? { createdAt: order as any } 
+          : sortBy === "score"
+            ? { averageScore: order as any }
+            : sortBy === "responsible"
+              ? { responsibleName: order as any }
+              : undefined,
         include: { branch: true }
       }),
       (prisma as any).branch.findMany({
@@ -50,17 +56,12 @@ export default async function ResultsPage({
     ]);
     responses = results[0];
     branches = results[1];
-    // In-memory sort for computed fields
+    
+    // In-memory sort only for computed source field
     if (sortBy === "source") {
       responses.sort((a, b) => {
         const textA = getSourceText(a);
         const textB = getSourceText(b);
-        return order === "asc" ? textA.localeCompare(textB) : textB.localeCompare(textA);
-      });
-    } else if (sortBy === "responsible") {
-      responses.sort((a, b) => {
-        const textA = a.responsibleName || "";
-        const textB = b.responsibleName || "";
         return order === "asc" ? textA.localeCompare(textB) : textB.localeCompare(textA);
       });
     }
@@ -77,6 +78,19 @@ export default async function ResultsPage({
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+          {/* Clear Results Button */}
+          <button 
+            type="button"
+            className="flex items-center gap-3 px-6 py-4 bg-white hover:bg-rose-50 border border-slate-100 text-rose-500 rounded-3xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-indigo-500/5 group"
+            onClick={() => {
+              if (confirm("Вы уверены, что хотите полностью очистить результаты? Это действие необратимо.")) {
+                 fetch("/api/surveys", { method: "DELETE" }).then(() => window.location.reload());
+              }
+            }}
+          >
+            <TrendingUp className="w-4 h-4 text-rose-400 group-hover:scale-125 transition-transform" />
+            Очистить
+          </button>
           {/* Branch Filter */}
           <div className="flex items-center gap-2 p-1.5 glass rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
             <div className="flex-1 sm:flex-none flex items-center gap-3 px-6 py-3">
@@ -114,55 +128,16 @@ export default async function ResultsPage({
         </div>
       ) : (
         <>
-          {/* Desktop View Table */}
           <div className="hidden xl:block bento-card p-0 overflow-hidden border-white/40 shadow-2xl shadow-indigo-500/5">
-            <table className="w-full text-left">
+            <table className="w-full text-left border-collapse table-fixed">
               <thead className="bg-slate-900 text-white">
                 <tr>
-                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">
-                    <Link 
-                      href={`/admin/results?${new URLSearchParams({ 
-                        branchId: branchId || "all", 
-                        type, 
-                        sortBy: "date", 
-                        order: sortBy === "date" && order === "desc" ? "asc" : "desc" 
-                      }).toString()}`}
-                      className="flex items-center gap-2 hover:text-indigo-400 transition-colors"
-                    >
-                      Дата и время
-                      {sortBy === "date" ? (order === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-20" />}
-                    </Link>
-                  </th>
-                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">
-                    <Link 
-                      href={`/admin/results?${new URLSearchParams({ 
-                        branchId: branchId || "all", 
-                        type, 
-                        sortBy: "source", 
-                        order: sortBy === "source" && order === "asc" ? "desc" : "asc" 
-                      }).toString()}`}
-                      className="flex items-center gap-2 hover:text-indigo-400 transition-colors"
-                    >
-                      Филиал / Источник
-                      {sortBy === "source" ? (order === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-20" />}
-                    </Link>
-                  </th>
-                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">Клиент / Сделка</th>
-                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">
-                    <Link 
-                      href={`/admin/results?${new URLSearchParams({ 
-                        branchId: branchId || "all", 
-                        type, 
-                        sortBy: "responsible", 
-                        order: sortBy === "responsible" && order === "asc" ? "desc" : "asc" 
-                      }).toString()}`}
-                      className="flex items-center gap-2 hover:text-indigo-400 transition-colors"
-                    >
-                      Ответственный
-                      {sortBy === "responsible" ? (order === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-20" />}
-                    </Link>
-                  </th>
-                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">Комментарий</th>
+                  <th className="w-[15%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Дата</th>
+                  <th className="w-[20%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60 text-center">Источник</th>
+                  <th className="w-[20%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Клиент / Сделка</th>
+                  <th className="w-[12%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60 text-center">Оценка</th>
+                  <th className="w-[15%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Ответственный</th>
+                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Комментарий</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white/40">
@@ -170,14 +145,14 @@ export default async function ResultsPage({
                   <tr key={res.id} className="hover:bg-white transition-colors group">
                     <td className="px-8 py-6 text-sm font-bold text-slate-400">
                       <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 opacity-40" />
-                        {new Date(res.createdAt).toLocaleDateString()}
-                        <span className="text-indigo-300 ml-1">{new Date(res.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <Calendar className="w-4 h-4 opacity-40 shrink-0" />
+                        <span className="truncate">{new Date(res.createdAt).toLocaleDateString()}</span>
+                        <span className="text-indigo-300 ml-1 shrink-0">{new Date(res.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-6">
+                    <td className="px-8 py-6 text-center">
                       <div className={cn(
-                        "text-[10px] font-black px-3 py-1.5 rounded-xl border uppercase tracking-widest inline-block group-hover:scale-105 transition-transform",
+                        "text-[10px] font-black px-3 py-1.5 rounded-xl border uppercase tracking-widest inline-block transition-transform",
                         res.branch?.name 
                           ? "text-indigo-600 bg-indigo-50 border-indigo-100/30" 
                           : (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL" && res.dealId !== "QR_GUEST")
@@ -188,24 +163,20 @@ export default async function ResultsPage({
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <div className="text-base font-black text-slate-900 tracking-tight">{res.clientId || "Incognito"}</div>
-                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-0.5 opacity-60">Deal: {res.dealId || "—"}</div>
+                      <div className="text-sm font-black text-slate-900 tracking-tight truncate">{res.clientId || "Incognito"}</div>
+                      <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-0.5 opacity-60 truncate">Deal: {res.dealId || "—"}</div>
                     </td>
-                    <td className="px-8 py-6">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-slate-900 text-2xl tracking-tighter">{res.averageScore.toFixed(1)}</span>
-                        <Star className="w-5 h-5 fill-amber-400 text-amber-400 group-hover:scale-125 transition-transform duration-500" />
+                    <td className="px-8 py-6 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="font-black text-slate-900 text-xl tracking-tighter">{res.averageScore.toFixed(1)}</span>
+                        <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <div className="text-sm font-bold text-slate-900">{res.responsibleName || "—"}</div>
+                      <div className="text-[11px] font-black text-slate-900 uppercase tracking-tight truncate">{res.responsibleName || "—"}</div>
                     </td>
-                    <td className="px-8 py-6 text-base text-slate-600 max-w-sm font-medium leading-relaxed">
-                      {res.comment ? (
-                        <span className="italic">“{res.comment}”</span>
-                      ) : (
-                        <span className="text-slate-200 italic font-normal text-sm">Нет комментария</span>
-                      )}
+                    <td className="px-8 py-6 text-sm text-slate-600 font-medium leading-relaxed italic overflow-hidden text-ellipsis">
+                      {res.comment ? `“${res.comment}”` : <span className="text-slate-200">Нет комментария</span>}
                     </td>
                   </tr>
                 ))}

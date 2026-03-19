@@ -29,13 +29,16 @@ export async function GET() {
               select: { questions: true }
             }
           }
+        },
+        ratingHistory: {
+          orderBy: { createdAt: "asc" }
         }
       }
     });
 
-    const branches = branchesRaw.map(branch => {
-      const scores = branch.surveyResponses.map(r => r.averageScore);
-      const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : "0.0";
+    const branches = branchesRaw.map((branch: any) => {
+      const scores = (branch.surveyResponses as { averageScore: number }[]).map(r => r.averageScore);
+      const avg = scores.length > 0 ? (scores.reduce((a: number, b: number) => a + b, 0) / scores.length).toFixed(1) : "0.0";
       
       const { surveyResponses, ...rest } = branch;
       return { ...rest, averageScore: avg };

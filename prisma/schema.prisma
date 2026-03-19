@@ -23,6 +23,7 @@ model Branch {
   template        QuestionTemplate? @relation(fields: [templateId], references: [id])
   shortLinks      ShortLink[]
   surveyResponses SurveyResponse[]
+  ratingHistory   RatingHistory[]
 }
 
 model QuestionTemplate {
@@ -94,6 +95,26 @@ model AnalyticsEvent {
 
   @@index([type])
   @@index([branchId])
+}
+
+model SentSurvey {
+  id              String   @id @default(cuid())
+  dealId          String   @unique
+  clientId        String?
+  responsibleName String?
+  createdAt       DateTime @default(now())
+}
+
+model RatingHistory {
+  id          String   @id @default(cuid())
+  branchId    String
+  service     String   // "yandex", "2gis", "google"
+  rating      Float
+  reviewCount Int
+  createdAt   DateTime @default(now())
+  branch      Branch   @relation(fields: [branchId], references: [id])
+
+  @@index([branchId, service])
 }
 
 enum AnalyticsType {
