@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,56 +9,55 @@ datasource db {
 }
 
 model Branch {
-  id               String           @id @default(cuid())
-  name             String
-  city             String?
-  yandexUrl        String?
-  dgisUrl          String?
-  googleUrl        String?
-  externalId       String?          // ID from B24 or other system
-  templateId       String?
-  template         QuestionTemplate? @relation(fields: [templateId], references: [id])
-  minScore         Float?           // Override global threshold
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  questions        Question[]
-  surveyResponses SurveyResponse[]
-  shortLinks       ShortLink[]
+  id              String            @id @default(cuid())
+  name            String
+  city            String?
+  yandexUrl       String?
+  dgisUrl         String?
+  googleUrl       String?
+  externalId      String?
+  templateId      String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   analyticsEvents AnalyticsEvent[]
+  template        QuestionTemplate? @relation(fields: [templateId], references: [id])
+  questions       Question[]
+  shortLinks      ShortLink[]
+  surveyResponses SurveyResponse[]
 }
 
 model QuestionTemplate {
-  id        String   @id @default(cuid())
+  id        String     @id @default(cuid())
   name      String
-  questions Question[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
   branches  Branch[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  questions Question[]
 }
 
 model Question {
   id         String            @id @default(cuid())
   text       String
   order      Int               @default(0)
-  branchId   String?  
-  branch     Branch?           @relation(fields: [branchId], references: [id])
-  templateId String?
-  template   QuestionTemplate? @relation(fields: [templateId], references: [id])
   createdAt  DateTime          @default(now())
   updatedAt  DateTime          @updatedAt
+  branchId   String?
+  templateId String?
+  branch     Branch?           @relation(fields: [branchId], references: [id])
+  template   QuestionTemplate? @relation(fields: [templateId], references: [id])
 }
 
 model SurveyResponse {
   id           String   @id @default(cuid())
-  clientId     String   // Bitrix24 Lead/Contact ID
-  dealId       String   // Bitrix24 Deal ID
-  branchId     String?  
-  branch       Branch?  @relation(fields: [branchId], references: [id])
+  clientId     String
+  dealId       String
   averageScore Float
-  answers      Json     // Back to Json for PostgreSQL support
+  answers      Json
   comment      String?
   createdAt    DateTime @default(now())
-  
+  branchId     String?
+  branch       Branch?  @relation(fields: [branchId], references: [id])
+
   @@index([clientId])
 }
 
@@ -74,13 +70,14 @@ model Settings {
 model ShortLink {
   id        String   @id @default(cuid())
   code      String   @unique
-  url       String   @db.Text
-  branchId  String?  
-  branch    Branch?  @relation(fields: [branchId], references: [id])
+  url       String
   createdAt DateTime @default(now())
+  branchId  String?
+  branch    Branch?  @relation(fields: [branchId], references: [id])
 
   @@index([code])
 }
+
 model User {
   id        String   @id @default(cuid())
   username  String   @unique
@@ -88,19 +85,19 @@ model User {
   createdAt DateTime @default(now())
 }
 
-enum AnalyticsType {
-  VIEW
-  CLICK
-}
-
 model AnalyticsEvent {
   id        String        @id @default(cuid())
   type      AnalyticsType
-  target    String?       // e.g., "YANDEX", "2GIS", "GOOGLE"
+  target    String?
   branchId  String?
-  branch    Branch?       @relation(fields: [branchId], references: [id])
   createdAt DateTime      @default(now())
+  branch    Branch?       @relation(fields: [branchId], references: [id])
 
   @@index([type])
   @@index([branchId])
+}
+
+enum AnalyticsType {
+  VIEW
+  CLICK
 }

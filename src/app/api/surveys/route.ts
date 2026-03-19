@@ -11,7 +11,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    const { clientId, dealId } = payload;
+    const { clientId, dealId, isTest } = payload;
+
+    // Sandbox mode for testing
+    if (isTest) {
+      console.log("Test survey detected. Skipping persistence and B24 updates.");
+      return NextResponse.json({ success: true, isTest: true });
+    }
 
     // Check 6-month constraint
     const sixMonthsAgo = new Date();

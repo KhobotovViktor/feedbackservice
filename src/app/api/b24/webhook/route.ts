@@ -7,9 +7,10 @@ async function handleWebhook(req: NextRequest) {
   const clientId = searchParams.get("clientId");
   const dealId = searchParams.get("dealId");
   const branchId = searchParams.get("branchId");
-
-  console.log(`Incoming B24 Webhook: clientId=${clientId}, dealId=${dealId}, branchId=${branchId}`);
-
+  const isTest = searchParams.get("isTest") === "true";
+  
+  console.log(`Incoming B24 Webhook: clientId=${clientId}, dealId=${dealId}, branchId=${branchId}, isTest=${isTest}`);
+  
   // Resilience: if clientId is missing but dealId is present, use dealId as clientId
   const effectiveClientId = clientId || dealId;
   const effectiveDealId = dealId || clientId;
@@ -27,7 +28,7 @@ async function handleWebhook(req: NextRequest) {
     console.warn("Detected unresolved Bitrix24 placeholders. Please check Robot configuration.");
   }
 
-  const token = await createSurveyToken(effectiveClientId, effectiveDealId, branchId);
+  const token = await createSurveyToken(effectiveClientId, effectiveDealId, branchId, isTest);
   
   // Get base URL from env or request headers
   let appUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -42,23 +43,34 @@ async function handleWebhook(req: NextRequest) {
 
   // Generate Short Link
   let surveyUrl = fullSurveyUrl;
-  try {
-    const crypto = require("crypto");
-    const code = crypto.randomBytes(4).toString("hex"); // 8 chars
-    await prisma.shortLink.create({
-      data: {
-        code,
-        url: fullSurveyUrl,
-        branchId: branchId || null
-      }
-    });
-    surveyUrl = `${appUrl}/s/${code}`;
-    console.log(`Generated Short Survey URL: ${surveyUrl}`);
-  } catch (shortError) {
-    console.error("Shortening failed, using full URL:", shortError);
+  if (!isTest) {
+    try {
+      const crypto = require("crypto");
+      const code = crypto.randomBytes(4).toString("hex"); // 8 chars
+      await prisma.shortLink.create({
+        data: {
+          code,
+          url: fullSurveyUrl,
+          branchId: branchId || null
+        }
+      });
+      surveyUrl = `${appUrl}/s/${code}`;
+      console.log(`Generated Short Survey URL: ${surveyUrl}`);
+    } catch (shortError) {
+      console.error("Shortening failed, using full URL:", shortError);
+    }
   }
 
-  // Outbound notification to Bitrix24
+  // Outbound notification to Bitrix24 (Skip if it's a test)
+  if (isTest) {
+    console.log("Test mode: Skipping B24 outbound notifications.");
+    return NextResponse.json({
+      surveyUrl,
+      token,
+      isTest: true
+    });
+  }
+
   try {
     const settings = await prisma.settings.findMany({
       where: { key: { in: ["b24_webhook_url", "b24_message_template", "b24_link_field"] } }

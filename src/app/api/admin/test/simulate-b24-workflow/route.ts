@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     if (!branchId) return NextResponse.json({ error: "Missing branchId" }, { status: 400 });
 
     // Simulate the Bitrix24 webhook call internally
-    const webhookUrl = `${req.nextUrl.origin}/api/b24/webhook?dealId=${dealId}&contactId=${contactId}&branchId=${branchId}`;
+    const webhookUrl = `${req.nextUrl.origin}/api/b24/webhook?dealId=${dealId}&contactId=${contactId}&branchId=${branchId}&isTest=true`;
     
     const res = await fetch(webhookUrl, { method: "POST" });
     const data = await res.json();

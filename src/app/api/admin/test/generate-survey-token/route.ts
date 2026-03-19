@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
     // Generate a test token
     // We'll use "TEST_CLIENT" and "TEST_DEAL" 
-    const token = await createSurveyToken("TEST_CLIENT", "TEST_DEAL", branchId);
+    const token = await createSurveyToken("TEST_CLIENT", "TEST_DEAL", branchId, true);
     
     return NextResponse.json({ 
       url: `${req.nextUrl.origin}/survey/${token}`,

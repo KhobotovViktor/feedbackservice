@@ -21,7 +21,8 @@ export async function middleware(req: NextRequest) {
     path === "/icon.png" ||
     path === "/logoalleya.png" ||
     path.startsWith("/icons/") ||
-    path.startsWith("/yandex_");
+    path.startsWith("/yandex_") ||
+    path.startsWith("/google");
 
   if (isPublicPath) {
     return NextResponse.next();
