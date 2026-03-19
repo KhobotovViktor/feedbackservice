@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Недействительная ссылка" }, { status: 401 });
   }
 
-  const { clientId, branchId } = payload;
+  const { clientId, branchId, isTest } = payload;
   
   // Fetch branch info if present
   let branchInfo = null;
@@ -31,6 +31,16 @@ export async function GET(req: NextRequest) {
           }
         }
       }
+    });
+  }
+
+  // Skip frequency check for tests
+  if (isTest) {
+    return NextResponse.json({ 
+      success: true,
+      branchId: branchId || null,
+      branch: branchInfo || null,
+      isTest: true
     });
   }
 

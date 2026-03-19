@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Plus, Trash2, Play, ExternalLink, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 export default function IntegrationPage() {
   const [settings, setSettings] = useState({
@@ -235,15 +236,12 @@ export default function IntegrationPage() {
                       Тестовый филиал
                     </label>
                     <div className="flex-1">
-                      <select 
+                      <CustomSelect 
+                        options={branches.map(b => ({ value: b.id, label: b.name }))}
                         value={testBranchId}
-                        onChange={(e) => setTestBranchId(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
-                      >
-                        {branches.map(b => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
-                      </select>
+                        onChange={(val) => setTestBranchId(val)}
+                        placeholder="Выберите филиал"
+                      />
                     </div>
                   </div>
                   <button

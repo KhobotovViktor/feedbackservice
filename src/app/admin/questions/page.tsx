@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2, GripVertical, Loader2, Settings, Building2, Star, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 interface Question {
   id: string;
@@ -140,16 +141,18 @@ export default function QuestionsPage() {
             <Building2 className="w-5 h-5 text-indigo-400" />
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xs:inline">Филиал:</span>
           </div>
-          <select 
-            className="flex-1 sm:flex-none bg-white border-none px-6 py-3 rounded-xl font-black outline-none shadow-sm text-xs md:text-sm appearance-none cursor-pointer hover:bg-slate-50 transition-all"
-            value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
-          >
-            <option value="all">Все (общие)</option>
-            {branches.map(b => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
+          <div className="flex-1 sm:flex-none">
+            <CustomSelect 
+              options={[
+                { value: "all", label: "Все (общие)" },
+                ...branches.map(b => ({ value: b.id, label: b.name }))
+              ]}
+              value={selectedBranch}
+              onChange={(val) => setSelectedBranch(val)}
+              placeholder="Выберите филиал"
+              className="min-w-[180px]"
+            />
+          </div>
         </div>
       </div>
 

@@ -115,8 +115,8 @@ export default function LoginPage() {
             </form>
 
             <div className="flex flex-col items-center gap-2 pt-4">
-              <p className="text-center text-slate-400 text-xs font-medium">
-                &copy; {new Date().getFullYear()} ИП Шевелёв Е.Н. Доступ только для сотрудников компании.
+              <p className="text-center text-slate-400 text-[10px] font-medium leading-relaxed max-w-[280px]">
+                &copy; {new Date().getFullYear()} ИП Шевелёв Е.Н. ИНН 352526561274 ОГРНИП 316352500061315. Доступ только для сотрудников компании.
               </p>
               <Link 
                 href="/privacy" 

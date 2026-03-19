@@ -28,16 +28,10 @@ export default function SurveyPage() {
   const [isPositive, setIsPositive] = useState(false);
   const [reviewLinks, setReviewLinks] = useState<{ yandex?: string; dgis?: string; google?: string }>({});
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
+  const [isTest, setIsTest] = useState(false);
   const [branchId, setBranchId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check for device lock
-    if (localStorage.getItem("survey_completed")) {
-      setAlreadyCompleted(true);
-      setLoading(false);
-      return;
-    }
-
     async function init() {
       try {
         const res = await fetch(`/api/surveys/check?token=${token}`);
@@ -48,6 +42,14 @@ export default function SurveyPage() {
           return;
         }
 
+        // Check for device lock (SKIP IF TEST)
+        if (!data.isTest && localStorage.getItem("survey_completed")) {
+          setAlreadyCompleted(true);
+          setLoading(false);
+          return;
+        }
+
+        setIsTest(data.isTest || false);
         const bId = data.branchId;
         setBranchId(bId);
         const branchInfo = data.branch;
@@ -91,11 +93,13 @@ export default function SurveyPage() {
         setIsPositiveThreshold(minScoreThreshold);
 
         // Log view event
-        fetch("/api/analytics", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "VIEW", branchId: bId }),
-        });
+        if (!data.isTest) {
+          fetch("/api/analytics", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "VIEW", branchId: bId }),
+          });
+        }
       } catch (err) {
         console.warn("API check failed, continuing for demo");
       } finally {
@@ -140,7 +144,10 @@ export default function SurveyPage() {
         setError(data.error);
         return;
       }
-      localStorage.setItem("survey_completed", "true");
+      
+      if (!isTest) {
+        localStorage.setItem("survey_completed", "true");
+      }
       setStep("success");
     } catch (err) {
       setError("Ошибка при отправке. Попробуйте позже.");
@@ -246,6 +253,10 @@ export default function SurveyPage() {
               >
                 Продолжить <ArrowRight className="w-6 h-6" />
               </button>
+
+              <div className="pt-8 text-center border-t border-slate-100">
+                <a href="/privacy" target="_blank" className="text-[9px] text-slate-400 hover:text-indigo-500 font-bold uppercase tracking-[0.2em] transition-colors">Политика конфиденциальности</a>
+              </div>
             </motion.div>
           )}
 
@@ -362,13 +373,12 @@ export default function SurveyPage() {
                 </div>
               )}
 
-              {!isPositive && (
-                <div className="pt-6">
-                   <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100/50">
-                      <p className="text-sm text-indigo-600 font-bold italic">Ваш отзыв передан руководству компании.</p>
-                   </div>
-                </div>
               )}
+
+              <div className="pt-8 border-t border-slate-200/50">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-2">Alleya Feedback</p>
+                <a href="/privacy" target="_blank" className="text-[10px] text-indigo-400 hover:text-indigo-600 font-bold uppercase tracking-[0.2em] transition-colors">Политика конфиденциальности</a>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
