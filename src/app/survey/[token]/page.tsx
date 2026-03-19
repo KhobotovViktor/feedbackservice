@@ -74,20 +74,12 @@ export default function SurveyPage() {
           }
         }
 
-        // Set review links and threshold
-        if (data.branch) {
-          setReviewLinks({
-            yandex: data.branch.yandexUrl || "",
-            dgis: data.branch.dgisUrl || "",
-            google: data.branch.googleUrl || ""
-          });
-        } else {
-          setReviewLinks({
-            yandex: sData.review_yandex || "",
-            dgis: sData.review_2gis || "",
-            google: sData.review_google_maps || ""
-          });
-        }
+        // Set review links with fallback to global settings
+        setReviewLinks({
+          yandex: branchInfo?.yandexUrl || sData.review_yandex || "",
+          dgis: branchInfo?.dgisUrl || sData.review_2gis || "",
+          google: branchInfo?.googleUrl || sData.review_google_maps || ""
+        });
         
         // Use setting for positive threshold
         setIsPositiveThreshold(minScoreThreshold);
@@ -173,7 +165,7 @@ export default function SurveyPage() {
           </div>
           <div className="pt-4">
              <div className="h-px bg-slate-200/50 w-full mb-6"></div>
-             <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.3em]">Alleya Feedback</p>
+             <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.3em]">Сервис обратной связи «Аллея Мебели»</p>
           </div>
         </div>
       </div>
@@ -231,7 +223,10 @@ export default function SurveyPage() {
                    <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
                 </div>
                 <h1 className="text-3xl md:text-4xl font-black text-slate-900 leading-none tracking-tighter">Ваше мнение <br/> имеет значение</h1>
-                <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px]">«Аллея Мебели»</p>
+                <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px]">Сервис обратной связи «Аллея Мебели»</p>
+                <div className="pt-2">
+                  <a href="https://alleyadoma.ru" target="_blank" className="text-[10px] text-slate-400 hover:text-indigo-500 font-bold uppercase tracking-[0.1em] transition-colors border-b border-slate-200 hover:border-indigo-200 pb-0.5">alleyadoma.ru</a>
+                </div>
               </div>
 
               <div className="space-y-10">
@@ -304,6 +299,9 @@ export default function SurveyPage() {
               </div>
               <div className="space-y-3">
                 <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Огромное спасибо!</h2>
+                <div className="pb-2">
+                  <a href="https://alleyadoma.ru" target="_blank" className="text-xs text-indigo-500 font-bold hover:text-indigo-600 transition-colors">Вернуться на alleyadoma.ru</a>
+                </div>
                 <p className="text-slate-600 text-lg font-medium leading-relaxed">
                   {isPositive 
                     ? "Мы счастливы, что вам понравилось! Ваша оценка вдохновляет нашу команду." 
@@ -325,12 +323,9 @@ export default function SurveyPage() {
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ type: "CLICK", target: "YANDEX", branchId }),
                         })}
-                        className="flex items-center gap-4 p-4 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-bold text-slate-700 shadow-sm"
+                        className="flex items-center justify-center p-5 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-black text-slate-700 shadow-sm"
                       >
-                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-slate-100">
-                          <img src="/icons/yandex.jpg" alt="Yandex" className="w-full h-full object-cover" />
-                        </div>
-                        Яндекс Карты
+                        Яндекс.Карты
                       </a>
                     )}
                     {reviewLinks.dgis && (
@@ -343,12 +338,9 @@ export default function SurveyPage() {
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ type: "CLICK", target: "2GIS", branchId }),
                         })}
-                        className="flex items-center gap-4 p-4 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-bold text-slate-700 shadow-sm"
+                        className="flex items-center justify-center p-5 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-black text-slate-700 shadow-sm"
                       >
-                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-slate-100">
-                          <img src="/icons/2gis.jpg" alt="2GIS" className="w-full h-full object-cover" />
-                        </div>
-                        2GIS
+                        2ГИС
                       </a>
                     )}
                     {reviewLinks.google && (
@@ -361,11 +353,8 @@ export default function SurveyPage() {
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ type: "CLICK", target: "GOOGLE", branchId }),
                         })}
-                        className="flex items-center gap-4 p-4 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-bold text-slate-700 shadow-sm"
+                        className="flex items-center justify-center p-5 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-black text-slate-700 shadow-sm"
                       >
-                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-slate-100">
-                          <img src="/icons/google.jpg" alt="Google" className="w-full h-full object-cover" />
-                        </div>
                         Google Maps
                       </a>
                     )}
@@ -374,7 +363,7 @@ export default function SurveyPage() {
               )}
 
               <div className="pt-8 border-t border-slate-200/50">
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-2">Alleya Feedback</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-2">Сервис обратной связи «Аллея Мебели»</p>
                 <a href="/privacy" target="_blank" className="text-[10px] text-indigo-400 hover:text-indigo-600 font-bold uppercase tracking-[0.2em] transition-colors">Политика конфиденциальности</a>
               </div>
             </motion.div>

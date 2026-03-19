@@ -1,7 +1,14 @@
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
 
-import { prisma } from './src/lib/prisma';
 async function main() {
-  const b = await prisma.branch.findFirst({ where: { name: { contains: 'Вологда' } } });
-  console.log(JSON.stringify(b, null, 2));
+  const branches = await prisma.branch.findMany({
+    where: { name: { contains: 'Аллея Мебели, Вологда' } }
+  });
+  console.log(JSON.stringify(branches, null, 2));
 }
-main();
+
+main().catch(e => {
+  console.error(e);
+  process.exit(1);
+});
