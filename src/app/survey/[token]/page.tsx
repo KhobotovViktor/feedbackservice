@@ -303,7 +303,7 @@ export default function SurveyPage() {
                 <CheckCircle className="w-12 h-12" />
               </div>
               <div className="space-y-3">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tighter tracking-tight">Огромное спасибо!</h2>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Огромное спасибо!</h2>
                 <p className="text-slate-600 text-lg font-medium leading-relaxed">
                   {isPositive 
                     ? "Мы счастливы, что вам понравилось! Ваша оценка вдохновляет нашу команду." 
@@ -320,7 +320,7 @@ export default function SurveyPage() {
                         href={reviewLinks.yandex} 
                         target="_blank" 
                         rel="noopener noreferrer" 
-                        onClick={() => fetch("/api/analytics", {
+                        onClick={() => !isTest && fetch("/api/analytics", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ type: "CLICK", target: "YANDEX", branchId }),
@@ -330,7 +330,7 @@ export default function SurveyPage() {
                         <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-slate-100">
                           <img src="/icons/yandex.jpg" alt="Yandex" className="w-full h-full object-cover" />
                         </div>
-                        Яндекс.Карты
+                        Яндекс Карты
                       </a>
                     )}
                     {reviewLinks.dgis && (
@@ -338,7 +338,7 @@ export default function SurveyPage() {
                         href={reviewLinks.dgis} 
                         target="_blank" 
                         rel="noopener noreferrer" 
-                        onClick={() => fetch("/api/analytics", {
+                        onClick={() => !isTest && fetch("/api/analytics", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ type: "CLICK", target: "2GIS", branchId }),
@@ -356,7 +356,7 @@ export default function SurveyPage() {
                         href={reviewLinks.google} 
                         target="_blank" 
                         rel="noopener noreferrer" 
-                        onClick={() => fetch("/api/analytics", {
+                        onClick={() => !isTest && fetch("/api/analytics", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ type: "CLICK", target: "GOOGLE", branchId }),
@@ -371,8 +371,6 @@ export default function SurveyPage() {
                     )}
                   </div>
                 </div>
-              )}
-
               )}
 
               <div className="pt-8 border-t border-slate-200/50">

@@ -122,7 +122,7 @@ export default function QRPrintPage() {
         <div className="w-full h-6 premium-gradient absolute bottom-0 left-0" />
       </div>
 
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @media print {
           body, html {
             background: white !important;
@@ -150,7 +150,7 @@ export default function QRPrintPage() {
             page-break-before: avoid;
           }
         }
-      `}</style>
+      ` }} />
     </div>
   );
 }
