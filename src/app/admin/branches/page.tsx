@@ -243,9 +243,10 @@ export default function BranchesPage() {
                   onChange={e => setNewBranch({...newBranch, googleUrl: e.target.value})}
                 />
               </div>
-              <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+              <div className="space-y-2 sm:col-span-2 lg:col-span-3">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Шаблон вопросов</label>
                 <CustomSelect 
+                  className="w-full"
                   options={[
                     { value: "", label: "Без шаблона (свои вопросы)" },
                     ...templates.map(t => ({ value: t.id, label: t.name }))

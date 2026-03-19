@@ -39,7 +39,7 @@ export function CustomSelect({ options, value, onChange, className, placeholder 
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full glass bg-white flex items-center justify-between px-6 py-3 rounded-2xl border-white/60 shadow-sm hover:bg-slate-50 transition-all font-black text-xs md:text-sm text-slate-900 group"
+        className="w-full bg-white/50 border border-slate-200 flex items-center justify-between px-5 py-4 rounded-2xl shadow-sm hover:bg-white hover:border-indigo-300 transition-all font-bold text-sm text-slate-900 group"
       >
         <span className="truncate">{selectedOption?.label || placeholder || "Выберите..."}</span>
         <ChevronDown className={cn("w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-all", isOpen && "rotate-180")} />
