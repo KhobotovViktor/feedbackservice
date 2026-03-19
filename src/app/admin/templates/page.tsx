@@ -32,6 +32,9 @@ export default function TemplatesPage() {
   const [newQuestionText, setNewQuestionText] = useState("");
 
   const [view, setView] = useState<"list" | "detail">("list");
+  const [editingMetadata, setEditingMetadata] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editMinScore, setEditMinScore] = useState("4.0");
 
   useEffect(() => {
     fetchTemplates();
@@ -124,8 +127,36 @@ export default function TemplatesPage() {
 
   const handleSelectTemplate = (template: Template) => {
     setSelectedTemplate(template);
+    setEditName(template.name);
+    setEditMinScore(template.minScore.toString());
+    setEditingMetadata(false);
     fetchQuestions(template.id);
     setView("detail");
+  };
+
+  const handleSaveMetadata = async () => {
+    if (!selectedTemplate || !editName) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/templates/${selectedTemplate.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName,
+          minScore: parseFloat(editMinScore)
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSelectedTemplate(updated);
+        setEditingMetadata(false);
+        fetchTemplates();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -268,18 +299,76 @@ export default function TemplatesPage() {
                 >
                   <ChevronLeft className="w-6 h-6" />
                 </button>
-                <div className="min-w-0">
-                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 rounded-full text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-2 border border-indigo-100/50">
-                      Active Template
-                   </div>
-                  <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter truncate leading-tight">{selectedTemplate.name}</h2>
-                  <div className="flex items-center gap-4 mt-2">
-                    <p className="text-slate-500 font-medium text-sm md:text-base">Управление вопросами для связанных филиалов</p>
-                    <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-lg border border-amber-100">
-                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                      <span className="text-xs font-black text-amber-700">{selectedTemplate.minScore.toFixed(1)}</span>
+                <div className="min-w-0 flex-1">
+                  {editingMetadata ? (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Название шаблона</label>
+                          <input 
+                            type="text" 
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
+                            value={editName}
+                            onChange={e => setEditName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Порог оценки</label>
+                          <div className="relative">
+                            <input 
+                              type="number" 
+                              step="0.1"
+                              min="1"
+                              max="5"
+                              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold pr-10"
+                              value={editMinScore}
+                              onChange={e => setEditMinScore(e.target.value)}
+                            />
+                            <Star className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-amber-400" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <button 
+                          onClick={() => setEditingMetadata(false)}
+                          className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-all text-xs"
+                        >
+                          Отмена
+                        </button>
+                        <button 
+                          onClick={handleSaveMetadata}
+                          disabled={saving || !editName}
+                          className="px-6 py-2 premium-gradient text-white rounded-xl font-black shadow-lg shadow-indigo-500/10 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2 text-xs"
+                        >
+                          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          Сохранить
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 rounded-full text-[9px] font-black text-indigo-500 uppercase tracking-widest border border-indigo-100/50">
+                          Active Template
+                        </div>
+                        <button 
+                          onClick={() => setEditingMetadata(true)}
+                          className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all"
+                          title="Редактировать название и порог"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter truncate leading-tight">{selectedTemplate.name}</h2>
+                      <div className="flex items-center gap-4 mt-2">
+                        <p className="text-slate-500 font-medium text-sm md:text-base">Управление вопросами для связанных филиалов</p>
+                        <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-lg border border-amber-100">
+                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                          <span className="text-xs font-black text-amber-700">{selectedTemplate.minScore.toFixed(1)}</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 

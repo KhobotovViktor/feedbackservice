@@ -14,6 +14,7 @@ export default function IntegrationPage() {
     b24_field_support: "",
     b24_field_average: "",
     b24_field_comment: "",
+    b24_template_id: "",
     review_yandex: "",
     review_2gis: "",
     review_google_maps: "",
@@ -26,14 +27,16 @@ export default function IntegrationPage() {
   const [testBranchId, setTestBranchId] = useState("");
   const [testLoading, setTestLoading] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
+  const [templates, setTemplates] = useState<any[]>([]);
 
   const webhookUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/api/b24/webhook?clientId={{ID}}&dealId={{DEAL_ID}}`;
 
   useEffect(() => {
     Promise.all([
       fetch("/api/settings").then(res => res.json()),
-      fetch("/api/branches").then(res => res.json())
-    ]).then(([settingsData, branchesData]) => {
+      fetch("/api/branches").then(res => res.json()),
+      fetch("/api/templates").then(res => res.json())
+    ]).then(([settingsData, branchesData, templatesData]) => {
         setSettings({
           b24_webhook_url: settingsData.b24_webhook_url || "",
           b24_message_template: settingsData.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}",
@@ -41,6 +44,7 @@ export default function IntegrationPage() {
           b24_field_support: settingsData.b24_field_support || "",
           b24_field_average: settingsData.b24_field_average || "",
           b24_field_comment: settingsData.b24_field_comment || "",
+          b24_template_id: settingsData.b24_template_id || "",
           review_yandex: settingsData.review_yandex || "",
           review_2gis: settingsData.review_2gis || "",
           review_google_maps: settingsData.review_google_maps || "",
@@ -49,6 +53,9 @@ export default function IntegrationPage() {
         if (Array.isArray(branchesData)) {
           setBranches(branchesData);
           if (branchesData.length > 0) setTestBranchId(branchesData[0].id);
+        }
+        if (Array.isArray(templatesData)) {
+          setTemplates(templatesData);
         }
         setLoading(false);
     });
@@ -135,6 +142,21 @@ export default function IntegrationPage() {
                 </div>
                 <p className="text-[10px] text-slate-400 font-medium mt-2 px-1 leading-relaxed">
                   Создайте в Битрикс24 (Маркет → Локальные приложения → Входящий вебхук) с правами на <span className="font-bold text-slate-500">CRM</span>.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                  Шаблон вопросов для Bitrix24
+                </label>
+                <CustomSelect 
+                  options={templates.map(t => ({ value: t.id, label: t.name }))}
+                  value={settings.b24_template_id}
+                  onChange={(val) => setSettings({ ...settings, b24_template_id: val })}
+                  placeholder="Выберите основной шаблон"
+                />
+                <p className="text-[10px] text-slate-400 font-medium mt-2 px-1 leading-relaxed italic">
+                  Этот шаблон будет применяться ко всем опросам, отправленным через вебхук CRM.
                 </p>
               </div>
 
@@ -307,7 +329,6 @@ export default function IntegrationPage() {
                       <label className="text-[10px] font-black text-rose-500 uppercase tracking-widest">
                         Яндекс.Карты
                       </label>
-                      <img src="/icons/yandex.jpg" alt="Yandex" className="w-4 h-4 rounded-sm object-cover" />
                     </div>
                     <input
                       type="text"
@@ -322,7 +343,6 @@ export default function IntegrationPage() {
                       <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
                         2GIS
                       </label>
-                      <img src="/icons/2gis.jpg" alt="2GIS" className="w-4 h-4 rounded-sm object-cover" />
                     </div>
                     <input
                       type="text"
@@ -337,7 +357,6 @@ export default function IntegrationPage() {
                       <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest">
                         Google Maps
                       </label>
-                      <img src="/icons/google.jpg" alt="Google" className="w-4 h-4 rounded-sm object-cover" />
                     </div>
                     <input
                       type="text"
@@ -408,8 +427,6 @@ export default function IntegrationPage() {
                   </p>
                 </div>
               </div>
-
-// Survey settings removed, moved to Templates
 
               <div className="pt-8 flex items-center gap-6">
                 <button

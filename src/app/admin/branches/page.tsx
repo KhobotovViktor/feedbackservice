@@ -182,7 +182,7 @@ export default function BranchesPage() {
               <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><X className="w-8 h-8" /></button>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 relative z-30">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Название</label>
                 <input 
@@ -243,7 +243,7 @@ export default function BranchesPage() {
                   onChange={e => setNewBranch({...newBranch, googleUrl: e.target.value})}
                 />
               </div>
-              <div className="space-y-2 sm:col-span-2 lg:col-span-3">
+              <div className="space-y-2 sm:col-span-2 lg:col-span-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Шаблон вопросов</label>
                 <CustomSelect 
                   className="w-full"

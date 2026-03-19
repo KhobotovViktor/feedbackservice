@@ -4,8 +4,8 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "default-secret-change-me"
 );
 
-export async function createSurveyToken(clientId: string, dealId: string, branchId?: string | null, isTest: boolean = false) {
-  const token = await new SignJWT({ clientId, dealId, branchId, isTest })
+export async function createSurveyToken(clientId: string, dealId: string, branchId?: string | null, isTest: boolean = false, templateId?: string | null, responsibleName?: string | null) {
+  const token = await new SignJWT({ clientId, dealId, branchId, isTest, templateId, responsibleName })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .sign(JWT_SECRET);
@@ -23,7 +23,7 @@ export async function createQRToken(branchId?: string | null) {
 export async function verifySurveyToken(token: string) {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
-    return payload as { clientId: string; dealId: string; branchId?: string | null; isTest?: boolean };
+    return payload as { clientId: string; dealId: string; branchId?: string | null; isTest?: boolean; templateId?: string | null; responsibleName?: string | null };
   } catch (error) {
     return null;
   }

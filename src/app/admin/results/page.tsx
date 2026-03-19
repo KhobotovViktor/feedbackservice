@@ -12,12 +12,28 @@ export default async function ResultsPage({
 }) {
   const { branchId, type = "all", sortBy = "date", order = "desc" } = await searchParams;
 
+  // Helper to get source text
+  const getSourceText = (res: any) => {
+    const isCRM = res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL" && res.dealId !== "QR_GUEST";
+    if (res.branch?.name) {
+      return `${res.branch.name} ${isCRM ? "(CRM)" : "(QR)"}`;
+    }
+    if (isCRM) return "Bitrix24 (CRM)";
+    return "Прямая ссылка / QR";
+  };
+
   let responses: any[] = [];
   let branches: any[] = [];
 
   try {
     const where: any = {};
-    if (branchId && branchId !== "all") where.branchId = branchId;
+    if (branchId === "crm") {
+      where.branchId = null;
+      where.dealId = { not: "QR_GUEST" };
+    } else if (branchId && branchId !== "all") {
+      where.branchId = branchId;
+    }
+
     if (type === "positive") where.averageScore = { gte: 4 };
     if (type === "negative") where.averageScore = { lt: 4 };
 
@@ -34,19 +50,17 @@ export default async function ResultsPage({
     ]);
     responses = results[0];
     branches = results[1];
-
-    // Helper to get source text for sorting
-    const getSourceText = (res: any) => {
-      if (res.branch?.name) return res.branch.name;
-      if (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL") return "Bitrix24 (CRM)";
-      return "Прямая ссылка / QR";
-    };
-
     // In-memory sort for computed fields
     if (sortBy === "source") {
       responses.sort((a, b) => {
         const textA = getSourceText(a);
         const textB = getSourceText(b);
+        return order === "asc" ? textA.localeCompare(textB) : textB.localeCompare(textA);
+      });
+    } else if (sortBy === "responsible") {
+      responses.sort((a, b) => {
+        const textA = a.responsibleName || "";
+        const textB = b.responsibleName || "";
         return order === "asc" ? textA.localeCompare(textB) : textB.localeCompare(textA);
       });
     }
@@ -134,7 +148,20 @@ export default async function ResultsPage({
                     </Link>
                   </th>
                   <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">Клиент / Сделка</th>
-                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">Средний балл</th>
+                  <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">
+                    <Link 
+                      href={`/admin/results?${new URLSearchParams({ 
+                        branchId: branchId || "all", 
+                        type, 
+                        sortBy: "responsible", 
+                        order: sortBy === "responsible" && order === "asc" ? "desc" : "asc" 
+                      }).toString()}`}
+                      className="flex items-center gap-2 hover:text-indigo-400 transition-colors"
+                    >
+                      Ответственный
+                      {sortBy === "responsible" ? (order === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-20" />}
+                    </Link>
+                  </th>
                   <th className="px-8 py-6 font-black text-[10px] uppercase tracking-[0.2em] opacity-60">Комментарий</th>
                 </tr>
               </thead>
@@ -153,11 +180,11 @@ export default async function ResultsPage({
                         "text-[10px] font-black px-3 py-1.5 rounded-xl border uppercase tracking-widest inline-block group-hover:scale-105 transition-transform",
                         res.branch?.name 
                           ? "text-indigo-600 bg-indigo-50 border-indigo-100/30" 
-                          : (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL")
+                          : (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL" && res.dealId !== "QR_GUEST")
                             ? "text-amber-600 bg-amber-50 border-amber-100/30"
                             : "text-slate-400 bg-slate-50 border-slate-100/30"
                       )}>
-                        {res.branch?.name || (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL" ? "Bitrix24 (CRM)" : "Прямая ссылка / QR")}
+                        {getSourceText(res)}
                       </div>
                     </td>
                     <td className="px-8 py-6">
@@ -169,6 +196,9 @@ export default async function ResultsPage({
                         <span className="font-black text-slate-900 text-2xl tracking-tighter">{res.averageScore.toFixed(1)}</span>
                         <Star className="w-5 h-5 fill-amber-400 text-amber-400 group-hover:scale-125 transition-transform duration-500" />
                       </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="text-sm font-bold text-slate-900">{res.responsibleName || "—"}</div>
                     </td>
                     <td className="px-8 py-6 text-base text-slate-600 max-w-sm font-medium leading-relaxed">
                       {res.comment ? (
@@ -199,11 +229,11 @@ export default async function ResultsPage({
                           "text-[9px] font-black px-3 py-1 rounded-lg border uppercase tracking-widest inline-block",
                           res.branch?.name 
                             ? "text-indigo-600 bg-indigo-50 border-indigo-100/30" 
-                            : (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL")
+                            : (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL" && res.dealId !== "QR_GUEST")
                               ? "text-amber-600 bg-amber-50 border-amber-100/30"
                               : "text-slate-400 bg-slate-50 border-slate-100/30"
                         )}>
-                           {res.branch?.name || (res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL" ? "Bitrix24 (CRM)" : "Прямая ссылка / QR")}
+                           {getSourceText(res)}
                         </div>
                      </div>
                      <div className={cn("flex items-center gap-2 px-4 py-2 rounded-2xl border shadow-sm group-hover:scale-110 transition-transform", ratingColor)}>
@@ -216,9 +246,14 @@ export default async function ResultsPage({
                      <div className="w-12 h-12 rounded-2xl premium-gradient flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
                         <User className="w-6 h-6" />
                      </div>
-                     <div className="min-w-0">
+                     <div className="min-w-0 flex-1">
                         <p className="text-lg font-black text-slate-900 tracking-tight truncate">{res.clientId || "Incognito"}</p>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60">Deal: {res.dealId || "—"}</p>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60">Deal: {res.dealId || "—"}</p>
+                          {res.responsibleName && (
+                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50/50 px-1.5 py-0.5 rounded">Resp: {res.responsibleName}</p>
+                          )}
+                        </div>
                      </div>
                   </div>
 

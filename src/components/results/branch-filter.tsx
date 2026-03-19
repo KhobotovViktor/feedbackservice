@@ -24,6 +24,7 @@ export function BranchFilter({ branches, defaultValue }: { branches: Branch[], d
 
   const options = [
     { value: "all", label: "Все филиалы" },
+    { value: "crm", label: "Битрикс24 (CRM)" },
     ...branches.map(b => ({ value: b.id, label: b.name }))
   ];
 

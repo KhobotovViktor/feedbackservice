@@ -53,8 +53,9 @@ model SurveyResponse {
   answers      Json
   comment      String?
   createdAt    DateTime @default(now())
-  branchId     String?
-  branch       Branch?  @relation(fields: [branchId], references: [id])
+  branchId        String?
+  responsibleName String?
+  branch          Branch?  @relation(fields: [branchId], references: [id])
 
   @@index([clientId])
 }

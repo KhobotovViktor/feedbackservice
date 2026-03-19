@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
         answers,
         comment,
         branchId: payload.branchId || null,
+        responsibleName: (payload as any).responsibleName || null,
       },
     });
 

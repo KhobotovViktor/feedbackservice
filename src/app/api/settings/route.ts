@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
       "review_2gis",
       "review_google_maps",
       "b24_group_chat_id",
+      "b24_template_id",
       "review_min_score",
       "survey_questions"
     ];

@@ -7,9 +7,10 @@ async function handleWebhook(req: NextRequest) {
   const clientId = searchParams.get("clientId");
   const dealId = searchParams.get("dealId");
   const branchId = searchParams.get("branchId");
+  const responsibleName = searchParams.get("responsible");
   const isTest = searchParams.get("isTest") === "true";
   
-  console.log(`Incoming B24 Webhook: clientId=${clientId}, dealId=${dealId}, branchId=${branchId}, isTest=${isTest}`);
+  console.log(`Incoming B24 Webhook: clientId=${clientId}, dealId=${dealId}, branchId=${branchId}, responsible=${responsibleName}, isTest=${isTest}`);
   
   // Resilience: if clientId is missing but dealId is present, use dealId as clientId
   const effectiveClientId = clientId || dealId;
@@ -28,7 +29,17 @@ async function handleWebhook(req: NextRequest) {
     console.warn("Detected unresolved Bitrix24 placeholders. Please check Robot configuration.");
   }
 
-  const token = await createSurveyToken(effectiveClientId, effectiveDealId, branchId, isTest);
+  const settings = await prisma.settings.findMany({
+    where: { key: { in: ["b24_webhook_url", "b24_message_template", "b24_link_field", "b24_template_id"] } }
+  });
+  
+  const settingsMap = settings.reduce((acc: Record<string, string>, curr: any) => {
+    acc[curr.key] = curr.value;
+    return acc;
+  }, {});
+
+  const b24TemplateId = settingsMap.b24_template_id;
+  const token = await createSurveyToken(effectiveClientId, effectiveDealId, branchId, isTest, b24TemplateId, responsibleName);
   
   // Get base URL from env or request headers
   let appUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -70,17 +81,7 @@ async function handleWebhook(req: NextRequest) {
       isTest: true
     });
   }
-
   try {
-    const settings = await prisma.settings.findMany({
-      where: { key: { in: ["b24_webhook_url", "b24_message_template", "b24_link_field"] } }
-    });
-    
-    const settingsMap = settings.reduce((acc: Record<string, string>, curr: any) => {
-      acc[curr.key] = curr.value;
-      return acc;
-    }, {});
-
     if (settingsMap.b24_webhook_url) {
       const template = settingsMap.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}";
       const message = template.replace("{surveyUrl}", surveyUrl);

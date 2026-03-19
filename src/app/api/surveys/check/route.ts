@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Недействительная ссылка" }, { status: 401 });
   }
 
-  const { clientId, branchId, isTest } = payload;
+  const { clientId, branchId, isTest, templateId } = payload;
   
   // Fetch branch info if present
   let branchInfo = null;
@@ -32,6 +32,25 @@ export async function GET(req: NextRequest) {
         }
       }
     });
+  }
+
+  // If no branch template, but templateId is in token (e.g. from B24 setting)
+  if ((!branchInfo || !branchInfo.template) && templateId) {
+    const template = await prisma.questionTemplate.findUnique({
+      where: { id: templateId },
+      include: {
+        questions: {
+          orderBy: { order: "asc" }
+        }
+      }
+    });
+    if (template) {
+      if (!branchInfo) {
+        branchInfo = { template } as any;
+      } else {
+        branchInfo.template = template as any;
+      }
+    }
   }
 
   // Skip frequency check for tests
