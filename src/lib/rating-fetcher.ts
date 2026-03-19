@@ -42,7 +42,17 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
     const html = await response.text();
 
     if (service === "yandex") {
-      // 1. Try JSON-LD (most robust)
+      // 1. Try OG Description (very robust for bot-protected pages)
+      const ogMatch = html.match(/<meta property="og:description" content="[^"]*Рейтинг ([\d,.]+)\. ([\d\s]+) отзыв/);
+      if (ogMatch) {
+         return {
+            rating: parseFloat(ogMatch[1].replace(",", ".")),
+            reviewCount: parseInt(ogMatch[2].replace(/\s/g, "")),
+            success: true
+         };
+      }
+
+      // 2. Try JSON-LD (most robust if served)
       const ldMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
       if (ldMatch) {
         try {
@@ -58,7 +68,7 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
         } catch (e) {}
       }
       
-      // 2. Fallback to rating components
+      // 3. Fallback to rating components
       const ratingValue = html.match(/class="[^"]*rating-value[^"]*">([\d.]+)<\/span>/)?.[1];
       const countValue = html.match(/>(\d+)\s+оценок<\/span>/)?.[1] || html.match(/>(\d+)\s+отзыв/)?.[1];
       
@@ -95,16 +105,27 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
     }
 
     if (service === "google") {
-      // Google is extremely hard without a real browser. 
-      // We might need to use a dedicated API or a more complex scraper.
-      // For now, let's try to find a simple marker.
-      const ratingMatch = html.match(/\[(\d\.\d),\s*(\d+),\s*"[^"]*",\s*null/);
+      // Google is extremely hard without a real browser.
+      // 1. Try a more flexible generic pattern for the data array
+      const ratingMatch = html.match(/\[(\d\.\d),\s*(\d+),\s*"[^"]*",\s*null/) || 
+                          html.match(/\[(\d\.\d),\s*(\d+),/);
       if (ratingMatch) {
         return {
           rating: parseFloat(ratingMatch[1]),
           reviewCount: parseInt(ratingMatch[2]),
           success: true
         };
+      }
+
+      // 2. Try to find rating in Russian/English display strings (if served)
+      const displayMatch = html.match(/([\d,.]+)\s*звезды,.+?([\d\s]+)\s*отзыв/) ||
+                           html.match(/([\d,.]+)\s*stars,.+?([\d\s]+)\s*review/);
+      if (displayMatch) {
+         return {
+            rating: parseFloat(displayMatch[1].replace(",", ".")),
+            reviewCount: parseInt(displayMatch[2].replace(/\s/g, "")),
+            success: true
+         };
       }
     }
 

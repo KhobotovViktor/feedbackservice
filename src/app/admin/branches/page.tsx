@@ -58,6 +58,16 @@ export default function BranchesPage() {
   });
   const [templates, setTemplates] = useState<QuestionTemplate[]>([]);
   const [selectedForQR, setSelectedForQR] = useState<Branch | null>(null);
+  const [selectedMetrics, setSelectedMetrics] = useState<Record<string, string>>({});
+
+  const METRIC_OPTIONS = [
+    { label: "Рейтинг Яндекс", value: "yandex-rating" },
+    { label: "Отзывы Яндекс", value: "yandex-reviewCount" },
+    { label: "Рейтинг 2ГИС", value: "2gis-rating" },
+    { label: "Отзывы 2ГИС", value: "2gis-reviewCount" },
+    { label: "Рейтинг Google", value: "google-rating" },
+    { label: "Отзывы Google", value: "google-reviewCount" },
+  ];
 
   useEffect(() => {
     fetchBranches();
@@ -398,18 +408,28 @@ export default function BranchesPage() {
 
               {/* Rating Monitoring Section */}
               <div className="mt-8 pt-8 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
                   <div className="flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-emerald-500" />
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Мониторинг отзовиков</p>
                   </div>
-                  <button 
-                    onClick={() => handleSyncRatings(branch.id)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    Обновить
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <div className="w-48">
+                      <CustomSelect
+                        value={selectedMetrics[branch.id] || "yandex-rating"}
+                        onChange={(val) => setSelectedMetrics(prev => ({ ...prev, [branch.id]: val }))}
+                        options={METRIC_OPTIONS}
+                        placeholder="Выберите метрику"
+                      />
+                    </div>
+                    <button 
+                      onClick={() => handleSyncRatings(branch.id)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      <RefreshCw className="w-3 h-3 text-emerald-500" />
+                      Обновить
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
@@ -433,14 +453,25 @@ export default function BranchesPage() {
                   {branch.ratingHistory && branch.ratingHistory.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart 
-                        data={branch.ratingHistory.map(h => ({
-                          date: new Date(h.createdAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
-                          rating: h.rating,
-                          service: h.service === 'yandex' ? 'Яндекс' : h.service === '2gis' ? '2ГИС' : 'Google'
-                        }))}
+                        data={(() => {
+                          const selection = selectedMetrics[branch.id] || 'yandex-rating';
+                          const [service, metric] = selection.split('-');
+                          const filtered = (branch.ratingHistory || [])
+                            .filter(h => h.service === service)
+                            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                            .map(h => ({
+                              date: new Date(h.createdAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
+                              value: metric === 'rating' ? h.rating : h.reviewCount,
+                              label: metric === 'rating' ? 'Оценка' : 'Отзывы'
+                            }));
+                          
+                          // If no data for specific service, show a friendly empty state transition
+                          if (filtered.length === 0) return [];
+                          return filtered;
+                        })()}
                       >
                         <defs>
-                          <linearGradient id="colorRating" x1="0" y1="0" x2="0" y2="1">
+                          <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
                             <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                           </linearGradient>
@@ -455,24 +486,26 @@ export default function BranchesPage() {
                         />
                         <YAxis 
                           hide={true} 
-                          domain={['dataMin - 0.5', 'dataMax + 0.5']} 
+                          domain={selectedMetrics[branch.id]?.includes('rating') ? ['dataMin - 0.5', 'dataMax + 0.5'] : ['auto', 'auto']}
                         />
                         <Tooltip 
                           contentStyle={{ 
-                            borderRadius: '1rem', 
+                            borderRadius: '1.25rem', 
                             border: 'none', 
                             boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
                             fontSize: '11px',
-                            fontWeight: 'bold'
+                            fontWeight: 'black'
                           }}
+                          formatter={(value: any, name: any, props: any) => [value, props.payload.label]}
                         />
                         <Area 
                           type="monotone" 
-                          dataKey="rating" 
+                          dataKey="value" 
                           stroke="#6366f1" 
                           strokeWidth={3} 
                           fillOpacity={1} 
-                          fill="url(#colorRating)" 
+                          fill="url(#colorValue)" 
+                          animationDuration={1000}
                         />
                       </AreaChart>
                     </ResponsiveContainer>

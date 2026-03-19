@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { Star, MessageSquare, Users, TrendingUp, QrCode, Eye, MousePointer2, AlertCircle, ArrowRight } from "lucide-react";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { cn } from "@/lib/utils";
+import { OverallMonitoring } from "@/components/dashboard/overall-monitoring";
 
 interface BentoCardProps {
   label: string;
@@ -102,6 +103,10 @@ export default async function AdminDashboard({
           surveyResponses: { 
             where: whereWithDate,
             select: { averageScore: true } 
+          },
+          ratingHistory: {
+            where: whereWithDate,
+            orderBy: { createdAt: 'asc' }
           }
         }
       }),
@@ -148,6 +153,9 @@ export default async function AdminDashboard({
   const openRate = totalViews > 0 ? Math.round((totalResponses / totalViews) * 100) : 0;
   const clickThroughRate = totalResponses > 0 ? Math.round((totalClicks / totalResponses) * 100) : 0;
 
+  // Aggregate history from all branches
+  const allHistory = (branchesRaw || []).flatMap((b: any) => b.ratingHistory || []);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-1000">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2">
@@ -156,6 +164,13 @@ export default async function AdminDashboard({
           <p className="text-slate-500 text-base md:text-lg font-medium">Аналитика качества сервиса в режиме реального времени</p>
         </div>
         <PeriodFilter />
+      </div>
+
+      {/* Overall Network Monitoring */}
+      <div className="grid grid-cols-1 gap-6">
+        <div className="bento-card min-h-[450px]">
+          <OverallMonitoring data={allHistory} />
+        </div>
       </div>
 
       {/* Bento Grid Layout */}
