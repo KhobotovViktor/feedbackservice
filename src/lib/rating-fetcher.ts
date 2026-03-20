@@ -15,12 +15,13 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
   // Normalize URLs to canonical forms if possible
   if (service === "yandex") {
     const orgIdMatch = cleanUrl.match(/\/org\/(\d+)/);
-    if (orgIdMatch) {
+    if (orgIdMatch && !cleanUrl.includes("yandex.ru/maps/org/")) {
       cleanUrl = `https://yandex.ru/maps/org/${orgIdMatch[1]}`;
     }
   } else if (service === "2gis") {
     const firmIdMatch = cleanUrl.match(/\/firm\/(\d+)/);
-    if (firmIdMatch) {
+    // Only force canonical if it doesn't already look like a proper 2gis firm URL
+    if (firmIdMatch && !cleanUrl.includes("2gis.ru")) {
       cleanUrl = `https://2gis.ru/firm/${firmIdMatch[1]}`;
     }
   }
@@ -32,9 +33,14 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
         "User-Agent": userAgent,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
         "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://www.google.com/",
+        "Referer": service === "google" ? "https://www.google.com/" : `https://www.${service}.ru/`,
         "Cache-Control": "no-cache",
-        "Pragma": "no-cache"
+        "Pragma": "no-cache",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "cross-site",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1"
       },
       cache: 'no-store'
     });
@@ -45,6 +51,10 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
     }
     
     const html = await response.text();
+
+    if (html.includes("captcha") || html.includes("check_robot") || html.includes("checkbox-captcha")) {
+       return { rating: 0, reviewCount: 0, success: false, error: "Bot detection (CAPTCHA) triggered" };
+    }
 
     if (service === "yandex") {
       // 1. Metadata / Schema.org (Most robust)
@@ -61,7 +71,8 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
 
       // 2. OpenGraph Description (Very common)
       // Matches: "⭐️ Рейтинг 4,6. 877 отзывов"
-      const ogMatch = html.match(/property="og:description" content="[^"]*Рейтинг ([\d,.]+)[^"]*?([\d\s]+) отзыв/i);
+      const ogMatch = html.match(/property="og:description" content="[^"]*Рейтинг\s*([\d,.]+)[^"]*?([\d\s]+)\s*отзыв/i) ||
+                      html.match(/content="[^"]*Рейтинг\s*([\d,.]+)[^"]*?([\d\s]+)\s*отзыв/i);
       if (ogMatch) {
         return {
           rating: Math.round(parseFloat(ogMatch[1].replace(',', '.')) * 10) / 10,
@@ -139,6 +150,17 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
       }
     } else if (service === "2gis") {
       // 2GIS OG description is usually reliable: "Оценка 4.8, 249 отзывов"
+      const ogMatch = html.match(/property="og:description" content="[^"]*Оценка ([\d.]+)[^"]*?([\d\s]+) отзыв/i) ||
+                      html.match(/Оценка ([\d.]+)[^,]*,\s*([\d\s]+) отзыв/i);
+      
+      if (ogMatch) {
+         return {
+            rating: Math.round(parseFloat(ogMatch[1]) * 10) / 10,
+            reviewCount: parseInt(ogMatch[2].replace(/\s/g, "")),
+            success: true
+         };
+      }
+
       const ratingMatch = html.match(/Оценка ([\d.]+)/i) || html.match(/Rating ([\d.]+)/i);
       const countMatch = html.match(/(\d+)\s+отзыв/i) || html.match(/(\d+)\s+review/i);
       
@@ -176,8 +198,10 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
       }
     }
 
+    console.log(`${service} extraction failed. HTML length: ${html.length}. Snippet: ${html.substring(0, 300).replace(/\s+/g, ' ')}`);
     return { rating: 0, reviewCount: 0, success: false, error: "Data markers not found" };
   } catch (err: any) {
+    console.error(`${service} sync exception:`, err);
     return { rating: 0, reviewCount: 0, success: false, error: err.message };
   }
 }
