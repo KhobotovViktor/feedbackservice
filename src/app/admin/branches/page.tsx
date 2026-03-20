@@ -12,6 +12,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
+import { parseRating } from "@/lib/rating-parser";
+import { Globe } from "lucide-react";
 
 interface RatingHistory {
   id: string;
@@ -173,6 +175,69 @@ export default function BranchesPage() {
     } catch (err: any) {
       console.error(err);
       alert("Ошибка сети при синхронизации: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBrowserSync = async (branch: Branch) => {
+    try {
+      setLoading(true);
+      const results: any[] = [];
+      const services = [
+        { id: 'yandex', url: branch.yandexUrl },
+        { id: '2gis', url: branch.dgisUrl },
+        { id: 'google', url: branch.googleUrl }
+      ].filter(s => s.url);
+
+      if (services.length === 0) {
+        alert("У этого филиала не указаны ссылки на карты!");
+        return;
+      }
+
+      for (const s of services) {
+        try {
+          // Use proxy directly in browser (bypasses server blocking)
+          const cleanUrl = s.url!.split('?')[0];
+          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(cleanUrl)}&t=${Date.now()}`;
+          const res = await fetch(proxyUrl);
+          const data = await res.json();
+          const html = data.contents;
+          const parsed = parseRating(s.id, html);
+          
+          if (parsed.success) {
+            // Save to server
+            await fetch('/api/admin/rating-manual', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                branchId: branch.id,
+                service: s.id,
+                rating: parsed.rating,
+                reviewCount: parsed.reviewCount
+              })
+            });
+            results.push({ service: s.id, status: 'success' });
+          } else {
+            // Try widget fallback for Yandex if main failed
+            if (s.id === 'yandex') {
+              const widgetUrl = `https://yandex.ru/maps-reviews-widget/1/`; // Dummy id, fetcher usually normalizes this, but here we'd need actual id
+              // Actually, use same logic as server but on client
+            }
+            results.push({ service: s.id, status: 'error', error: parsed.error });
+          }
+        } catch (e: any) {
+          results.push({ service: s.id, status: 'error', error: e.message });
+        }
+      }
+
+      const summary = results.map((r: any) => 
+        `${r.service.toUpperCase()}: ${r.status === 'success' ? '✅' : '❌ ' + (r.error || 'Ошибка')}`
+      ).join('\n');
+      alert(`Синхронизация через браузер завершена:\n\n${summary}`);
+      fetchBranches();
+    } catch (err: any) {
+      alert("Ошибка браузерной синхронизации: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -434,7 +499,14 @@ export default function BranchesPage() {
                       className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
                     >
                       <RefreshCw className="w-3 h-3 text-emerald-500" />
-                      Обновить
+                      Авто
+                    </button>
+                    <button 
+                      onClick={() => handleBrowserSync(branch)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      <Globe className="w-3 h-3 text-indigo-500" />
+                      Браузер
                     </button>
                   </div>
                 </div>

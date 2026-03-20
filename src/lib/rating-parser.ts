@@ -1,0 +1,68 @@
+export interface RatingResult {
+  rating: number;
+  reviewCount: number;
+  success: boolean;
+  error?: string;
+}
+
+export function parseRating(service: string, html: string): RatingResult {
+  if (!html || html.length < 200) {
+    return { rating: 0, reviewCount: 0, success: false, error: "Empty content or blocked" };
+  }
+
+  if (service === "yandex") {
+    let wRating = html.match(/class=\"Rating-Value\">([\d,.]+)<\/div>/)?.[1] || 
+                  html.match(/\"ratingValue\":\s*\"([\d,.]+)\"/)?.[1];
+    let wCount = html.match(/class=\"Rating-Count\">[^<]*?(\d+)[^<]*?<\/div>/)?.[1] || 
+                 html.match(/\"reviewCount\":\s*\"(\d+)\"/)?.[1];
+    
+    if (!wRating) {
+      const metaRating = html.match(/content=\"[^"]*?([\d,.]+)\s*из\s*5/i) || 
+                         html.match(/content=\"[^"]*?Рейтинг\s*([\d,.]+)/i);
+      const metaCount = html.match(/content=\"[^"]*?(\d+)\s+отзыв/i) ||
+                        html.match(/content=\"[^"]*?([\d\s]+)\s+оценок/i);
+      if (metaRating) wRating = metaRating[1];
+      if (metaCount) wCount = metaCount[1];
+    }
+
+    if (wRating && wCount) {
+      return {
+        rating: Math.round(parseFloat(wRating.replace(',', '.')) * 10) / 10,
+        reviewCount: parseInt(wCount.replace(/\s/g, '')),
+        success: true
+      };
+    }
+  } else if (service === "google") {
+    const patterns = [
+      /\[\s*"[^"]*"\s*,\s*\[\s*([0-5]\.\d+)\s*,\s*(\d+)\s*\]/i,
+      /aria-label="([0-5][.,]\d)\s*звезд[^"]* ([\d\s]+)\s*отзыв/i,
+      /aria-label="([0-5][.,]\d)\s*stars[^"]* ([\d\s]+)\s*reviews/i,
+      /\[null,\s*([0-5][.,]\d+),\s*(\d+)\]/i,
+      /\"ratingValue\":\s*\"([\d,.]+)\"/i,
+      /\"reviewCount\":\s*\"(\d+)\"/i
+    ];
+
+    for (const p of patterns) {
+      const m = html.match(p);
+      if (m && m[1] && m[2]) {
+        return {
+          rating: Math.round(parseFloat(m[1].replace(',', '.')) * 10) / 10,
+          reviewCount: parseInt(m[2].replace(/\s/g, '')),
+          success: true
+        };
+      }
+    }
+  } else if (service === "2gis") {
+    const ogMatch = html.match(/property="og:description" content="[^"]*Оценка ([\d.]+)[^"]*?([\d\s]+) отзыв/i) ||
+                    html.match(/Оценка ([\d.]+)[^,]*,\s*([\d\s]+) отзыв/i);
+    if (ogMatch) {
+      return {
+        rating: parseFloat(ogMatch[1]),
+        reviewCount: parseInt(ogMatch[2].replace(/\s/g, '')),
+        success: true
+      };
+    }
+  }
+
+  return { rating: 0, reviewCount: 0, success: false, error: "Patterns not found" };
+}

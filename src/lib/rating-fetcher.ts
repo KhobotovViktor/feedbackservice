@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { parseRating } from "./rating-parser";
 
 export interface RatingResult {
   rating: number;
@@ -89,78 +90,6 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
       return { rating: 0, reviewCount: 0, success: false, error: "Access blocked (Captcha/403) on all routes" };
     }
 
-    // Diagnostic log for failures
-    const logFailure = (reason: string) => {
-      console.log(`${service} extraction failed: ${reason}. HTML len: ${html.length}. Snippet: ${html.substring(0, 500).replace(/\s+/g, ' ')}`);
-    };
-
-    if (service === "yandex") {
-      // 1. Try Widget extraction first
-      let wRating = html.match(/class=\"Rating-Value\">([\d,.]+)<\/div>/)?.[1] || 
-                      html.match(/\"ratingValue\":\s*\"([\d,.]+)\"/)?.[1];
-      let wCount = html.match(/class=\"Rating-Count\">[^<]*?(\d+)[^<]*?<\/div>/)?.[1] || 
-                     html.match(/\"reviewCount\":\s*\"(\d+)\"/)?.[1];
-      
-      if (!wRating) {
-        // Try to find rating in OG meta with generic pattern
-        const metaRating = html.match(/content=\"[^"]*?([\d,.]+)\s*из\s*5/i) || 
-                           html.match(/content=\"[^"]*?Рейтинг\s*([\d,.]+)/i);
-        const metaCount = html.match(/content=\"[^"]*?(\d+)\s+отзыв/i) ||
-                          html.match(/content=\"[^"]*?([\d\s]+)\s+оценок/i);
-        if (metaRating) wRating = metaRating[1];
-        if (metaCount) wCount = metaCount[1];
-      }
-
-      if (wRating && wCount) {
-        return {
-          rating: Math.round(parseFloat(wRating.replace(',', '.')) * 10) / 10,
-          reviewCount: parseInt(wCount.replace(/\s/g, '')),
-          success: true
-        };
-      }
-      logFailure("Yandex patterns not found");
-    } else if (service === "google") {
-      const patterns = [
-        /\[\s*"[^"]*"\s*,\s*\[\s*([0-5]\.\d+)\s*,\s*(\d+)\s*\]/i,
-        /aria-label="([0-5][.,]\d)\s*звезд[^"]* ([\d\s]+)\s*отзыв/i,
-        /aria-label="([0-5][.,]\d)\s*stars[^"]* ([\d\s]+)\s*reviews/i,
-        /\[null,\s*([0-5][.,]\d+),\s*(\d+)\]/i,
-        /Оценка:\s*([0-5][.,]\d).+?(\d+)\s*отзыв/i,
-        /Rating:\s*([0-5][.,]\d).+?(\d+)\s*review/i,
-        /\"ratingValue\":\s*\"([\d,.]+)\"/i,
-        /\"reviewCount\":\s*\"(\d+)\"/i
-      ];
-
-      for (const p of patterns) {
-        const m = html.match(p);
-        if (m && m[1] && m[2]) {
-          return {
-            rating: Math.round(parseFloat(m[1].replace(',', '.')) * 10) / 10,
-            reviewCount: parseInt(m[2].replace(/\s/g, '')),
-            success: true
-          };
-        }
-      }
-      
-      // Special check for Google consent page
-      if (html.includes("consent.google.com")) {
-        return { rating: 0, reviewCount: 0, success: false, error: "Blocked by Google Consent page" };
-      }
-      logFailure("Google patterns not found");
-    } else if (service === "2gis") {
-      const ogMatch = html.match(/property="og:description" content="[^"]*Оценка ([\d.]+)[^"]*?([\d\s]+) отзыв/i) ||
-                      html.match(/Оценка ([\d.]+)[^,]*,\s*([\d\s]+) отзыв/i);
-      
-      if (ogMatch) {
-         return {
-            rating: Math.round(parseFloat(ogMatch[1]) * 10) / 10,
-            reviewCount: parseInt(ogMatch[2].replace(/\s/g, "")),
-            success: true
-         };
-      }
-    }
-
-    console.log(`${service} data not found. HTML snippet: ${html.substring(0, 200).replace(/\s+/g, ' ')}`);
     return { rating: 0, reviewCount: 0, success: false, error: "Data markers not found in page content" };
   } catch (err: any) {
     console.error(`${service} sync exception:`, err);
