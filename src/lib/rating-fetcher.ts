@@ -59,7 +59,33 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
     }
 
     if (service === "yandex") {
-      // 1. Metadata / Schema.org (Most robust)
+      // Try Yandex Widget first (extremely reliable on Vercel)
+      const orgId = cleanUrl.match(/\/org\/(\d+)/)?.[1];
+      if (orgId) {
+        const widgetUrl = `https://yandex.ru/maps-reviews-widget/${orgId}?comments`;
+        try {
+          const widgetRes = await fetch(widgetUrl, { headers: { "User-Agent": desktopUA } });
+          if (widgetRes.ok) {
+            const wHtml = await widgetRes.text();
+            const wRating = wHtml.match(/class=\"Rating-Value\">([\d,.]+)<\/div>/)?.[1] || 
+                            wHtml.match(/\"ratingValue\":\s*\"([\d,.]+)\"/)?.[1];
+            const wCount = wHtml.match(/class=\"Rating-Count\">[^<]*?(\d+)[^<]*?<\/div>/)?.[1] || 
+                           wHtml.match(/\"reviewCount\":\s*\"(\d+)\"/)?.[1];
+            
+            if (wRating && wCount) {
+              return {
+                rating: Math.round(parseFloat(wRating.replace(',', '.')) * 10) / 10,
+                reviewCount: parseInt(wCount.replace(/\s/g, '')),
+                success: true
+              };
+            }
+          }
+        } catch (e) {
+          console.warn("Yandex Widget fetch failed, falling back to main page...");
+        }
+      }
+
+      // Metadata / Schema.org (Main page fallback)
       const ratingProp = html.match(/itemProp="ratingValue" content="([0-9,.]+)"/i);
       const reviewProp = html.match(/itemProp="reviewCount" content="(\d+)"/i);
       
