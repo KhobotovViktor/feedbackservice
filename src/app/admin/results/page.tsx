@@ -122,22 +122,24 @@ export default async function ResultsPage({
             <table className="w-full text-left border-collapse table-fixed">
               <thead className="bg-slate-900 text-white">
                 <tr>
-                  <th className="w-[15%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Дата</th>
-                  <th className="w-[20%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60 text-center">Источник</th>
-                  <th className="w-[20%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Клиент / Сделка</th>
-                  <th className="w-[12%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60 text-center">Оценка</th>
-                  <th className="w-[15%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Ответственный</th>
+                  <th className="w-[18%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Дата</th>
+                  <th className="w-[18%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60 text-center">Источник</th>
+                  <th className="w-[18%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Клиент / Сделка</th>
+                  <th className="w-[10%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60 text-center">Оценка</th>
+                  <th className="w-[14%] px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Ответственный</th>
                   <th className="px-8 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Комментарий</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white/40">
                 {responses.map((res: any) => (
                   <tr key={res.id} className="hover:bg-white transition-colors group">
-                    <td className="px-8 py-6 text-sm font-bold text-slate-400">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 opacity-40 shrink-0" />
-                        <span className="truncate">{new Date(res.createdAt).toLocaleDateString()}</span>
-                        <span className="text-indigo-300 ml-1 shrink-0">{new Date(res.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-3">
+                        <Calendar className="w-5 h-5 text-indigo-400/40 shrink-0" />
+                        <div className="flex flex-col leading-tight">
+                          <span className="text-xs font-black text-slate-900 whitespace-nowrap">{new Date(res.createdAt).toLocaleDateString('ru-RU')}</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date(res.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
                       </div>
                     </td>
                     <td className="px-8 py-6 text-center">

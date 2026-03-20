@@ -8,21 +8,23 @@ export interface RatingResult {
 }
 
 export async function fetchExternalRating(url: string, service: "yandex" | "2gis" | "google"): Promise<RatingResult> {
-  const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  const desktopUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+  const mobileUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
   
   let cleanUrl = url.split("?")[0].replace(/\/$/, "");
 
   // Normalize URLs to canonical forms if possible
   if (service === "yandex") {
     const orgIdMatch = cleanUrl.match(/\/org\/(\d+)/);
-    if (orgIdMatch && !cleanUrl.includes("yandex.ru/maps/org/")) {
+    if (orgIdMatch) {
       cleanUrl = `https://yandex.ru/maps/org/${orgIdMatch[1]}`;
     }
   } else if (service === "2gis") {
     const firmIdMatch = cleanUrl.match(/\/firm\/(\d+)/);
-    // Only force canonical if it doesn't already look like a proper 2gis firm URL
-    if (firmIdMatch && !cleanUrl.includes("2gis.ru")) {
-      cleanUrl = `https://2gis.ru/firm/${firmIdMatch[1]}`;
+    const cityMatch = cleanUrl.match(/2gis\.ru\/([^/]+)/);
+    if (firmIdMatch) {
+      const city = cityMatch && cityMatch[1] !== 'firm' ? cityMatch[1] : 'russia';
+      cleanUrl = `https://2gis.ru/${city}/firm/${firmIdMatch[1]}`;
     }
   }
 
@@ -30,7 +32,7 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
     console.log(`Fetching ${service} rating from: ${cleanUrl}`);
     const response = await fetch(cleanUrl, {
       headers: { 
-        "User-Agent": userAgent,
+        "User-Agent": service === "google" ? mobileUA : desktopUA,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
         "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": service === "google" ? "https://www.google.com/" : `https://www.${service}.ru/`,
@@ -72,7 +74,8 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
       // 2. OpenGraph Description (Very common)
       // Matches: "⭐️ Рейтинг 4,6. 877 отзывов"
       const ogMatch = html.match(/property="og:description" content="[^"]*Рейтинг\s*([\d,.]+)[^"]*?([\d\s]+)\s*отзыв/i) ||
-                      html.match(/content="[^"]*Рейтинг\s*([\d,.]+)[^"]*?([\d\s]+)\s*отзыв/i);
+                      html.match(/content="[^"]*Рейтинг\s*([\d,.]+)[^"]*?([\d\s]+)\s*отзыв/i) ||
+                      html.match(/Рейтинг\s*([\d,.]+)[^"]*?([\d\s]+)\s*отзыв/i);
       if (ogMatch) {
         return {
           rating: Math.round(parseFloat(ogMatch[1].replace(',', '.')) * 10) / 10,
