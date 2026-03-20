@@ -197,12 +197,31 @@ export default function BranchesPage() {
 
       for (const s of services) {
         try {
-          // Use proxy directly in browser (bypasses server blocking)
           const cleanUrl = s.url!.split('?')[0];
-          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(cleanUrl)}&t=${Date.now()}`;
-          const res = await fetch(proxyUrl);
-          const data = await res.json();
-          const html = data.contents;
+          let html = "";
+          
+          // Try multiple proxies on the client side
+          const proxies = [
+            `https://api.allorigins.win/get?url=${encodeURIComponent(cleanUrl)}&t=${Date.now()}`,
+            `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(cleanUrl)}`
+          ];
+
+          for (const proxyUrl of proxies) {
+            try {
+              const res = await fetch(proxyUrl);
+              const data = await res.json();
+              html = data.contents || data.body || (typeof data === 'string' ? data : "");
+              if (html && html.length > 500 && !html.includes("captcha")) break;
+            } catch (e) {
+              console.warn(`Browser proxy failed: ${proxyUrl}`, e);
+            }
+          }
+
+          if (!html) {
+             results.push({ service: s.id, status: 'error', error: "Прокси заблокирован" });
+             continue;
+          }
+
           const parsed = parseRating(s.id, html);
           
           if (parsed.success) {
