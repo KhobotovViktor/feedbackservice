@@ -42,17 +42,30 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
     const html = await response.text();
 
     if (service === "yandex") {
-      // 1. Try OG Description (very robust for bot-protected pages)
-      const ogMatch = html.match(/<meta property="og:description" content="[^"]*Рейтинг ([\d,.]+)\. ([\d\s]+) отзыв/);
-      if (ogMatch) {
-         return {
-            rating: parseFloat(ogMatch[1].replace(",", ".")),
-            reviewCount: parseInt(ogMatch[2].replace(/\s/g, "")),
-            success: true
-         };
+      // 1. Metadata / Schema.org (Most robust)
+      const ratingProp = html.match(/itemProp="ratingValue" content="([0-9,.]+)"/i);
+      const reviewProp = html.match(/itemProp="reviewCount" content="(\d+)"/i);
+      
+      if (ratingProp && reviewProp) {
+        return {
+          rating: parseFloat(ratingProp[1].replace(',', '.')),
+          reviewCount: parseInt(reviewProp[1].replace(/\s/g, '')),
+          success: true
+        };
       }
 
-      // 2. Try JSON-LD (most robust if served)
+      // 2. OpenGraph Description (Very common)
+      // Matches both "Рейтинг 4,6 из 5 — 877 отзывов" and "⭐️ Рейтинг 4,6. 877 отзывов"
+      const ogMatch = html.match(/property="og:description" content="[^"]*Рейтинг ([0-9,.]+)[^"—.]*[\s—.]+([\d\s]+) отзыв/i);
+      if (ogMatch) {
+        return {
+          rating: parseFloat(ogMatch[1].replace(',', '.')),
+          reviewCount: parseInt(ogMatch[2].replace(/\s/g, '')),
+          success: true
+        };
+      }
+
+      // 3. JSON-LD Fallback
       const ldMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
       if (ldMatch) {
         try {
@@ -79,22 +92,49 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
           success: true
         };
       }
-    }
+    } else if (service === "google") {
+      // Google is highly dynamic. Try multiple strategies:
+      const patterns = [
+        // 1. Aria-label (often present even in simpler versions)
+        /aria-label="([0-5][.,]\d)\s*звезд[^"]* ([\d\s]+)\s*отзыв/i,
+        /aria-label="([0-5][.,]\d)\s*stars[^"]* ([\d\s]+)\s*reviews/i,
+        
+        // 2. Numerical array in initialization state [rating, reviews]
+        /\[null,\s*([0-5][.,]\d+),\s*(\d+)\]/i,
+        /\["([^"]*)",\s*\[([0-5][.,]\d+),\s*(\d+)\]/i,
 
-    if (service === "2gis") {
-      // Look for OG:description: "Оценка 4.8, 56 фото, 249 отзывов."
-      const ogMatch = html.match(/<meta property="og:description" content="[^"]*Оценка ([\d.]+)[^"]* ([\d\s]+) отзыв/);
-      if (ogMatch) {
-        return {
-          rating: parseFloat(ogMatch[1]),
-          reviewCount: parseInt(ogMatch[2].replace(/\s/g, "")),
-          success: true
-        };
+        // 3. String literals (last resort)
+        /(\d[.,]\d) звезда/i,
+        /Рейтинг:\s*(\d[.,]\d)/i,
+        /([\d\s]+)\s*отзывов/i
+      ];
+
+      let rating: number | null = null;
+      let count: number | null = null;
+
+      for (const p of patterns) {
+        const m = html.match(p);
+        if (m) {
+          if (m[2]) { // Pattern matched both
+            rating = parseFloat(m[1].replace(',', '.'));
+            count = parseInt(m[2].replace(/\s/g, ''));
+            break;
+          } else if (p.source.includes('отзыв') && !count) {
+             count = parseInt(m[1].replace(/\s/g, ''));
+          } else if (!rating) {
+             rating = parseFloat(m[1].replace(',', '.'));
+          }
+        }
       }
+
+      if (rating && count) {
+        return { rating, reviewCount: count, success: true };
+      }
+    } else if (service === "2gis") {
+      // 2GIS OG description is usually reliable: "Оценка 4.8, 249 отзывов"
+      const ratingMatch = html.match(/Оценка ([\d.]+)/i) || html.match(/Rating ([\d.]+)/i);
+      const countMatch = html.match(/(\d+)\s+отзыв/i) || html.match(/(\d+)\s+review/i);
       
-      // Fallback: look for generic ratings count
-      const countMatch = html.match(/(\d+)\s+отзывов/);
-      const ratingMatch = html.match(/"ratingValue":\s*([\d.]+)/) || html.match(/"rating":\s*([\d.]+)/);
       if (ratingMatch && countMatch) {
          return {
             rating: parseFloat(ratingMatch[1]),
