@@ -212,57 +212,83 @@ export default function BranchesPage() {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://alleyafeedbackservice.vercel.app';
     const apiKey = "alleya-default-key-123"; 
     
-    let script = `// --- Alleya Feedback Service Automation Script ---\n`;
-    script += `function syncAllRatings() {\n`;
-    script += `  const API_URL = "\${baseUrl}/api/admin/rating-manual";\n`;
-    script += `  const API_KEY = "\${apiKey}";\n\n`;
-    script += `  const branches = [\n`;
-    branches.forEach(b => {
-      script += `    { id: "\${b.id}", name: "\${b.name}", yandex: "\${b.yandexUrl || ''}", google: "\${b.googleUrl || ''}", dgis: "\${b.dgisUrl || ''}" },\n`;
-    });
-    script += `  ];\n\n`;
-    script += `  branches.forEach(branch => {\n`;
-    script += `    if (branch.yandex) syncService(branch.id, "yandex", branch.yandex, API_URL, API_KEY);\n`;
-    script += `    if (branch.google) syncService(branch.id, "google", branch.google, API_URL, API_KEY);\n`;
-    script += `    if (branch.dgis) syncService(branch.id, "2gis", branch.dgis, API_URL, API_KEY);\n`;
-    script += `  });\n`;
-    script += `}\n\n`;
-    script += `function syncService(branchId, service, url, apiUrl, apiKey) {\n`;
-    script += `  try {\n`;
-    script += `    const options = {\n`;
-    script += `      muteHttpExceptions: true,\n`;
-    script += `      headers: {\n`;
-    script += `        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'\n`;
-    script += `      }\n`;
-    script += `    };\n`;
-    script += `    const html = UrlFetchApp.fetch(url, options).getContentText();\n`;
-    script += `    let rating = 0, count = 0;\n`;
-    script += `    if (service === "yandex") {\n`;
-    script += `       const rMatch = html.match(/rating-text\\\\\\">([\\\\d,.]+)<\\\\/span>/) || html.match(/class=\\\\\\"Rating-Value\\\\\\">([\\\\d,.]+)<\\\\/div>/);\n`;
-    script += `       const cMatch = html.match(/aria-label=\\\\\\"(\\\\d+)\\\\s+оцен/) || html.match(/class=\\\\\\"Rating-Count\\\\\\">[^<]*?(\\\\d+)[^<]*?<\\\\/div>/);\n`;
-    script += `       if (rMatch) rating = parseFloat(rMatch[1].replace(',', '.'));\n`;
-    script += `       if (cMatch) count = parseInt(cMatch[1]);\n`;
-    script += `    } else if (service === "2gis") {\n`;
-    script += `       const rMatch = html.match(/class=\\\\\\"_y10azs\\\\\\">([\\\\d.]+)/);\n`;
-    script += `       const cMatch = html.match(/class=\\\\\\"_jspzdm\\\\\\">(\\\\d+)\\\\s+оцен/);\n`;
-    script += `       if (rMatch) rating = parseFloat(rMatch[1]);\n`;
-    script += `       if (cMatch) count = parseInt(cMatch[1]);\n`;
-    script += `    } else if (service === "google") {\n`;
-    script += `       const rMatch = html.match(/<span aria-hidden=\\\\\\"true\\\\\\">([0-5][.,]\\\\d)<\\\\/span>/);\n`;
-    script += `       const cMatch = html.match(/aria-label=\\\\\\"([\\\\d\\\\s,]+)\\\\s+reviews\\\\\\\"/) || html.match(/aria-label=\\\\\\"([\\\\d\\\\s,]+)\\\\s+отзыв\\\\\\\"/);\n`;
-    script += `       if (rMatch) rating = parseFloat(rMatch[1].replace(',', '.'));\n`;
-    script += `       if (cMatch) count = parseInt(cMatch[1].replace(/[^\\\\d]/g, ''));\n`;
-    script += `    }\n\n`;
-    script += `    if (rating > 0) {\n`;
-    script += `      UrlFetchApp.fetch(apiUrl, {\n`;
-    script += `        method: "post",\n`;
-    script += `        contentType: "application/json",\n`;
-    script += `        payload: JSON.stringify({ branchId, service, rating, reviewCount: count, apiKey })\n`;
-    script += `      });\n`;
-    script += `    }\n`;
-    script += `  } catch (e) { console.error(e); }\n`;
-    script += `}\n`;
-    return script;
+    const branchesJson = JSON.stringify(branches.map(b => ({
+      id: b.id,
+      name: b.name,
+      yandex: b.yandexUrl || '',
+      google: b.googleUrl || '',
+      dgis: b.dgisUrl || ''
+    })));
+
+    const scriptLines = [
+      '// --- Alleya Feedback Service Automation Script ---',
+      '',
+      'function syncAllRatings() {',
+      '  const API_URL = "' + baseUrl + '/api/admin/rating-manual";',
+      '  const API_KEY = "' + apiKey + '";',
+      '  const branches = ' + branchesJson + ';',
+      '',
+      '  branches.forEach(function(branch) {',
+      '    if (branch.yandex) syncService(branch.id, "yandex", branch.yandex, API_URL, API_KEY);',
+      '    if (branch.google) syncService(branch.id, "google", branch.google, API_URL, API_KEY);',
+      '    if (branch.dgis) syncService(branch.id, "2gis", branch.dgis, API_URL, API_KEY);',
+      '  });',
+      '}',
+      '',
+      'function syncService(branchId, service, url, apiUrl, apiKey) {',
+      '  try {',
+      '    const options = {',
+      '      muteHttpExceptions: true,',
+      '      headers: {',
+      '        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",',
+      '        "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"',
+      '      }',
+      '    };',
+      '    ',
+      '    const response = UrlFetchApp.fetch(url, options);',
+      '    if (response.getResponseCode() !== 200) {',
+      '      console.warn("Ошибка доступа к " + service + " (" + url + "): Код " + response.getResponseCode());',
+      '      return;',
+      '    }',
+      '',
+      '    const html = response.getContentText();',
+      '    let rating = 0, count = 0;',
+      '',
+      '    if (service === "yandex") {',
+      '       const r = html.match(new RegExp(\'rating-text">([\\\\d,.]+)\', "i")) || html.match(new RegExp(\'class="Rating-Value">([\\\\d,.]+)\', "i"));',
+      '       const c = html.match(new RegExp(\'aria-label="(\\\\d+)\\\\s+оцен\', "i")) || html.match(new RegExp(\'class="Rating-Count">[^<]*?(\\\\d+)\', "i"));',
+      '       if (r) rating = parseFloat(r[1].replace(",", "."));',
+      '       if (c) count = parseInt(c[1]);',
+      '       ',
+      '    } else if (service === "2gis") {',
+      '       const r = html.match(new RegExp(\'class="_y10azs">([\\\\d.]+)\', "i"));',
+      '       const c = html.match(new RegExp(\'class="_jspzdm">(\\\\d+)\\\\s+оцен\', "i"));',
+      '       if (r) rating = parseFloat(r[1]);',
+      '       if (c) count = parseInt(c[1]);',
+      '       ',
+      '    } else if (service === "google") {',
+      '       const r = html.match(new RegExp(\'<span aria-hidden="true">([0-5][.,]\\\\d)</span>\', "i"));',
+      '       const c = html.match(new RegExp(\'aria-label="([\\\\d\\\\s,]+)\\\\s+(?:reviews|отзыв)"\', "i"));',
+      '       if (r) rating = parseFloat(r[1].replace(",", "."));',
+      '       if (c) count = parseInt(c[1].replace(/[^\\\\d]/g, ""));',
+      '    }',
+      '',
+      '    if (rating > 0) {',
+      '      console.log("Успешно: " + service + " - " + rating + " (" + count + ")");',
+      '      UrlFetchApp.fetch(apiUrl, {',
+      '        method: "post",',
+      '        contentType: "application/json",',
+      '        payload: JSON.stringify({ branchId, service, rating, reviewCount: count, apiKey }),',
+      '        muteHttpExceptions: true',
+      '      });',
+      '    } else {',
+      '      console.warn("Рейтинг не найден для " + service + ": " + url);',
+      '    }',
+      '  } catch (e) { console.error("Ошибка " + service + ": ", e.message); }',
+      '}'
+    ];
+
+    return scriptLines.join('\\n');
   };
 
   const handleBrowserSync = async (branch: Branch) => {
@@ -371,17 +397,17 @@ export default function BranchesPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-        <div className="space-y-1">
-          <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter">Филиалы</h1>
-          <p className="text-slate-500 text-lg font-medium">Управление точками продаж и их настройками</p>
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Управление филиалами</h1>
+          <p className="text-slate-500 text-sm font-medium">Настройка мониторинга и опросных листов</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+        <div className="flex gap-4">
           <button 
             onClick={() => setShowAutomationHub(true)}
-            className="flex items-center justify-center gap-2 px-6 py-4 bg-white border border-slate-100 text-indigo-500 rounded-[1.5rem] font-bold shadow-sm hover:bg-slate-50 active:scale-[0.98] transition-all w-full sm:w-auto"
+            className="px-6 py-3 bg-white border border-slate-100 text-indigo-500 rounded-2xl font-black shadow-sm flex items-center gap-2 hover:bg-slate-50 active:scale-95 transition-all text-sm"
           >
-            <Zap className="w-5 h-5" />
+            <Zap className="w-4 h-4" />
             Автоматизация
           </button>
           <button 
@@ -390,9 +416,9 @@ export default function BranchesPage() {
               setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", externalId: "", templateId: "" });
               setShowAdd(true);
             }}
-            className="flex items-center justify-center gap-2 px-8 py-4 premium-gradient text-white rounded-[1.5rem] font-bold shadow-xl shadow-indigo-500/20 hover:scale-[1.03] active:scale-[0.98] transition-all w-full sm:w-auto"
+            className="px-6 py-3 premium-gradient text-white rounded-2xl font-black shadow-lg shadow-indigo-500/25 flex items-center gap-2 hover:scale-[1.02] active:scale-95 transition-all text-sm"
           >
-            <Plus className="w-6 h-6" />
+            <Plus className="w-5 h-5 text-white/80" />
             Добавить филиал
           </button>
         </div>
@@ -975,6 +1001,96 @@ export default function BranchesPage() {
                   Я всё настроил
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAutomationHub && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowAutomationHub(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-3xl glass p-10 rounded-[3rem] shadow-2xl border-white/60 space-y-8 max-h-[90vh] overflow-y-auto overflow-x-hidden">
+               <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-5">
+                    <div className="w-16 h-16 rounded-[1.5rem] premium-gradient flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                      <Zap className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">Хаб Автоматизации</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">100% стабильный сбор данных через Google Cloud</p>
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowAutomationHub(false)} className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all"><X className="w-5 h-5" /></button>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 {[
+                   { step: "01", title: "Создайте скрипт", desc: "Перейдите в script.google.com и создайте новый проект.", link: "https://script.google.com" },
+                   { step: "02", title: "Вставьте код", desc: "Удалите весь старый код и вставьте сгенерированный ниже фрагмент.", icon: Copy },
+                   { step: "03", title: "Запустите", desc: "Настройте триггер (часы) на выполнение функции syncAllRatings.", icon: Settings }
+                 ].map((s, idx) => (
+                   <div key={idx} className="p-6 bg-slate-50/50 rounded-3xl border border-slate-100/50 space-y-3 relative group overflow-hidden">
+                     <span className="text-4xl font-black text-indigo-500/10 absolute -right-2 -top-2 group-hover:scale-110 transition-transform">{s.step}</span>
+                     <h4 className="text-sm font-black text-slate-900">{s.title}</h4>
+                     <p className="text-[11px] font-bold text-slate-500 leading-relaxed">{s.desc}</p>
+                     {s.link && (
+                       <a href={s.link} target="_blank" className="inline-flex items-center gap-1.5 text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:gap-2 transition-all">
+                         Открыть <ExternalLink className="w-3 h-3" />
+                       </a>
+                     )}
+                   </div>
+                 ))}
+               </div>
+
+               <div className="space-y-3">
+                  <div className="flex justify-between items-center px-1">
+                    <div className="flex items-center gap-2">
+                      <Bot className="w-4 h-4 text-indigo-500" />
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Индивидуальный скрипт для ваших филиалов</label>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(generateGASScript());
+                        alert("Код скопирован! Теперь вставьте его в Google Apps Script.");
+                      }}
+                      className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all flex items-center gap-2"
+                    >
+                      <Copy className="w-3 h-3" />
+                      Копировать код
+                    </button>
+                  </div>
+                  <div className="relative group">
+                    <pre className="w-full p-8 bg-slate-900 text-indigo-100/70 rounded-[2rem] text-[10px] font-mono overflow-auto h-[350px] border border-white/10 shadow-2xl scrollbar-thin scrollbar-thumb-indigo-500/20">
+                      {generateGASScript()}
+                    </pre>
+                    <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-slate-900 via-slate-900/80 to-transparent rounded-b-[2rem] pointer-events-none opacity-60" />
+                  </div>
+               </div>
+
+               <div className="p-5 bg-indigo-50/30 rounded-3xl border border-indigo-100/50 flex items-start gap-4">
+                 <div className="w-10 h-10 rounded-2xl bg-indigo-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-500/20">
+                   <TrendingUp className="w-5 h-5 text-white" />
+                 </div>
+                 <div>
+                   <h4 className="text-xs font-black text-indigo-900 tracking-tight">Почему это работает?</h4>
+                   <p className="text-[11px] font-bold text-indigo-700/70 leading-relaxed mt-1">
+                     Google Apps Script работает на серверах Google, которые считаются «доверенными». Яндекс и Google Maps не блокируют их, что гарантирует 100% стабильность ваших данных.
+                   </p>
+                 </div>
+               </div>
+
+               <div className="text-center">
+                 <button 
+                   onClick={() => setShowAutomationHub(false)}
+                   className="px-12 py-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-sm active:scale-95 transition-all shadow-xl shadow-slate-900/20 hover:shadow-2xl hover:bg-slate-800"
+                 >
+                   Я настроил автоматизацию
+                 </button>
+               </div>
             </motion.div>
           </div>
         )}
