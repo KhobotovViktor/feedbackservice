@@ -32,6 +32,7 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
     console.log(`Fetching ${service} rating from: ${cleanUrl}`);
     
     let html = "";
+    let usedProxy = false;
 
     // Phase 1: Direct Fetch with Googlebot UA
     try {
@@ -57,32 +58,59 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
       console.warn(`${service} direct fetch error:`, e);
     }
 
-    // Phase 2: Proxy Fallback (AllOrigins)
+    // Phase 2: Proxy Fallbacks
     if (!html) {
-      console.log(`Using proxy fallback for ${service}...`);
-      try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(cleanUrl)}`;
-        const pResponse = await fetch(proxyUrl, { cache: 'no-store' });
-        if (pResponse.ok) {
-          const data = await pResponse.json();
-          html = data.contents || "";
+      const proxies = [
+        (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+        (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`
+      ];
+
+      for (const getProxyUrl of proxies) {
+        console.log(`Using proxy fallback for ${service}...`);
+        try {
+          const proxyUrl = getProxyUrl(cleanUrl);
+          const pResponse = await fetch(proxyUrl, { cache: 'no-store' });
+          if (pResponse.ok) {
+            const data = await pResponse.json();
+            const content = data.contents || data.body || "";
+            if (content && content.length > 500 && !content.includes("captcha")) {
+              html = content;
+              usedProxy = true;
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn(`${service} proxy failed:`, e);
         }
-      } catch (e) {
-        console.error(`${service} proxy fallback failed:`, e);
       }
     }
 
     if (!html || html.length < 200) {
-      return { rating: 0, reviewCount: 0, success: false, error: "Access blocked (Captcha/403) on both direct and proxy routes" };
+      return { rating: 0, reviewCount: 0, success: false, error: "Access blocked (Captcha/403) on all routes" };
     }
+
+    // Diagnostic log for failures
+    const logFailure = (reason: string) => {
+      console.log(`${service} extraction failed: ${reason}. HTML len: ${html.length}. Snippet: ${html.substring(0, 500).replace(/\s+/g, ' ')}`);
+    };
 
     if (service === "yandex") {
       // 1. Try Widget extraction first
-      const wRating = html.match(/class=\"Rating-Value\">([\d,.]+)<\/div>/)?.[1] || 
+      let wRating = html.match(/class=\"Rating-Value\">([\d,.]+)<\/div>/)?.[1] || 
                       html.match(/\"ratingValue\":\s*\"([\d,.]+)\"/)?.[1];
-      const wCount = html.match(/class=\"Rating-Count\">[^<]*?(\d+)[^<]*?<\/div>/)?.[1] || 
+      let wCount = html.match(/class=\"Rating-Count\">[^<]*?(\d+)[^<]*?<\/div>/)?.[1] || 
                      html.match(/\"reviewCount\":\s*\"(\d+)\"/)?.[1];
       
+      if (!wRating) {
+        // Try to find rating in OG meta with generic pattern
+        const metaRating = html.match(/content=\"[^"]*?([\d,.]+)\s*из\s*5/i) || 
+                           html.match(/content=\"[^"]*?Рейтинг\s*([\d,.]+)/i);
+        const metaCount = html.match(/content=\"[^"]*?(\d+)\s+отзыв/i) ||
+                          html.match(/content=\"[^"]*?([\d\s]+)\s+оценок/i);
+        if (metaRating) wRating = metaRating[1];
+        if (metaCount) wCount = metaCount[1];
+      }
+
       if (wRating && wCount) {
         return {
           rating: Math.round(parseFloat(wRating.replace(',', '.')) * 10) / 10,
@@ -90,35 +118,17 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
           success: true
         };
       }
-
-      // 2. Metadata / Schema.org
-      const ratingProp = html.match(/itemProp="ratingValue" content="([0-9,.]+)"/i);
-      const reviewProp = html.match(/itemProp="reviewCount" content="(\d+)"/i);
-      if (ratingProp && reviewProp) {
-        return {
-          rating: Math.round(parseFloat(ratingProp[1].replace(',', '.')) * 10) / 10,
-          reviewCount: parseInt(reviewProp[1].replace(/\s/g, '')),
-          success: true
-        };
-      }
-
-      // 3. OG / Meta
-      const ogMatch = html.match(/property="og:description" content="[^"]*Рейтинг\s*([\d,.]+)[^"]*?([\d\s]+)\s*отзыв/i) ||
-                      html.match(/content="[^"]*Рейтинг\s*([\d,.]+)[^"]*?([\d\s]+)\s*отзыв/i);
-      if (ogMatch) {
-        return {
-          rating: Math.round(parseFloat(ogMatch[1].replace(',', '.')) * 10) / 10,
-          reviewCount: parseInt(ogMatch[2].replace(/\s/g, '')),
-          success: true
-        };
-      }
+      logFailure("Yandex patterns not found");
     } else if (service === "google") {
       const patterns = [
         /\[\s*"[^"]*"\s*,\s*\[\s*([0-5]\.\d+)\s*,\s*(\d+)\s*\]/i,
         /aria-label="([0-5][.,]\d)\s*звезд[^"]* ([\d\s]+)\s*отзыв/i,
         /aria-label="([0-5][.,]\d)\s*stars[^"]* ([\d\s]+)\s*reviews/i,
         /\[null,\s*([0-5][.,]\d+),\s*(\d+)\]/i,
-        /(\d[.,]\d) звезда.+?([\d\s]+)\s*отзыв/i
+        /Оценка:\s*([0-5][.,]\d).+?(\d+)\s*отзыв/i,
+        /Rating:\s*([0-5][.,]\d).+?(\d+)\s*review/i,
+        /\"ratingValue\":\s*\"([\d,.]+)\"/i,
+        /\"reviewCount\":\s*\"(\d+)\"/i
       ];
 
       for (const p of patterns) {
@@ -131,6 +141,12 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
           };
         }
       }
+      
+      // Special check for Google consent page
+      if (html.includes("consent.google.com")) {
+        return { rating: 0, reviewCount: 0, success: false, error: "Blocked by Google Consent page" };
+      }
+      logFailure("Google patterns not found");
     } else if (service === "2gis") {
       const ogMatch = html.match(/property="og:description" content="[^"]*Оценка ([\d.]+)[^"]*?([\d\s]+) отзыв/i) ||
                       html.match(/Оценка ([\d.]+)[^,]*,\s*([\d\s]+) отзыв/i);
