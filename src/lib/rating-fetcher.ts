@@ -8,6 +8,7 @@ export interface RatingResult {
 }
 
 export async function fetchExternalRating(url: string, service: "yandex" | "2gis" | "google"): Promise<RatingResult> {
+  const googleBotUA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
   const desktopUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
   const mobileUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
   
@@ -32,17 +33,12 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
     console.log(`Fetching ${service} rating from: ${cleanUrl}`);
     const response = await fetch(cleanUrl, {
       headers: { 
-        "User-Agent": service === "google" ? mobileUA : desktopUA,
+        "User-Agent": googleBotUA,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
         "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": service === "google" ? "https://www.google.com/" : `https://www.${service}.ru/`,
         "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "cross-site",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1"
+        "Pragma": "no-cache"
       },
       cache: 'no-store'
     });
@@ -64,7 +60,7 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
       if (orgId) {
         const widgetUrl = `https://yandex.ru/maps-reviews-widget/${orgId}?comments`;
         try {
-          const widgetRes = await fetch(widgetUrl, { headers: { "User-Agent": desktopUA } });
+          const widgetRes = await fetch(widgetUrl, { headers: { "User-Agent": googleBotUA } });
           if (widgetRes.ok) {
             const wHtml = await widgetRes.text();
             const wRating = wHtml.match(/class=\"Rating-Value\">([\d,.]+)<\/div>/)?.[1] || 
