@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { Activity } from "lucide-react";
 
@@ -10,6 +10,11 @@ interface Props {
 
 export function OverallMonitoring({ data }: Props) {
   const [metric, setMetric] = useState<'rating' | 'reviews'>('rating');
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Aggregation logic: group by date
   const aggregated = data.reduce((acc: any, curr: any) => {
@@ -52,52 +57,56 @@ export function OverallMonitoring({ data }: Props) {
         </div>
       </div>
 
-      <div className="flex-1 w-full min-h-[300px]">
-        {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="colorValueOverall" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis 
-                dataKey="date" 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
-                dy={10}
-              />
-              <YAxis 
-                hide={true} 
-                domain={metric === 'rating' ? [1, 5] : ['auto', 'auto']} 
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  borderRadius: '1.25rem', 
-                  border: 'none', 
-                  boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
-                  fontSize: '11px',
-                  fontWeight: 'black'
-                }}
-                formatter={(value: any, name: any, props: any) => [value, props.payload.label]}
-              />
-              <Area 
-                type="monotone" 
-                dataKey="value" 
-                stroke="#6366f1" 
-                strokeWidth={4} 
-                fillOpacity={1} 
-                fill="url(#colorValueOverall)" 
-                animationDuration={1500}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+      <div className="flex-1 w-full min-h-[350px] relative">
+        {(isMounted && chartData.length > 0) ? (
+          <div className="absolute inset-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorValueOverall" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="date" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
+                  dy={10}
+                />
+                <YAxis 
+                  hide={true} 
+                  domain={metric === 'rating' ? [1, 5] : ['auto', 'auto']} 
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    borderRadius: '1.25rem', 
+                    border: 'none', 
+                    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                    fontSize: '11px',
+                    fontWeight: 'black'
+                  }}
+                  formatter={(value: any, name: any, props: any) => [value, props.payload.label]}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke="#6366f1" 
+                  strokeWidth={4} 
+                  fillOpacity={1} 
+                  fill="url(#colorValueOverall)" 
+                  animationDuration={1500}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         ) : (
           <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-[2rem] border border-dashed border-slate-200">
-             <p className="text-slate-400 font-bold text-sm">Недостаточно данных для графика</p>
+             <p className="text-slate-400 font-bold text-sm">
+               {!isMounted ? "Загрузка графика..." : "Недостаточно данных для графика"}
+             </p>
           </div>
         )}
       </div>

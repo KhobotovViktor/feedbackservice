@@ -30,12 +30,17 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
     const response = await fetch(cleanUrl, {
       headers: { 
         "User-Agent": userAgent,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
         "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://www.google.com/"
-      }
+        "Referer": "https://www.google.com/",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache"
+      },
+      cache: 'no-store'
     });
 
     if (!response.ok) {
+        console.error(`${service} fetch error: HTTP ${response.status}`);
         return { rating: 0, reviewCount: 0, success: false, error: `HTTP ${response.status}` };
     }
     
@@ -187,32 +192,44 @@ export async function syncBranchRatings(branchId: string) {
   const results = [];
 
   if (branch.yandexUrl) {
+    console.log(`Syncing Yandex for branch ${branch.name}...`);
     const res = await fetchExternalRating(branch.yandexUrl, "yandex");
     if (res.success) {
       await prisma.ratingHistory.create({
         data: { branchId, service: "yandex", rating: res.rating, reviewCount: res.reviewCount }
       });
-      results.push({ service: "yandex", ...res });
+      results.push({ service: "yandex", status: "success", rating: res.rating, count: res.reviewCount });
+    } else {
+      console.warn(`Yandex sync failed for ${branch.name}: ${res.error || "Data markers not found"}`);
+      results.push({ service: "yandex", status: "failed", error: res.error || "Data markers not found" });
     }
   }
 
   if (branch.dgisUrl) {
+    console.log(`Syncing 2GIS for branch ${branch.name}...`);
     const res = await fetchExternalRating(branch.dgisUrl, "2gis");
     if (res.success) {
       await prisma.ratingHistory.create({
         data: { branchId, service: "2gis", rating: res.rating, reviewCount: res.reviewCount }
       });
-      results.push({ service: "2gis", ...res });
+      results.push({ service: "2gis", status: "success", rating: res.rating, count: res.reviewCount });
+    } else {
+      console.warn(`2GIS sync failed for ${branch.name}: ${res.error || "Data markers not found"}`);
+      results.push({ service: "2gis", status: "failed", error: res.error || "Data markers not found" });
     }
   }
 
   if (branch.googleUrl) {
+    console.log(`Syncing Google for branch ${branch.name}...`);
     const res = await fetchExternalRating(branch.googleUrl, "google");
     if (res.success) {
       await prisma.ratingHistory.create({
         data: { branchId, service: "google", rating: res.rating, reviewCount: res.reviewCount }
       });
-      results.push({ service: "google", ...res });
+      results.push({ service: "google", status: "success", rating: res.rating, count: res.reviewCount });
+    } else {
+      console.warn(`Google sync failed for ${branch.name}: ${res.error || "Data markers not found"}`);
+      results.push({ service: "google", status: "failed", error: res.error || "Data markers not found" });
     }
   }
 

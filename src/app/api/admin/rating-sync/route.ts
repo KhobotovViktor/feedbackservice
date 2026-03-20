@@ -8,8 +8,8 @@ export async function GET(req: NextRequest) {
     const branchId = searchParams.get("branchId");
 
     if (branchId) {
-      const result = await syncBranchRatings(branchId);
-      return NextResponse.json({ success: true, result });
+      const results = await syncBranchRatings(branchId);
+      return NextResponse.json({ success: true, results });
     }
 
     const branches = await prisma.branch.findMany({

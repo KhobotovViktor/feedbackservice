@@ -86,7 +86,7 @@ export default function BranchesPage() {
 
   const fetchBranches = async () => {
     try {
-      const res = await fetch("/api/branches");
+      const res = await fetch(`/api/branches?t=${Date.now()}`);
       const data = await res.json();
       if (Array.isArray(data)) {
         setBranches(data);
@@ -158,14 +158,21 @@ export default function BranchesPage() {
   const handleSyncRatings = async (branchId: string) => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/admin/rating-sync?branchId=${branchId}`);
-      if (res.ok) {
-        fetchBranches();
+      const res = await fetch(`/api/admin/rating-sync?branchId=${branchId}&t=${Date.now()}`);
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        await fetchBranches();
+        const summary = data.results.map((r: any) => 
+          `${r.service.toUpperCase()}: ${r.status === 'success' ? '✅' : '❌ ' + (r.error || 'Ошибка')}`
+        ).join('\n');
+        alert(`Синхронизация завершена:\n\n${summary}`);
       } else {
-        alert("Ошибка синхронизации рейтингов");
+        alert("Ошибка синхронизации рейтингов: " + (data.error || "Неизвестная ошибка"));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert("Ошибка сети при синхронизации: " + err.message);
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,7 @@ import { Building2, MessageCircle, Star, Calendar, User, TrendingUp, Filter, Arr
 import { cn } from "@/lib/utils";
 import { BranchFilter } from "@/components/results/branch-filter";
 import { TypeFilter } from "@/components/results/type-filter";
+import { ClearResultsButton } from "@/components/results/clear-results-button";
 import Link from "next/link";
 
 export default async function ResultsPage({ 
@@ -79,18 +80,7 @@ export default async function ResultsPage({
         
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
           {/* Clear Results Button */}
-          <button 
-            type="button"
-            className="flex items-center gap-3 px-6 py-4 bg-white hover:bg-rose-50 border border-slate-100 text-rose-500 rounded-3xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-indigo-500/5 group"
-            onClick={() => {
-              if (confirm("Вы уверены, что хотите полностью очистить результаты? Это действие необратимо.")) {
-                 fetch("/api/surveys", { method: "DELETE" }).then(() => window.location.reload());
-              }
-            }}
-          >
-            <TrendingUp className="w-4 h-4 text-rose-400 group-hover:scale-125 transition-transform" />
-            Очистить
-          </button>
+          <ClearResultsButton />
           {/* Branch Filter */}
           <div className="flex items-center gap-2 p-1.5 glass rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
             <div className="flex-1 sm:flex-none flex items-center gap-3 px-6 py-3">
