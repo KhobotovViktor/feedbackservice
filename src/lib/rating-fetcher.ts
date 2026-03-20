@@ -48,18 +48,18 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
       
       if (ratingProp && reviewProp) {
         return {
-          rating: parseFloat(ratingProp[1].replace(',', '.')),
+          rating: Math.round(parseFloat(ratingProp[1].replace(',', '.')) * 10) / 10,
           reviewCount: parseInt(reviewProp[1].replace(/\s/g, '')),
           success: true
         };
       }
 
       // 2. OpenGraph Description (Very common)
-      // Matches both "Рейтинг 4,6 из 5 — 877 отзывов" and "⭐️ Рейтинг 4,6. 877 отзывов"
-      const ogMatch = html.match(/property="og:description" content="[^"]*Рейтинг ([0-9,.]+)[^"—.]*[\s—.]+([\d\s]+) отзыв/i);
+      // Matches: "⭐️ Рейтинг 4,6. 877 отзывов"
+      const ogMatch = html.match(/property="og:description" content="[^"]*Рейтинг ([\d,.]+)[^"]*?([\d\s]+) отзыв/i);
       if (ogMatch) {
         return {
-          rating: parseFloat(ogMatch[1].replace(',', '.')),
+          rating: Math.round(parseFloat(ogMatch[1].replace(',', '.')) * 10) / 10,
           reviewCount: parseInt(ogMatch[2].replace(/\s/g, '')),
           success: true
         };
@@ -95,13 +95,15 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
     } else if (service === "google") {
       // Google is highly dynamic. Try multiple strategies:
       const patterns = [
-        // 1. Aria-label (often present even in simpler versions)
+        // 1. High-precision array [ "Business Name", [4.21855, 458] ]
+        /\[\s*"[^"]*"\s*,\s*\[\s*([0-5]\.\d+)\s*,\s*(\d+)\s*\]/i,
+        
+        // 2. Aria-label (often present even in simpler versions)
         /aria-label="([0-5][.,]\d)\s*звезд[^"]* ([\d\s]+)\s*отзыв/i,
         /aria-label="([0-5][.,]\d)\s*stars[^"]* ([\d\s]+)\s*reviews/i,
         
-        // 2. Numerical array in initialization state [rating, reviews]
+        // 3. Numerical array in initialization state [rating, reviews]
         /\[null,\s*([0-5][.,]\d+),\s*(\d+)\]/i,
-        /\["([^"]*)",\s*\[([0-5][.,]\d+),\s*(\d+)\]/i,
 
         // 3. String literals (last resort)
         /(\d[.,]\d) звезда/i,
@@ -116,13 +118,13 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
         const m = html.match(p);
         if (m) {
           if (m[2]) { // Pattern matched both
-            rating = parseFloat(m[1].replace(',', '.'));
+            rating = Math.round(parseFloat(m[1].replace(',', '.')) * 10) / 10;
             count = parseInt(m[2].replace(/\s/g, ''));
             break;
           } else if (p.source.includes('отзыв') && !count) {
              count = parseInt(m[1].replace(/\s/g, ''));
           } else if (!rating) {
-             rating = parseFloat(m[1].replace(',', '.'));
+             rating = Math.round(parseFloat(m[1].replace(',', '.')) * 10) / 10;
           }
         }
       }
@@ -137,8 +139,8 @@ export async function fetchExternalRating(url: string, service: "yandex" | "2gis
       
       if (ratingMatch && countMatch) {
          return {
-            rating: parseFloat(ratingMatch[1]),
-            reviewCount: parseInt(countMatch[1]),
+            rating: Math.round(parseFloat(ratingMatch[1]) * 10) / 10,
+            reviewCount: parseInt(countMatch[1].replace(/\s/g, "")),
             success: true
          };
       }
