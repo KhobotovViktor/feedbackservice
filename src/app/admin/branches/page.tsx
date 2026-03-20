@@ -199,26 +199,44 @@ export default function BranchesPage() {
         try {
           const cleanUrl = s.url!.split('?')[0];
           let html = "";
+          let lastError = "";
           
-          // Try multiple proxies on the client side
           const proxies = [
-            `https://api.allorigins.win/get?url=${encodeURIComponent(cleanUrl)}&t=${Date.now()}`,
-            `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(cleanUrl)}`
+            { url: `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanUrl)}`, mode: 'text' },
+            { url: `https://api.allorigins.win/get?url=${encodeURIComponent(cleanUrl)}`, mode: 'json' },
+            { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(cleanUrl)}`, mode: 'text' },
+            { url: `https://corsproxy.io/?${encodeURIComponent(cleanUrl)}`, mode: 'text' },
+            { url: `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(cleanUrl)}`, mode: 'text' }
           ];
 
-          for (const proxyUrl of proxies) {
+          for (const proxy of proxies) {
             try {
-              const res = await fetch(proxyUrl);
-              const data = await res.json();
-              html = data.contents || data.body || (typeof data === 'string' ? data : "");
-              if (html && html.length > 500 && !html.includes("captcha")) break;
-            } catch (e) {
-              console.warn(`Browser proxy failed: ${proxyUrl}`, e);
+              console.log(`Trying browser proxy: ${proxy.url}`);
+              const res = await fetch(proxy.url);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              
+              if (proxy.mode === 'json') {
+                const data = await res.json();
+                html = data.contents || "";
+              } else {
+                html = await res.text();
+              }
+
+              if (html && html.length > 500 && !html.includes("captcha") && !html.includes("Detected as bot")) {
+                console.log(`Successful fetch from proxy: ${proxy.url}`);
+                break;
+              } else {
+                lastError = html.includes("captcha") ? "Captcha" : "Blocked/Empty";
+                html = "";
+              }
+            } catch (e: any) {
+              lastError = e.message;
+              console.warn(`Browser proxy error: ${proxy.url}`, e);
             }
           }
 
           if (!html) {
-             results.push({ service: s.id, status: 'error', error: "Прокси заблокирован" });
+             results.push({ service: s.id, status: 'error', error: `Прокси заблокирован (${lastError})` });
              continue;
           }
 
