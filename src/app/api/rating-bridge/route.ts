@@ -22,10 +22,21 @@ async function handleSync(branchId: string, service: string, rating: string, rev
   try {
     const SYNC_API_KEY = process.env.SYNC_API_KEY || "alleya-default-key-123";
     if (apiKey !== SYNC_API_KEY) {
-      return NextResponse.json({ error: "Auth failed" }, { status: 401 });
+      return NextResponse.json({ error: "Auth failed", debug: "Key mismatch" }, { status: 401 });
     }
 
-    await prisma.ratingHistory.create({
+    const branches = await prisma.branch.findMany({ select: { id: true, name: true } });
+    const branchExists = branches.find(b => b.id === branchId);
+
+    if (!branchExists) {
+      return NextResponse.json({ 
+        error: "Branch not found", 
+        idRequested: branchId,
+        availableIds: branches.map(b => b.id)
+      }, { status: 404 });
+    }
+
+    const record = await prisma.ratingHistory.create({
       data: {
         branchId,
         service,
@@ -39,9 +50,21 @@ async function handleSync(branchId: string, service: string, rating: string, rev
       data: { updatedAt: new Date() }
     });
 
-    return NextResponse.json({ success: true, updated: true });
+    const allRatings = await prisma.ratingHistory.count();
+    const dbUrl = process.env.DATABASE_URL || "not set";
+    const maskedUrl = dbUrl.substring(0, 25) + "...";
+
+    return NextResponse.json({ 
+      success: true, 
+      updated: true, 
+      branch: branchExists.name,
+      id: record.id,
+      totalRatingsInDb: allRatings,
+      dbInfo: maskedUrl,
+      received: { branchId, service, rating, reviewCount }
+    });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message, stack: err.stack }, { status: 500 });
   }
 }
 

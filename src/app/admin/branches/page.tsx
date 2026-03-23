@@ -92,7 +92,9 @@ export default function BranchesPage() {
     try {
       const res = await fetch(`/api/branches?t=${Date.now()}`);
       const data = await res.json();
-      if (Array.isArray(data)) {
+      if (data.branches && Array.isArray(data.branches)) {
+        setBranches(data.branches);
+      } else if (Array.isArray(data)) {
         setBranches(data);
       } else {
         console.error("Branches API error:", data);

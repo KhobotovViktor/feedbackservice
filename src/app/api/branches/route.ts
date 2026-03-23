@@ -33,7 +33,7 @@ export async function GET() {
           }
         },
         ratingHistory: {
-          orderBy: { createdAt: "asc" }
+          orderBy: { createdAt: "desc" }
         }
       }
     });
@@ -46,7 +46,11 @@ export async function GET() {
       return { ...rest, averageScore: avg };
     });
 
-    return NextResponse.json(branches);
+    return NextResponse.json({ 
+      branches, 
+      _serverTime: new Date().toISOString(),
+      _count: branches.length
+    });
   } catch (error: any) {
     console.error("FETCH_BRANCHES_ERROR:", error);
     return NextResponse.json({ 
