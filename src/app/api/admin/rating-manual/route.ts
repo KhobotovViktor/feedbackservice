@@ -1,6 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export async function GET() {
+  return NextResponse.json({ 
+    success: true, 
+    message: "Manual rating endpoint is active. Use POST to send data." 
+  });
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-API-Key',
+    },
+  });
+}
+
 export async function POST(req: Request) {
   try {
     const { branchId, service, rating, reviewCount, apiKey } = await req.json();

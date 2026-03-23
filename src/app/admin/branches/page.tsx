@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { 
   QrCode, X, Copy, Download, LayoutDashboard, Star, Printer, Play,
   TrendingUp, BarChart3, Plus, Loader2, Building2, MapPin, Trash2, Edit2,
-  Settings, Bot, ExternalLink, Zap
+  Settings, Bot, ExternalLink, Zap, AlertTriangle
 } from "lucide-react";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -62,6 +62,7 @@ export default function BranchesPage() {
   const [templates, setTemplates] = useState<QuestionTemplate[]>([]);
   const [selectedForQR, setSelectedForQR] = useState<Branch | null>(null);
   const [selectedMetrics, setSelectedMetrics] = useState<Record<string, string>>({});
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://alleyafeedbackservice.vercel.app';
 
   const METRIC_OPTIONS = [
     { label: "Рейтинг Яндекс", value: "yandex-rating" },
@@ -185,7 +186,6 @@ export default function BranchesPage() {
   };
 
   const generateGASScript = () => {
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://alleyafeedbackservice.vercel.app';
     const apiKey = "alleya-default-key-123"; 
     
     const branchesJson = JSON.stringify(branches.map(b => ({
@@ -280,9 +280,10 @@ export default function BranchesPage() {
       '',
       '    if (rating > 0) {',
       '      console.log("Успешное извлечение (" + service + "): " + rating + " (" + count + ")");',
+      '      console.log("Отправка на: " + apiUrl);',
       '      try {',
       '        const pushResponse = UrlFetchApp.fetch(apiUrl, {',
-      '          method: "post",',
+      '          method: "POST",',
       '          contentType: "application/json",',
       '          payload: JSON.stringify({ branchId, service, rating, reviewCount: count, apiKey: API_KEY }),',
       '          muteHttpExceptions: true',
@@ -859,6 +860,18 @@ export default function BranchesPage() {
 
               <div className="space-y-6">
                 <div className="p-6 bg-slate-50/50 rounded-3xl border border-slate-100 space-y-3">
+                  {baseUrl.includes('localhost') && (
+                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl mb-4">
+                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-2 mb-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        Предупреждение: Localhost
+                      </p>
+                      <p className="text-[11px] font-bold text-amber-700 leading-relaxed">
+                        Вы работаете на локальном сервере. Google Apps Script не сможет «достучаться» до вашего компьютера. 
+                        Скрипт заработает только после деплоя на Vercel (публичный URL).
+                      </p>
+                    </div>
+                  )}
                   <p className="text-xs font-bold text-slate-600 leading-relaxed">
                     Для обхода блокировок Яндекса и Google мы рекомендуем использовать «Мост через Google Cloud». 
                     Это бесплатно, надежно и данные будут обновляться автоматически.
