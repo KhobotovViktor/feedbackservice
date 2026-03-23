@@ -200,7 +200,7 @@ export default function BranchesPage() {
       '// --- Alleya Feedback Service Automation Script ---',
       '',
       'function syncAllRatings() {',
-      '  const API_URL = "' + baseUrl + '/api/admin/rating-manual";',
+      '  const API_URL = "' + baseUrl + '/api/sync-manual";',
       '  const API_KEY = "' + apiKey + '";',
       '  const branches = ' + branchesJson + ';',
       '',
