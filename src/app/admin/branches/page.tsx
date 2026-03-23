@@ -293,6 +293,7 @@ export default function BranchesPage() {
       '        const pushResponse = UrlFetchApp.fetch(apiUrl, {',
       '          method: "POST",',
       '          contentType: "application/json",',
+      '          headers: { "X-API-Key": API_KEY },',
       '          payload: JSON.stringify({ branchId, service, rating, reviewCount: count, apiKey: API_KEY }),',
       '          muteHttpExceptions: true',
       '        });',
