@@ -31,6 +31,12 @@ export async function POST(req: Request) {
       }
     });
 
+    // Update branch updatedAt
+    await prisma.branch.update({
+      where: { id: branchId },
+      data: { updatedAt: new Date() }
+    });
+
     console.log(`Manual rating record saved for branch ${branchId}, service ${service}: ${rating}/${reviewCount}`);
     
     return NextResponse.json({ success: true, id: record.id });

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { 
   QrCode, X, Copy, Download, LayoutDashboard, Star, Printer, Play,
-  TrendingUp, RefreshCw, BarChart3, Plus, Loader2, Building2, MapPin, Trash2, Edit2,
+  TrendingUp, BarChart3, Plus, Loader2, Building2, MapPin, Trash2, Edit2,
   Settings, Bot, ExternalLink, Zap
 } from "lucide-react";
 import { 
@@ -13,8 +13,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
-import { parseRating } from "@/lib/rating-parser";
-import { Globe } from "lucide-react";
 
 interface RatingHistory {
   id: string;
@@ -160,28 +158,6 @@ export default function BranchesPage() {
     }
   };
 
-  const handleSyncRatings = async (branchId: string) => {
-    try {
-      setLoading(true);
-      const res = await fetch(`/api/admin/rating-sync?branchId=${branchId}&t=${Date.now()}`);
-      const data = await res.json();
-      
-      if (res.ok && data.success) {
-        await fetchBranches();
-        const summary = data.results.map((r: any) => 
-          `${r.service.toUpperCase()}: ${r.status === 'success' ? '✅' : '❌ ' + (r.error || 'Ошибка')}`
-        ).join('\n');
-        alert(`Синхронизация завершена:\n\n${summary}`);
-      } else {
-        alert("Ошибка синхронизации рейтингов: " + (data.error || "Неизвестная ошибка"));
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert("Ошибка сети при синхронизации: " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleManualRatingSave = async () => {
     if (!editingRating) return;
@@ -216,7 +192,7 @@ export default function BranchesPage() {
       id: b.id,
       name: b.name,
       yandex: b.yandexUrl || '',
-      google: b.googleUrl || '',
+      googleSearch: b.name + " отзывы",
       dgis: b.dgisUrl || ''
     })));
 
@@ -230,7 +206,10 @@ export default function BranchesPage() {
       '',
       '  branches.forEach(function(branch) {',
       '    if (branch.yandex) syncService(branch.id, "yandex", branch.yandex, API_URL, API_KEY);',
-      '    if (branch.google) syncService(branch.id, "google", branch.google, API_URL, API_KEY);',
+      '    if (branch.googleSearch) {',
+      '      var gUrl = "http://api.scraperapi.com/?api_key=2f79d5dad217d73a81af41f23cb816e1&country_code=ru&render=true&url=" + encodeURIComponent("https://www.google.ru/search?q=" + encodeURIComponent(branch.googleSearch));',
+      '      syncService(branch.id, "google", gUrl, API_URL, API_KEY);',
+      '    }',
       '    if (branch.dgis) syncService(branch.id, "2gis", branch.dgis, API_URL, API_KEY);',
       '  });',
       '}',
@@ -248,6 +227,7 @@ export default function BranchesPage() {
       '    const response = UrlFetchApp.fetch(url, options);',
       '    if (response.getResponseCode() !== 200) {',
       '      console.warn("Ошибка доступа к " + service + " (" + url + "): Код " + response.getResponseCode());',
+      '      console.warn("Причина: " + response.getContentText().substring(0, 500));',
       '      return;',
       '    }',
       '',
@@ -255,32 +235,61 @@ export default function BranchesPage() {
       '    let rating = 0, count = 0;',
       '',
       '    if (service === "yandex") {',
-      '       const r = html.match(new RegExp(\'rating-text">([\\\\d,.]+)\', "i")) || html.match(new RegExp(\'class="Rating-Value">([\\\\d,.]+)\', "i"));',
-      '       const c = html.match(new RegExp(\'aria-label="(\\\\d+)\\\\s+оцен\', "i")) || html.match(new RegExp(\'class="Rating-Count">[^<]*?(\\\\d+)\', "i"));',
+      '       const r = html.match(new RegExp(\'itemprop="ratingValue" content="([\\\\d,.]+)"\', "i")) || ',
+      '                 html.match(new RegExp(\'ratingValue":\\\\s*([\\\\d,.]+)\', "i")) ||',
+      '                 html.match(new RegExp(\'class="business-rating-badge-view__rating-text[^>]*>([\\\\d,.]+)\', "i")) ||',
+      '                 html.match(new RegExp(\'rating-text">([\\\\d,.]+)\', "i")) ||',
+      '                 html.match(new RegExp(\'class="Rating-Value">([\\\\d,.]+)\', "i"));',
+      '',
+      '       const c = html.match(new RegExp(\'itemprop="reviewCount" content="(\\\\d+)"\', "i")) ||',
+      '                 html.match(new RegExp(\'reviewCount":\\\\s*(\\\\d+)\', "i")) ||',
+      '                 html.match(new RegExp(\'class="business-header-rating-view__text[^>]*>([\\\\d\\\\s,]+)\\\\s*(?:оцен|отзыв)\', "i")) ||',
+      '                 html.match(new RegExp(\'class="business-rating-amount-view[^>]*>([\\\\d\\\\s,]+)\\\\s*(?:оцен|отзыв)\', "i")) ||',
+      '                 html.match(new RegExp(\'aria-label="([\\\\d\\\\s,]+)\\\\s+(?:оцен|отзыв)\', "i"));',
+      '',
+      '       if (r) rating = parseFloat(r[1].replace(",", "."));',
+      '       if (c) count = parseInt(c[1].replace(/[^\\\\d]/g, ""));',
+      '       ',
+      '    } else if (service === "2gis") {',
+      '       const r = html.match(new RegExp(\'itemprop="ratingValue" content="([\\\\d.]+)"\', "i")) ||',
+      '                 html.match(new RegExp(\'ratingValue":\\\\s*([\\\\d.]+)\', "i")) ||',
+      '                 html.match(new RegExp(\'class="_y10azs">([\\\\d.]+)\', "i"));',
+      '       const c = html.match(new RegExp(\'itemprop="reviewCount" content="(\\\\d+)"\', "i")) ||',
+      '                 html.match(new RegExp(\'reviewCount":\\\\s*(\\\\d+)\', "i")) ||',
+      '                 html.match(new RegExp(\'class="_jspzdm">(\\\\d+)\\\\s+оцен\', "i"));',
       '       if (r) rating = parseFloat(r[1].replace(",", "."));',
       '       if (c) count = parseInt(c[1]);',
       '       ',
-      '    } else if (service === "2gis") {',
-      '       const r = html.match(new RegExp(\'class="_y10azs">([\\\\d.]+)\', "i"));',
-      '       const c = html.match(new RegExp(\'class="_jspzdm">(\\\\d+)\\\\s+оцен\', "i"));',
-      '       if (r) rating = parseFloat(r[1]);',
-      '       if (c) count = parseInt(c[1]);',
-      '       ',
       '    } else if (service === "google") {',
-      '       const r = html.match(new RegExp(\'<span aria-hidden="true">([0-5][.,]\\\\d)</span>\', "i"));',
-      '       const c = html.match(new RegExp(\'aria-label="([\\\\d\\\\s,]+)\\\\s+(?:reviews|отзыв)"\', "i"));',
+      '       const r = html.match(new RegExp(\'<span[^>]*>([0-5][.,]\\\\d)</span>[^<]*<a[^>]*>\', "i")) || ',
+      '                 html.match(new RegExp(\'ratingValue"\\\\s*:\\\\s*([0-5][.,]\\\\d)\', "i")) ||',
+      '                 html.match(new RegExp(\'Оценка:\\\\\\s*([0-5][.,]\\\\d)\', "i")) ||',
+      '                 html.match(new RegExp(\'aria-label="Рейтинг ([0-5][.,]\\\\d) из 5\', "i")) ||',
+      '                 html.match(new RegExp(\'>([0-5][.,]\\\\d)</span>\'));',
+      '                 ',
+      '       const c = html.match(new RegExp(\'>([\\\\d\\\\s\\\\u00A0,]+)\\\\s*(?:отзыв|отзыва|отзывов)\', "i")) ||',
+      '                 html.match(new RegExp(\'aria-label="[^"]*?([\\\\d\\\\s\\\\u00A0,]+)\\\\s*(?:отзыв|отзыва|отзывов)\', "i")) ||',
+      '                 html.match(new RegExp(\'reviewCount":\\\\s*(\\\\d+)\', "i")) ||',
+      '                 html.match(new RegExp(\'<a[^>]*>([\\\\d\\\\s\\\\u00A0,]+)\\\\s*(?:Google|отзыв)\', "i")) ||',
+      '                 html.match(new RegExp(\'<span>\\\\(([\\\\d\\\\s\\\\u00A0,]+)\\\\)</span>\', "i")) ||',
+      '                 html.match(new RegExp(\'\\\\(([\\\\d\\\\s\\\\u00A0,]+)\\\\)\'));',
+      '',
       '       if (r) rating = parseFloat(r[1].replace(",", "."));',
       '       if (c) count = parseInt(c[1].replace(/[^\\\\d]/g, ""));',
       '    }',
       '',
       '    if (rating > 0) {',
-      '      console.log("Успешно: " + service + " - " + rating + " (" + count + ")");',
-      '      UrlFetchApp.fetch(apiUrl, {',
+      '      console.log("Найдено: " + service + " - " + rating + " (" + count + ")");',
+      '      const pushResponse = UrlFetchApp.fetch(apiUrl, {',
       '        method: "post",',
       '        contentType: "application/json",',
       '        payload: JSON.stringify({ branchId, service, rating, reviewCount: count, apiKey }),',
       '        muteHttpExceptions: true',
       '      });',
+      '      console.log("Статус отправки в API: " + pushResponse.getResponseCode());',
+      '      if (pushResponse.getResponseCode() !== 200) {',
+      '        console.warn("Ошибка API: " + pushResponse.getContentText().substring(0, 200));',
+      '      }',
       '    } else {',
       '      console.warn("Рейтинг не найден для " + service + ": " + url);',
       '    }',
@@ -291,105 +300,6 @@ export default function BranchesPage() {
     return scriptLines.join('\\n');
   };
 
-  const handleBrowserSync = async (branch: Branch) => {
-    try {
-      setLoading(true);
-      const results: any[] = [];
-      const services = [
-        { id: 'yandex', url: branch.yandexUrl },
-        { id: '2gis', url: branch.dgisUrl },
-        { id: 'google', url: branch.googleUrl }
-      ].filter(s => s.url);
-
-      if (services.length === 0) {
-        alert("У этого филиала не указаны ссылки на карты!");
-        return;
-      }
-
-      for (const s of services) {
-        try {
-          const cleanUrl = s.url!.split('?')[0];
-          let html = "";
-          let lastError = "";
-          
-          const proxies = [
-            { url: `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanUrl)}`, mode: 'text' },
-            { url: `https://api.allorigins.win/get?url=${encodeURIComponent(cleanUrl)}`, mode: 'json' },
-            { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(cleanUrl)}`, mode: 'text' },
-            { url: `https://corsproxy.io/?${encodeURIComponent(cleanUrl)}`, mode: 'text' },
-            { url: `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(cleanUrl)}`, mode: 'text' }
-          ];
-
-          for (const proxy of proxies) {
-            try {
-              console.log(`Trying browser proxy: ${proxy.url}`);
-              const res = await fetch(proxy.url);
-              if (!res.ok) throw new Error(`HTTP ${res.status}`);
-              
-              if (proxy.mode === 'json') {
-                const data = await res.json();
-                html = data.contents || "";
-              } else {
-                html = await res.text();
-              }
-
-              if (html && html.length > 500 && !html.includes("captcha") && !html.includes("Detected as bot")) {
-                console.log(`Successful fetch from proxy: ${proxy.url}`);
-                break;
-              } else {
-                lastError = html.includes("captcha") ? "Captcha" : "Blocked/Empty";
-                html = "";
-              }
-            } catch (e: any) {
-              lastError = e.message;
-              console.warn(`Browser proxy error: ${proxy.url}`, e);
-            }
-          }
-
-          if (!html) {
-             results.push({ service: s.id, status: 'error', error: `Прокси заблокирован (${lastError})` });
-             continue;
-          }
-
-          const parsed = parseRating(s.id, html);
-          
-          if (parsed.success) {
-            // Save to server
-            await fetch('/api/admin/rating-manual', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                branchId: branch.id,
-                service: s.id,
-                rating: parsed.rating,
-                reviewCount: parsed.reviewCount
-              })
-            });
-            results.push({ service: s.id, status: 'success' });
-          } else {
-            // Try widget fallback for Yandex if main failed
-            if (s.id === 'yandex') {
-              const widgetUrl = `https://yandex.ru/maps-reviews-widget/1/`; // Dummy id, fetcher usually normalizes this, but here we'd need actual id
-              // Actually, use same logic as server but on client
-            }
-            results.push({ service: s.id, status: 'error', error: parsed.error });
-          }
-        } catch (e: any) {
-          results.push({ service: s.id, status: 'error', error: e.message });
-        }
-      }
-
-      const summary = results.map((r: any) => 
-        `${r.service.toUpperCase()}: ${r.status === 'success' ? '✅' : '❌ ' + (r.error || 'Ошибка')}`
-      ).join('\n');
-      alert(`Синхронизация через браузер завершена:\n\n${summary}`);
-      fetchBranches();
-    } catch (err: any) {
-      alert("Ошибка браузерной синхронизации: " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleTestSurvey = (branchId: string) => {
     window.open(`/survey/qr?branchId=${branchId}&test=true`, '_blank');
@@ -651,20 +561,6 @@ export default function BranchesPage() {
                         placeholder="Выберите метрику"
                       />
                     </div>
-                    <button 
-                      onClick={() => handleSyncRatings(branch.id)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-                    >
-                      <RefreshCw className="w-3 h-3 text-emerald-500" />
-                      Авто
-                    </button>
-                    <button 
-                      onClick={() => handleBrowserSync(branch)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-                    >
-                      <Globe className="w-3 h-3 text-indigo-500" />
-                      Браузер
-                    </button>
                   </div>
                 </div>
 
