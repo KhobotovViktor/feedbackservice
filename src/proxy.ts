@@ -16,6 +16,7 @@ export async function proxy(req: NextRequest) {
     path.startsWith("/api/auth") ||
     path.startsWith("/api/surveys") ||
     path.startsWith("/api/rating-bridge") ||
+    path.includes("rating-bridge") ||
     path.startsWith("/api/b24/webhook") ||
     path.startsWith("/api/test-b24-notification") ||
     path === "/favicon.ico" ||
