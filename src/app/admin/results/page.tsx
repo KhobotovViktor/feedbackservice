@@ -82,9 +82,9 @@ export default async function ResultsPage({
           {/* Clear Results Button */}
           <ClearResultsButton />
           {/* Branch Filter */}
-          <div className="flex items-center gap-2 p-1.5 glass rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
-            <div className="flex-1 sm:flex-none flex items-center gap-3 px-6 py-3">
-              <Building2 className="w-5 h-5 text-indigo-400" />
+          <div className="flex items-center gap-2 p-1 md:p-1.5 glass rounded-2xl md:rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
+            <div className="flex-1 sm:flex-none flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-3">
+              <Building2 className="w-4 h-4 md:w-5 md:h-5 text-indigo-400" />
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xs:inline">Филиал:</span>
             </div>
             <div className="flex-1 sm:flex-none">
@@ -93,9 +93,9 @@ export default async function ResultsPage({
           </div>
 
           {/* Type Filter */}
-          <div className="flex items-center gap-2 p-1.5 glass rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
-            <div className="flex-1 sm:flex-none flex items-center gap-3 px-6 py-3">
-              <Filter className="w-5 h-5 text-indigo-400" />
+          <div className="flex items-center gap-2 p-1 md:p-1.5 glass rounded-2xl md:rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
+            <div className="flex-1 sm:flex-none flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-3">
+              <Filter className="w-4 h-4 md:w-5 md:h-5 text-indigo-400" />
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xs:inline">Тип:</span>
             </div>
             <div className="flex-1 sm:flex-none">

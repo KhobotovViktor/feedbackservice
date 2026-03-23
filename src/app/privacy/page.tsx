@@ -26,7 +26,7 @@ export default function PrivacyPage() {
             </div>
           </div>
 
-          <div className="prose prose-indigo prose-lg max-w-none text-slate-600 font-medium leading-relaxed space-y-8">
+          <div className="prose prose-indigo prose-lg max-w-none text-slate-600 font-medium leading-relaxed space-y-8 break-words hyphens-auto">
             <section className="space-y-4">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">1. Общие положения</h2>
               <p>

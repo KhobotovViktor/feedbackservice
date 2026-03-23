@@ -203,7 +203,7 @@ export default function BranchesPage() {
       '    ',
       '    const response = UrlFetchApp.fetch(url, options);',
       '    if (response.getResponseCode() !== 200) {',
-      '      console.warn("Ошибка доступа к " + service + " (" + url + "): Код " + response.getResponseCode());',
+      '      console.warn("Ошибка извлечения " + service + " (" + url + "): Код " + response.getResponseCode());',
       '      return;',
       '    }',
       '',
@@ -255,28 +255,31 @@ export default function BranchesPage() {
       '    }',
       '',
       '    if (rating > 0) {',
-      '      console.log("--- Синхронизация (" + service + ") ---");',
-      '      try {',
-      '        const syncUrl = apiUrl + ',
-      '          "?branchId=" + encodeURIComponent(branchId) + ',
-      '          "&service=" + encodeURIComponent(service) + ',
-      '          "&rating=" + encodeURIComponent(rating) + ',
-      '          "&reviewCount=" + encodeURIComponent(count) + ',
-      '          "&apiKey=" + encodeURIComponent(apiKey);',
-      '',
-      '        const resp = UrlFetchApp.fetch(syncUrl, { method: "GET", muteHttpExceptions: true });',
-      '        if (resp.getResponseCode() === 200) {',
-      '          console.log("✅ Готово");',
-      '        } else {',
-      '          console.error("❌ Ошибка: " + resp.getResponseCode());',
-      '        }',
-      '      } catch (e) {',
-      '        console.error("❌ Сбой: " + e.message);',
+      '      console.log("--- Синхронизация (" + service + "): " + rating + " ---");',
+      '      const payload = {',
+      '        branchId: branchId,',
+      '        service: service,',
+      '        rating: rating,',
+      '        reviewCount: count,',
+      '        apiKey: apiKey',
+      '      };',
+      '      ',
+      '      const resp = UrlFetchApp.fetch(apiUrl, {',
+      '        method: "POST",',
+      '        contentType: "application/json",',
+      '        payload: JSON.stringify(payload),',
+      '        muteHttpExceptions: true',
+      '      });',
+      '      ',
+      '      if (resp.getResponseCode() === 200) {',
+      '        console.log("✅ Успешно синхронизировано");',
+      '      } else {',
+      '        console.error("❌ Ошибка синхронизации (" + resp.getResponseCode() + "): " + resp.getContentText());',
       '      }',
       '    } else {',
-      '      console.warn("⚠️ Рейтинг не найден для " + service + ": " + url);',
+      '      console.warn("⚠️ Данные не извлечены для " + service + " (" + url + ")");',
       '    }',
-      '  } catch (e) { console.error("🛑 Ошибка выполнения " + service + ": ", e.message); }',
+      '  } catch (e) { console.error("🛑 Критическая ошибка " + service + ": ", e.message); }',
       '}'
     ];
 
@@ -298,10 +301,11 @@ export default function BranchesPage() {
         <div className="flex gap-4">
           <button 
             onClick={() => setShowAutomationHub(true)}
-            className="px-6 py-3 bg-white border border-slate-100 text-indigo-500 rounded-2xl font-black shadow-sm flex items-center gap-2 hover:bg-slate-50 active:scale-95 transition-all text-sm"
+            className="px-4 md:px-6 py-3 bg-white border border-slate-100 text-indigo-500 rounded-2xl font-black shadow-sm flex items-center justify-center gap-2 hover:bg-slate-50 active:scale-95 transition-all text-xs md:text-sm flex-1 sm:flex-none"
           >
             <Zap className="w-4 h-4" />
-            Автоматизация
+            <span className="hidden xs:inline">Автоматизация</span>
+            <span className="xs:hidden">Хаб</span>
           </button>
           <button 
             onClick={() => {
@@ -309,10 +313,10 @@ export default function BranchesPage() {
               setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", externalId: "", templateId: "" });
               setShowAdd(true);
             }}
-            className="px-6 py-3 premium-gradient text-white rounded-2xl font-black shadow-lg shadow-indigo-500/25 flex items-center gap-2 hover:scale-[1.02] active:scale-95 transition-all text-sm"
+            className="px-4 md:px-6 py-3 premium-gradient text-white rounded-2xl font-black shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all text-xs md:text-sm flex-1 sm:flex-none"
           >
             <Plus className="w-5 h-5 text-white/80" />
-            Добавить филиал
+            Добавить
           </button>
         </div>
       </div>
@@ -450,7 +454,7 @@ export default function BranchesPage() {
               <div className="flex justify-between items-start mb-10">
                 <div className="space-y-2 flex-1 min-w-0 pr-4">
                   <div className="flex items-center gap-3 flex-wrap">
-                    <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter truncate leading-none">{branch.name}</h3>
+                    <h3 className="text-xl md:text-3xl font-black text-slate-900 tracking-tighter leading-tight break-words overflow-hidden">{branch.name}</h3>
                     <div className="flex gap-2">
                       {branch.externalId && (
                         <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-[10px] font-black rounded-lg uppercase tracking-widest border border-slate-200/50">
@@ -497,19 +501,19 @@ export default function BranchesPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 mb-auto">
-                <div className="p-5 glass border-white/40 rounded-2xl text-center group-hover:bg-white/80 transition-all">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-3">Вопросов</p>
-                  <p className="text-2xl font-black text-slate-900">{(branch as any).template?._count?.questions || 0}</p>
+              <div className="grid grid-cols-1 xs:grid-cols-3 gap-3 md:gap-4 mb-auto">
+                <div className="p-3 md:p-5 glass border-white/40 rounded-2xl text-center group-hover:bg-white/80 transition-all">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2 md:mb-3">Вопросов</p>
+                  <p className="text-xl md:text-2xl font-black text-slate-900">{(branch as any).template?._count?.questions || 0}</p>
                 </div>
-                <div className="p-5 glass border-white/40 rounded-2xl text-center group-hover:bg-white/80 transition-all">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-3">Отзывов</p>
-                  <p className="text-2xl font-black text-slate-900">{branch._count?.surveyResponses || 0}</p>
+                <div className="p-3 md:p-5 glass border-white/40 rounded-2xl text-center group-hover:bg-white/80 transition-all">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2 md:mb-3">Отзывов</p>
+                  <p className="text-xl md:text-2xl font-black text-slate-900">{branch._count?.surveyResponses || 0}</p>
                 </div>
-                <div className="p-5 glass border-white/40 rounded-2xl text-center group-hover:bg-white/80 transition-all">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-3">Рейтинг</p>
+                <div className="p-3 md:p-5 glass border-white/40 rounded-2xl text-center group-hover:bg-white/80 transition-all">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2 md:mb-3">Рейтинг</p>
                   <div className="flex items-center justify-center gap-1">
-                     <p className="text-2xl font-black text-slate-900">{branch.averageScore || "0.0"}</p>
+                     <p className="text-xl md:text-2xl font-black text-slate-900">{branch.averageScore || "0.0"}</p>
                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
                   </div>
                 </div>

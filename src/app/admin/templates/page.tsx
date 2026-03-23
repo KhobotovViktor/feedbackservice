@@ -256,7 +256,7 @@ export default function TemplatesPage() {
                   key={template.id}
                   onClick={() => handleSelectTemplate(template)}
                   className={cn(
-                    "w-full p-6 p-8 rounded-[2.5rem] border transition-all text-left flex justify-between items-center group",
+                    "w-full p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border transition-all text-left flex justify-between items-center group",
                     selectedTemplate?.id === template.id 
                       ? "glass-dark text-white border-white/5 shadow-2xl shadow-indigo-500/20" 
                       : "glass hover:bg-white/80 border-white/40 shadow-sm"
@@ -291,7 +291,7 @@ export default function TemplatesPage() {
 
         <div className={cn("lg:col-span-2", view === "list" && "hidden lg:block")}>
           {selectedTemplate ? (
-            <div className="bento-card bg-white/60 p-8 md:p-12 space-y-10 min-h-[600px] flex flex-col">
+            <div className="bento-card bg-white/60 p-6 md:p-12 space-y-8 md:space-y-10 min-h-[500px] md:min-h-[600px] flex flex-col">
               <div className="flex items-center gap-6">
                 <button 
                   onClick={() => setView("list")}
@@ -359,10 +359,10 @@ export default function TemplatesPage() {
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter truncate leading-tight">{selectedTemplate.name}</h2>
+                      <h2 className="text-2xl md:text-4xl font-black text-slate-900 tracking-tighter leading-tight break-words overflow-hidden">{selectedTemplate.name}</h2>
                       <div className="flex items-center gap-4 mt-2">
-                        <p className="text-slate-500 font-medium text-sm md:text-base">Управление вопросами для связанных филиалов</p>
-                        <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-lg border border-amber-100">
+                        <p className="text-slate-500 font-medium text-xs md:text-base">Управление вопросами для связанных филиалов</p>
+                        <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-lg border border-amber-100 shrink-0">
                           <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                           <span className="text-xs font-black text-amber-700">{selectedTemplate.minScore.toFixed(1)}</span>
                         </div>
@@ -405,11 +405,11 @@ export default function TemplatesPage() {
                           key={q.id} 
                           className="flex items-center justify-between p-5 glass border-white/60 rounded-2xl group hover:bg-white transition-all shadow-sm"
                         >
-                          <div className="flex items-center gap-5 min-w-0 pr-2">
-                            <span className="shrink-0 w-10 h-10 flex items-center justify-center bg-white border border-slate-100 rounded-xl text-xs font-black text-slate-900 shadow-sm">
+                          <div className="flex items-center gap-3 md:gap-5 min-w-0 pr-2">
+                            <span className="shrink-0 w-8 h-8 md:w-10 md:h-10 flex items-center justify-center bg-white border border-slate-100 rounded-xl text-[10px] md:text-xs font-black text-slate-900 shadow-sm">
                               {idx + 1}
                             </span>
-                            <p className="text-slate-800 font-bold text-base md:text-lg leading-snug truncate">{q.text}</p>
+                            <p className="text-slate-800 font-bold text-sm md:text-lg leading-snug break-words overflow-hidden">{q.text}</p>
                           </div>
                           <button 
                             onClick={async () => {

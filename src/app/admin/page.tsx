@@ -168,7 +168,7 @@ export default async function AdminDashboard({
 
       {/* Overall Network Monitoring */}
       <div className="grid grid-cols-1 gap-6">
-        <div className="bento-card min-h-[450px]">
+        <div className="bento-card min-h-[300px] md:min-h-[450px]">
           <OverallMonitoring data={allHistory} />
         </div>
       </div>
@@ -215,10 +215,10 @@ export default async function AdminDashboard({
         />
 
         {/* Row 2 & 3: Main Funnel Visual & Branch Sidebar */}
-        <div className="md:col-span-2 lg:col-span-3 lg:row-span-2 bento-card relative overflow-hidden flex flex-col min-h-[500px]">
+        <div className="md:col-span-2 lg:col-span-3 lg:row-span-2 bento-card relative overflow-hidden flex flex-col min-h-[400px] md:min-h-[500px]">
           <div className="relative z-10 flex flex-col h-full">
-            <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3 mb-10">
-              <TrendingUp className="w-8 h-8 text-indigo-500" />
+            <h2 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-3 mb-6 md:mb-10">
+              <TrendingUp className="w-6 h-6 md:w-8 md:h-8 text-indigo-500" />
               Воронка вовлеченности
             </h2>
             
@@ -235,10 +235,10 @@ export default async function AdminDashboard({
               </div>
 
               {/* Step 2 */}
-              <div className="space-y-3 pl-8 md:pl-16">
+              <div className="space-y-3 pl-4 md:pl-16">
                 <div className="flex justify-between items-center px-4">
                   <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">Заполнение ({openRate}%)</span>
-                  <span className="text-2xl font-black text-slate-900">{totalResponses}</span>
+                  <span className="text-lg md:text-2xl font-black text-slate-900">{totalResponses}</span>
                 </div>
                 <div className="h-4 bg-slate-100/50 rounded-full border border-white/40 overflow-hidden">
                   <div className="h-full bg-emerald-500 w-full rounded-full shadow-lg shadow-emerald-500/20" style={{ width: `${openRate}%` }}></div>
@@ -246,10 +246,10 @@ export default async function AdminDashboard({
               </div>
 
               {/* Step 3 */}
-              <div className="space-y-3 pl-16 md:pl-32">
+              <div className="space-y-3 pl-8 md:pl-32">
                 <div className="flex justify-between items-center px-4">
                   <span className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em]">Переход на карты ({clickThroughRate}%)</span>
-                  <span className="text-2xl font-black text-slate-900">{totalClicks}</span>
+                  <span className="text-lg md:text-2xl font-black text-slate-900">{totalClicks}</span>
                 </div>
                 <div className="h-4 bg-slate-100/50 rounded-full border border-white/40 overflow-hidden">
                   <div className="h-full bg-amber-500 w-full rounded-full shadow-lg shadow-amber-500/20" style={{ width: `${(Number(openRate) * Number(clickThroughRate) / 100) || 0}%` }}></div>
@@ -284,7 +284,7 @@ export default async function AdminDashboard({
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/5 blur-[120px] -mr-64 -mt-64 rounded-full"></div>
         </div>
 
-        <div className="lg:row-span-2 bento-card flex flex-col h-full bg-white/40 min-h-[500px]">
+        <div className="lg:row-span-2 bento-card flex flex-col h-full bg-white/40 min-h-[400px] md:min-h-[500px]">
           <div className="flex items-center justify-between mb-8">
              <h3 className="text-xl font-black text-slate-900">По филиалам</h3>
              <Users className="w-6 h-6 text-slate-300" />
