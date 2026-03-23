@@ -218,10 +218,11 @@ export default function BranchesPage() {
       '                 html.match(new RegExp(\'class="Rating-Value">([\\\\d,.]+)\', "i"));',
       '',
       '       const c = html.match(new RegExp(\'itemprop="reviewCount" content="(\\\\d+)"\', "i")) ||',
-      '                 html.match(new RegExp(\'reviewCount":\\\\s*(\\\\d+)\', "i")) ||',
+      '                 html.match(new RegExp(\'reviewCount":\\\\s*"(\\\\d+)"\', "i")) ||',
       '                 html.match(new RegExp(\'class="business-header-rating-view__text[^>]*>([\\\\d\\\\s,]+)\\\\s*(?:оцен|отзыв)\', "i")) ||',
       '                 html.match(new RegExp(\'class="business-rating-amount-view[^>]*>([\\\\d\\\\s,]+)\\\\s*(?:оцен|отзыв)\', "i")) ||',
-      '                 html.match(new RegExp(\'aria-label="([\\\\d\\\\s,]+)\\\\s+(?:оцен|отзыв)\', "i"));',
+      '                 html.match(new RegExp(\'aria-label="([\\\\d\\\\s,]+)\\\\s+(?:оцен|отзыв)\', "i")) ||',
+      '                 html.match(new RegExp(\'class="Rating-Count">[^<]*?(\\\\d+)[^<]*?</div>\', "i"));',
       '',
       '       if (r) rating = parseFloat(r[1].replace(",", "."));',
       '       if (c) count = parseInt(c[1].replace(/[^\\\\d]/g, ""));',
@@ -231,10 +232,11 @@ export default function BranchesPage() {
       '                 html.match(new RegExp(\'ratingValue":\\\\s*([\\\\d.]+)\', "i")) ||',
       '                 html.match(new RegExp(\'class="_y10azs">([\\\\d.]+)\', "i"));',
       '       const c = html.match(new RegExp(\'itemprop="reviewCount" content="(\\\\d+)"\', "i")) ||',
-      '                 html.match(new RegExp(\'reviewCount":\\\\s*(\\\\d+)\', "i")) ||',
-      '                 html.match(new RegExp(\'class="_jspzdm">(\\\\d+)\\\\s+оцен\', "i"));',
+      '                 html.match(new RegExp(\'reviewCount":\\\\s*"(\\\\d+)"\', "i")) ||',
+      '                 html.match(new RegExp(\'class="_jspzdm">(\\\\d+)\\\\s+оцен\', "i")) ||',
+      '                 html.match(new RegExp(\'([\\\\d\\\\s]+) отзыв\', "i"));',
       '       if (r) rating = parseFloat(r[1].replace(",", "."));',
-      '       if (c) count = parseInt(c[1]);',
+      '       if (c) count = parseInt(c[1].toString().replace(/[^\\\\d]/g, ""));',
       '       ',
       '    } else if (service === "google") {',
       '       const r = html.match(new RegExp(\'<span[^>]*>([0-5][.,]\\\\d)</span>[^<]*<a[^>]*>\', "i")) || ',
@@ -255,12 +257,12 @@ export default function BranchesPage() {
       '    }',
       '',
       '    if (rating > 0) {',
-      '      console.log("--- Синхронизация (" + service + "): " + rating + " ---");',
+      '      console.log("--- Синхронизация (" + service + "): " + rating + " (" + (count || 0) + " отзывов) ---");',
       '      const syncUrl = apiUrl + ',
       '        "?branchId=" + encodeURIComponent(branchId) + ',
       '        "&service=" + encodeURIComponent(service) + ',
       '        "&rating=" + encodeURIComponent(rating) + ',
-      '        "&reviewCount=" + encodeURIComponent(count) + ',
+      '        "&reviewCount=" + encodeURIComponent(count || 0) + ',
       '        "&apiKey=" + encodeURIComponent(apiKey);',
       '',
       '      const resp = UrlFetchApp.fetch(syncUrl, { method: "GET", muteHttpExceptions: true });',
@@ -292,7 +294,7 @@ export default function BranchesPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-12">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Управление филиалами</h1>
           <p className="text-slate-500 text-sm font-medium">Настройка мониторинга и опросных листов</p>
@@ -449,31 +451,33 @@ export default function BranchesPage() {
           </div>
         ) : (
           branches.map((branch) => (
-            <div key={branch.id} className="bento-card group flex flex-col h-full bg-white/60">
-              <div className="flex justify-between items-start mb-10">
-                <div className="space-y-2 flex-1 min-w-0 pr-4">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h3 className="text-xl md:text-3xl font-black text-slate-900 tracking-tighter leading-tight break-words overflow-hidden">{branch.name}</h3>
-                    <div className="flex gap-2">
+            <div key={branch.id} className="bento-card group flex flex-col h-full bg-white/60 p-6 md:p-8">
+              <div className="flex flex-col-reverse sm:flex-row justify-between items-start mb-10 gap-6">
+                <div className="space-y-4 flex-1 min-w-0 w-full">
+                  <div className="flex items-start justify-between sm:justify-start gap-4 flex-wrap sm:flex-nowrap">
+                    <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter leading-tight break-words overflow-hidden">{branch.name}</h3>
+                    <div className="flex gap-2 shrink-0">
                       {branch.externalId && (
                         <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-[10px] font-black rounded-lg uppercase tracking-widest border border-slate-200/50">
                           {branch.externalId}
                         </span>
                       )}
-                      <button 
-                        onClick={() => handleTestSurvey(branch.id)}
-                        className="p-1 px-2.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-lg uppercase tracking-widest border border-emerald-100/50 hover:bg-emerald-500 hover:text-white transition-all flex items-center gap-1"
-                        title="Пройти тест опраса для этого филиала"
-                      >
-                        <Play className="w-3 h-3" />
-                        Тест
-                      </button>
-                      <button 
-                        onClick={() => handleEditClick(branch)}
-                        className="p-1 px-2.5 bg-indigo-50 text-indigo-500 text-[10px] font-black rounded-lg uppercase tracking-widest border border-indigo-100/50 hover:bg-indigo-500 hover:text-white transition-all"
-                      >
-                        Редактировать
-                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleTestSurvey(branch.id)}
+                          className="p-1 px-2.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-lg uppercase tracking-widest border border-emerald-100/50 hover:bg-emerald-500 hover:text-white transition-all flex items-center gap-1"
+                          title="Пройти тест опраса для этого филиала"
+                        >
+                          <Play className="w-3 h-3" />
+                          Тест
+                        </button>
+                        <button 
+                          onClick={() => handleEditClick(branch)}
+                          className="p-1 px-2.5 bg-indigo-50 text-indigo-500 text-[10px] font-black rounded-lg uppercase tracking-widest border border-indigo-100/50 hover:bg-indigo-500 hover:text-white transition-all"
+                        >
+                          Ред.
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-slate-500 font-bold text-sm">
@@ -487,9 +491,9 @@ export default function BranchesPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col items-end gap-3 shrink-0">
-                  <div className="w-14 h-14 premium-gradient text-white rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/20 group-hover:rotate-12 transition-transform duration-500">
-                    <Building2 className="w-7 h-7" />
+                <div className="flex flex-row sm:flex-col items-center sm:items-end gap-3 shrink-0 self-end sm:self-start">
+                  <div className="w-12 h-12 md:w-14 md:h-14 premium-gradient text-white rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/20 group-hover:rotate-12 transition-transform duration-500">
+                    <Building2 className="w-6 h-6 md:w-7 md:h-7" />
                   </div>
                   <button 
                     onClick={() => handleDeleteBranch(branch.id, branch.name)}

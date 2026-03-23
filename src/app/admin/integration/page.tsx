@@ -244,7 +244,7 @@ export default function IntegrationPage() {
                   <h3 className="text-lg font-black text-slate-900 tracking-tight">Имитация рабочего процесса</h3>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row items-end gap-4 p-6 bg-slate-50/50 rounded-2xl border border-slate-100">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 p-6 bg-slate-50/50 rounded-2xl border border-slate-100">
                   <div className="flex-1 space-y-2 w-full">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                       Тестовый филиал
@@ -261,7 +261,7 @@ export default function IntegrationPage() {
                   <button
                     onClick={handleSimulateWorkflow}
                     disabled={testLoading || !testBranchId}
-                    className="px-6 py-4 premium-gradient text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-lg shadow-indigo-500/20 disabled:opacity-50 h-[46px]"
+                    className="px-6 py-4 premium-gradient text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-lg shadow-indigo-500/20 disabled:opacity-50 h-[46px] w-full sm:w-auto"
                   >
                     {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap size={16} />}
                     Запустить тест
