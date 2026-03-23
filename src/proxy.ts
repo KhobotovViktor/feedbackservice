@@ -32,12 +32,13 @@ export async function proxy(req: NextRequest) {
   const session = req.cookies.get("session")?.value;
 
   if (!session) {
-    if (path.startsWith("/api/")) {
+    if (path.includes("/api/")) {
       return NextResponse.json({ 
-        error: "Unauthorized (Middleware)", 
-        path,
-        isPublicPath,
-        msg: "Please check your endpoint whitelisting in middleware.ts"
+        error: "Unauthorized (Middleware Logic)", 
+        requestedPath: path,
+        method: req.method,
+        isPublic: isPublicPath,
+        msg: "If isPublic is false, please add your path to isPublicPath list in proxy.ts"
       }, { status: 401 });
     }
     return NextResponse.redirect(new URL("/login", req.url));
