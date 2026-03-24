@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,14 +16,14 @@ export async function GET(req: NextRequest) {
     return handleSync(branchId, service, rating, reviewCount || "0", apiKey || "");
   }
 
-  return NextResponse.json({ active: true, syncSupported: "GET params" });
+  return NextResponse.json({ active: true, syncSupported: "GET params", serverTime: new Date().toISOString() });
 }
 
 async function handleSync(branchId: string, service: string, rating: string, reviewCount: string, apiKey: string) {
   try {
     const SYNC_API_KEY = process.env.SYNC_API_KEY || "alleya-default-key-123";
     if (apiKey !== SYNC_API_KEY) {
-      return NextResponse.json({ error: "Auth failed", debug: "Key mismatch" }, { status: 401 });
+      return NextResponse.json({ error: "Auth failed", debug: "Key mismatch", receivedKey: apiKey ? "provided" : "none" }, { status: 401 });
     }
 
     const branches = await prisma.branch.findMany({ select: { id: true, name: true } });
@@ -32,7 +33,7 @@ async function handleSync(branchId: string, service: string, rating: string, rev
       return NextResponse.json({ 
         error: "Branch not found", 
         idRequested: branchId,
-        availableIds: branches.map(b => b.id)
+        availableBranches: branches.map(b => `${b.name} (${b.id})`)
       }, { status: 404 });
     }
 
@@ -50,21 +51,25 @@ async function handleSync(branchId: string, service: string, rating: string, rev
       data: { updatedAt: new Date() }
     });
 
-    const allRatings = await prisma.ratingHistory.count();
-    const dbUrl = process.env.DATABASE_URL || "not set";
-    const maskedUrl = dbUrl.substring(0, 25) + "...";
+    // Revalidate paths to clear Next.js cache
+    revalidatePath("/admin/branches");
+    revalidatePath("/admin");
+    revalidatePath("/api/branches");
 
+    const allRatings = await prisma.ratingHistory.count({ where: { branchId } });
+    
     return NextResponse.json({ 
-      success: true, 
-      updated: true, 
-      branch: branchExists.name,
-      id: record.id,
-      totalRatingsInDb: allRatings,
-      dbInfo: maskedUrl,
-      received: { branchId, service, rating, reviewCount }
+      status: "success",
+      syncId: record.id,
+      branchName: branchExists.name,
+      service,
+      rating: parseFloat(rating),
+      reviewCount: parseInt(reviewCount) || 0,
+      totalRecordsForBranch: allRatings,
+      serverTimestamp: new Date().toISOString()
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message, stack: err.stack }, { status: 500 });
+    return NextResponse.json({ error: err.message, type: "SYNC_EXCEPTION" }, { status: 500 });
   }
 }
 
