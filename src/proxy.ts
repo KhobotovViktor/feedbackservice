@@ -4,7 +4,7 @@ import { jwtVerify } from "jose";
 const secretKey = "admin_secret_key_change_me_in_prod";
 const key = new TextEncoder().encode(process.env.AUTH_SECRET || secretKey);
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
 
   // Define public paths
