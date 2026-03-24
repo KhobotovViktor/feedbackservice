@@ -7,7 +7,17 @@ const key = new TextEncoder().encode(process.env.AUTH_SECRET || secretKey);
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
 
-  // Define public paths
+  // 1. Dynamic check for static assets (fallback for matcher)
+  if (
+    path.includes(".") || 
+    path.startsWith("/_next") || 
+    path.startsWith("/icons/") ||
+    path === "/favicon.ico"
+  ) {
+    return NextResponse.next();
+  }
+
+  // 2. Define public paths and bypasses
   const isPublicPath = 
     path === "/login" || 
     path === "/privacy" || 
@@ -19,13 +29,7 @@ export async function middleware(req: NextRequest) {
     path.includes("rating-bridge") ||
     path.startsWith("/api/b24/webhook") ||
     path.startsWith("/api/test-b24-notification") ||
-    path === "/favicon.ico" ||
-    path === "/icon.png" ||
-    path === "/logoalleya.png" ||
-    path.startsWith("/icons/") ||
-    path.startsWith("/yandex_") ||
-    path.startsWith("/google") ||
-    // Robust Sync Bypass: If it has an API Key, it's a sync request
+    // Robust Sync Bypass: If it has an API Key in query or headers, it's a sync request
     req.nextUrl.searchParams.has("apiKey") ||
     req.headers.has("x-api-key");
 
@@ -33,16 +37,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // 3. Session validation for protected paths
   const session = req.cookies.get("session")?.value;
 
   if (!session) {
-    if (path.includes("/api/")) {
+    if (path.startsWith("/api/")) {
       return NextResponse.json({ 
-        error: "Unauthorized (Middleware Logic)", 
-        requestedPath: path,
-        method: req.method,
-        isPublic: isPublicPath,
-        msg: "If isPublic is false, please add your path to isPublicPath list in proxy.ts"
+        error: "Unauthorized", 
+        path 
       }, { status: 401 });
     }
     return NextResponse.redirect(new URL("/login", req.url));
@@ -52,11 +54,12 @@ export async function middleware(req: NextRequest) {
     await jwtVerify(session, key);
     return NextResponse.next();
   } catch (error) {
-    console.error("JWT verification failed:", error);
+    console.error("Middleware Auth Error:", error);
     return NextResponse.redirect(new URL("/login", req.url));
   }
 }
 
+// See "Matching Paths" below to learn more
 export const config = {
   matcher: [
     /*
@@ -64,9 +67,7 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - icons/...
-     * - .jpg, .png files
      */
-    "/((?!_next/static|_next/image|favicon.ico|icon.png|logoalleya.png|icons/|.*\\.jpg$|.*\\.png$|.*\\.ico$).*)",
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
