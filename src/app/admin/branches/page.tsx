@@ -161,7 +161,6 @@ export default function BranchesPage() {
     }
   };
 
-
   const generateGASScript = () => {
     const apiKey = "alleya-default-key-123"; 
     
@@ -177,132 +176,103 @@ export default function BranchesPage() {
       '// --- Alleya Feedback Service Automation Script ---',
       '',
       'function syncAllRatings() {',
-      '  const API_URL = "' + baseUrl + '/api/rating-bridge";',
+      '  const API_URL = "' + baseUrl.replace(/\/$/, "") + '/api/rating-bridge";',
       '  const API_KEY = "' + apiKey + '";',
-      '    const scraperKey = "2f79d5dad217d73a81af41f23cb816e1";',
+      '  const SCRAPER_KEY = "2f79d5dad217d73a81af41f23cb816e1";',
+      '  const branches = ' + branchesJson + ';',
       '',
       '  branches.forEach(function(branch) {',
-      '    if (branch.yandex) syncService(branch.id, "yandex", branch.yandex, API_URL, API_KEY, scraperKey);',
+      '    console.log("--- Синхронизация: " + branch.name + " ---");',
+      '    if (branch.yandex) syncService(branch.id, "yandex", branch.yandex, API_URL, API_KEY, SCRAPER_KEY);',
       '    if (branch.googleSearch) {',
       '      var gUrl = "https://www.google.ru/search?q=" + encodeURIComponent(branch.googleSearch);',
-      '      syncService(branch.id, "google", gUrl, API_URL, API_KEY, scraperKey);',
+      '      syncService(branch.id, "google", gUrl, API_URL, API_KEY, SCRAPER_KEY);',
       '    }',
-      '    if (branch.dgis) syncService(branch.id, "2gis", branch.dgis, API_URL, API_KEY, scraperKey);',
+      '    if (branch.dgis) syncService(branch.id, "2gis", branch.dgis, API_URL, API_KEY, SCRAPER_KEY);',
       '  });',
       '}',
       '',
       'function syncService(branchId, service, url, apiUrl, apiKey, scraperKey) {',
+      '  if (!url || !apiUrl) {',
+      '    console.warn("⚠️ [" + (service || "UNKNOWN") + "] Пропуск: Отсутствует URL или API URL.");',
+      '    return;',
+      '  }',
       '  try {',
       '    const options = {',
       '      muteHttpExceptions: true,',
-      '      headers: {',
-      '        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",',
-      '        "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"',
-      '      }',
+      '      headers: { "User-Agent": "Mozilla/5.0", "x-api-key": apiKey }',
       '    };',
       '    ',
-      '    const response = UrlFetchApp.fetch(url, options);',
+      '    let finalUrl = url;',
+      '    if (service === "google" && scraperKey) {',
+      '      finalUrl = "http://api.scraperapi.com/?api_key=" + scraperKey + "&country_code=ru&render=true&url=" + encodeURIComponent(url);',
+      '    }',
+      '',
+      '    const response = UrlFetchApp.fetch(finalUrl, options);',
       '    if (response.getResponseCode() !== 200) {',
-      '      console.warn("Ошибка извлечения " + service + " (" + url + "): Код " + response.getResponseCode());',
+      '      console.warn("❌ [" + service.toUpperCase() + "] Ошибка извлечения: Код " + response.getResponseCode());',
       '      return;',
       '    }',
       '',
       '    const html = response.getContentText();',
-      '    let rating = 0, count = 0;',
+      '    let rating = null, count = null;',
       '',
       '    if (service === "yandex") {',
-      '       const r = html.match(new RegExp(\'itemprop="ratingValue" content="([\\\\d,.]+)"\', "i")) || ',
-      '                 html.match(new RegExp(\'ratingValue":\\\\s*([\\\\d,.]+)\', "i")) ||',
-      '                 html.match(new RegExp(\'class="business-rating-badge-view__rating-text[^>]*>([\\\\d,.]+)\', "i")) ||',
-      '                 html.match(new RegExp(\'rating-text">([\\\\d,.]+)\', "i")) ||',
-      '                 html.match(new RegExp(\'class="Rating-Value">([\\\\d,.]+)\', "i"));',
-      '',
-      '       const c = html.match(new RegExp(\'itemprop="reviewCount" content="(\\\\d+)"\', "i")) ||',
-      '                 html.match(new RegExp(\'reviewCount":\\\\s*"(\\\\d+)"\', "i")) ||',
-      '                 html.match(new RegExp(\'class="business-header-rating-view__text[^>]*>([\\\\d\\\\s,]+)\\\\s*(?:оцен|отзыв)\', "i")) ||',
-      '                 html.match(new RegExp(\'class="business-rating-amount-view[^>]*>([\\\\d\\\\s,]+)\\\\s*(?:оцен|отзыв)\', "i")) ||',
-      '                 html.match(new RegExp(\'aria-label="([\\\\d\\\\s,]+)\\\\s+(?:оцен|отзыв)\', "i")) ||',
-      '                 html.match(new RegExp(\'class="Rating-Count">[^<]*?(\\\\d+)[^<]*?</div>\', "i"));',
-      '',
-      '       if (r) rating = parseFloat(r[1].replace(",", "."));',
-      '       if (c) count = parseInt(c[1].replace(/[^\\\\d]/g, ""));',
-      '       ',
-      '    } else if (service === "2gis") {',
-      '       const r = html.match(new RegExp(\'itemprop="ratingValue" content="([\\\\d.]+)"\', "i")) ||',
-      '                 html.match(new RegExp(\'ratingValue":\\\\s*([\\\\d.]+)\', "i")) ||',
-      '                 html.match(new RegExp(\'class="_y10azs">([\\\\d.]+)\', "i"));',
-      '       const c = html.match(new RegExp(\'itemprop="reviewCount" content="(\\\\d+)"\', "i")) ||',
-      '                 html.match(new RegExp(\'reviewCount":\\\\s*"(\\\\d+)"\', "i")) ||',
-      '                 html.match(new RegExp(\'class="_jspzdm">(\\\\d+)\\\\s+оцен\', "i")) ||',
-      '                 html.match(new RegExp(\'([\\\\d\\\\s]+) отзыв\', "i"));',
-      '       if (r) rating = parseFloat(r[1].replace(",", "."));',
-      '       if (c) count = parseInt(c[1].toString().replace(/[^\\\\d]/g, ""));',
-      '       ',
+      '      const rMatch = html.match(/ratingValue["\']:\\s*["\']?([0-9.]+)/) || html.match(/class=\\s*["\']?business-rating-badge-view__rating-value["\']?\\s*>([0-9.]+)/);',
+      '      const cMatch = html.match(/reviewCount["\']:\\s*["\']?(\\d+)/) || html.match(/class=\\s*["\']?business-rating-amount-view["\']?\\s*>(\\d+)/);',
+      '      if (rMatch) rating = rMatch[1];',
+      '      if (cMatch) count = cMatch[1];',
       '    } else if (service === "google") {',
-      '       const r = html.match(new RegExp(\'<span[^>]*>([0-5][.,]\\\\d)</span>[^<]*<a[^>]*>\', "i")) || ',
-      '                 html.match(new RegExp(\'ratingValue"\\\\s*:\\\\s*([0-5][.,]\\\\d)\', "i")) ||',
-      '                 html.match(new RegExp(\'Оценка:\\\\\\s*([0-5][.,]\\\\d)\', "i")) ||',
-      '                 html.match(new RegExp(\'aria-label="Рейтинг ([0-5][.,]\\\\d) из 5\', "i")) ||',
-      '                 html.match(new RegExp(\'>([0-5][.,]\\\\d)</span>\'));',
-      '                 ',
-      '       const c = html.match(new RegExp(\'>([\\\\d\\\\s\\\\u00A0,]+)\\\\s*(?:отзыв|отзыва|отзывов)\', "i")) ||',
-      '                 html.match(new RegExp(\'aria-label="[^"]*?([\\\\d\\\\s\\\\u00A0,]+)\\\\s*(?:отзыв|отзыва|отзывов)\', "i")) ||',
-      '                 html.match(new RegExp(\'reviewCount":\\\\s*(\\\\d+)\', "i")) ||',
-      '                 html.match(new RegExp(\'<a[^>]*>([\\\\d\\\\s\\\\u00A0,]+)\\\\s*(?:Google|отзыв)\', "i")) ||',
-      '                 html.match(new RegExp(\'<span>\\\\(([\\\\d\\\\s\\\\u00A0,]+)\\\\)</span>\', "i")) ||',
-      '                 html.match(new RegExp(\'\\\\(([\\\\d\\\\s\\\\u00A0,]+)\\\\)\'));',
-      '',
-      '       if (r) rating = parseFloat(r[1].replace(",", "."));',
-      '       if (c) count = parseInt(c[1].replace(/[^\\\\d]/g, ""));',
+      '      const rMatch = html.match(/([0-9][,.][0-9])\\s*из\\s*5/) || html.match(/([0-9][,.][0-9])\\s*stars/) || html.match(/ratingValue["\']>([0-9.]+)/) || html.match(/data-score=["\']([0-9.]+)/);',
+      '      const cMatch = html.match(/(\\d+)\\s*(?:отзыв|отзывов|отзыва|reviews)/) || html.match(/ratingCount["\']>(\\d+)/) || html.match(/data-count=["\'](\\d+)/);',
+      '      if (rMatch) rating = rMatch[1].replace(",", ".");',
+      '      if (cMatch) count = cMatch[1].replace(/\\D/g, "");',
+      '    } else if (service === "2gis") {',
+      '      const rMatch = html.match(/"ratingValue["\']:\\s*["\']?([0-9.]+)/) || html.match(/>([0-9][,.][0-9])<\\/span>/);',
+      '      const cMatch = html.match(/"reviewCount["\']:\\s*["\']?(\\d+)/) || html.match(/>(\\d+)\\s*отзыв/);',
+      '      if (rMatch) rating = rMatch[1].replace(",", ".");',
+      '      if (cMatch) count = cMatch[1].toString().replace(/\\D/g, "");',
       '    }',
       '',
-      '    if (rating > 0) {',
-      '      console.log("--- Синхронизация (" + service + "): " + rating + " (" + (count || 0) + " отзывов) ---");',
-      '      const syncUrl = apiUrl + ',
-      '        "?branchId=" + encodeURIComponent(branchId) + ',
-      '        "&service=" + encodeURIComponent(service) + ',
-      '        "&rating=" + encodeURIComponent(rating) + ',
-      '        "&reviewCount=" + encodeURIComponent(count || 0) + ',
-      '        "&apiKey=" + encodeURIComponent(apiKey);',
+      '    if (!rating) {',
+      '      console.warn("❌ [" + service.toUpperCase() + "] Данные не найдены на странице.");',
+      '      return;',
+      '    }',
       '',
-      '      let resp = UrlFetchApp.fetch(syncUrl, { method: "GET", muteHttpExceptions: true });',
-      '      let body = resp.getContentText();',
+      '    console.log("📍 [" + service.toUpperCase() + "] Найдено: " + rating + " (" + (count || 0) + " отз.)");',
       '',
-      '      // Если получили HTML вместо JSON (защита Vercel/WAF), пробуем через ScraperAPI',
-      '      if (resp.getResponseCode() === 200 && body.indexOf("<!DOCTYPE html>") !== -1 && scraperKey) {',
-      '        console.warn("⚠️ Прямой запрос перехвачен (Bot Protection). Пробую через прокси...");',
-      '        const proxyUrl = "http://api.scraperapi.com/?api_key=" + scraperKey + "&url=" + encodeURIComponent(syncUrl);',
-      '        resp = UrlFetchApp.fetch(proxyUrl, { method: "GET", muteHttpExceptions: true });',
-      '        body = resp.getContentText();',
-      '      }',
+      '    // Синхронизация с базой',
+      '    const syncUrl = apiUrl + "?branchId=" + branchId + "&service=" + service + "&rating=" + encodeURIComponent(rating) + "&reviewCount=" + encodeURIComponent(count || 0) + "&apiKey=" + encodeURIComponent(apiKey);',
+      '    let resp = UrlFetchApp.fetch(syncUrl, { method: "GET", muteHttpExceptions: true });',
+      '    let body = resp.getContentText();',
       '',
-      '      if (resp.getResponseCode() === 200) {',
-      '        try {',
-      '          const result = JSON.parse(body);',
-      '          console.log("✅ [" + service.toUpperCase() + "] Синхронизировано: " + result.rating + " ⭐ (" + result.reviewCount + " отз.)");',
-      '          console.log("   Инфо: Филиал " + result.branchName + ", записей в истории: " + result.totalRecordsForBranch);',
-      '        } catch(e) {',
-      '          console.log("✅ Успешно (код 200), НО ответ не в формате JSON.");',
-      '          console.log("   Начало ответа: " + body.substring(0, 150).replace(/\\n/g, " "));',
-      '        }',
-      '      } else {',
-      '        const body = resp.getContentText();',
-      '        if (body.indexOf("<title>Аллея Мебели") !== -1) {',
-      '          console.error("❌ Ошибкa: Перенаправление на страницу логина. Проверьте whitelisting в proxy.ts");',
-      '        } else {',
-      '          console.error("❌ Ошибка синхронизации (" + resp.getResponseCode() + "): " + body);',
-      '        }',
+      '    // Автоматический обход Bot Protection Vercel через ScraperAPI',
+      '    if (body.indexOf("<!DOCTYPE html>") !== -1 && scraperKey) {',
+      '      console.warn("⚠️ Прямой доступ к API заблокирован Vercel. Пробую через ScraperAPI...");',
+      '      resp = UrlFetchApp.fetch("http://api.scraperapi.com/?api_key=" + scraperKey + "&url=" + encodeURIComponent(syncUrl), { method: "GET", muteHttpExceptions: true });',
+      '      body = resp.getContentText();',
+      '    }',
+      '',
+      '    if (resp.getResponseCode() === 200) {',
+      '      try {',
+      '        const res = JSON.parse(body);',
+      '        console.log("✅ [" + service.toUpperCase() + "] Успешно. История: " + res.totalRecordsForBranch + " зап.");',
+      '      } catch(e) {',
+      '        console.log("❌ ОШИБКА: Не JSON ответ. Возможно, блокировка WAF (Vercel).");',
+      '        console.log("   Начало ответа: " + body.substring(0, 100).replace(/\\n/g, " "));',
       '      }',
       '    } else {',
-      '      console.warn("⚠️ Данные не извлечены для " + service + " (" + url + ")");',
+      '      console.error("❌ Ошибка API: " + resp.getResponseCode() + ". " + body.substring(0, 100));',
       '    }',
-      '  } catch (e) { console.error("🛑 Критическая ошибка " + service + ": ", e.message); }',
-      '}'
+      '  } catch (e) {',
+      '    console.error("🛑 Критическая ошибка " + service + ": " + e.toString());',
+      '  }',
+      '}',
+      'syncAllRatings();'
     ];
 
-    return scriptLines.join('\\n');
+    return scriptLines.join('\n');
   };
-
 
   const handleTestSurvey = (branchId: string) => {
     window.open(`/survey/qr?branchId=${branchId}&test=true`, '_blank');
@@ -582,7 +552,6 @@ export default function BranchesPage() {
                           <span className="text-xs font-black text-slate-900">{latest?.rating || '—'}</span>
                           <span className="text-[9px] font-bold text-slate-400">/ {latest?.reviewCount || 0}</span>
                         </div>
-
                       </div>
                     );
                   })}
@@ -604,7 +573,6 @@ export default function BranchesPage() {
                               label: metric === 'rating' ? 'Оценка' : 'Отзывы'
                             }));
                           
-                          // If no data for specific service, show a friendly empty state transition
                           if (filtered.length === 0) return [];
                           return filtered;
                         })()}
@@ -782,8 +750,6 @@ export default function BranchesPage() {
         )}
       </AnimatePresence>
 
-
-
       <AnimatePresence>
         {showAutomationHub && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
@@ -827,8 +793,8 @@ export default function BranchesPage() {
                <div className="space-y-3">
                   <div className="flex justify-between items-center px-1">
                     <div className="flex items-center gap-2">
-                      <Bot className="w-4 h-4 text-indigo-500" />
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Индивидуальный скрипт для ваших филиалов</label>
+                       <Bot className="w-4 h-4 text-indigo-500" />
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Индивидуальный скрипт для ваших филиалов</label>
                     </div>
                     <button 
                       onClick={() => {

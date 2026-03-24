@@ -24,7 +24,10 @@ export async function proxy(req: NextRequest) {
     path === "/logoalleya.png" ||
     path.startsWith("/icons/") ||
     path.startsWith("/yandex_") ||
-    path.startsWith("/google");
+    path.startsWith("/google") ||
+    // Robust Sync Bypass: If it has an API Key, it's a sync request
+    req.nextUrl.searchParams.has("apiKey") ||
+    req.headers.has("x-api-key");
 
   if (isPublicPath) {
     return NextResponse.next();
