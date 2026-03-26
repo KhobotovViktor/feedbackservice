@@ -1,35 +1,41 @@
-const fs = require('fs');
+// Test 2GIS catalog API and ScraperAPI Google autoparse
 
-async function testExtraction() {
-  const gQuery = "Аллея Мебели Вологда отзывы";
-  const scraperKey = "2f79d5dad217d73a81af41f23cb816e1";
+async function test2gisApi() {
+  // Found in 2GIS page config: webApiKey
+  const apiKey = "c7f1a769-c8a5-4636-b14d-d8c987808a12"; 
+  const firmId = "70000001039498416";
   
-  console.log("=== Testing Google Search (us proxy) ===");
-  const gUrl = `https://www.google.com/search?q=${encodeURIComponent(gQuery)}&hl=ru`;
-  const gScraperUrl = `http://api.scraperapi.com/?api_key=${scraperKey}&country_code=us&render=true&url=${encodeURIComponent(gUrl)}`;
+  // 2GIS Catalog API  
+  const url = `https://catalog.api.2gis.ru/3.0/items/byid?id=${firmId}&key=${apiKey}&fields=items.reviews`;
+  console.log("=== 2GIS Catalog API ===");
+  console.log("URL:", url);
   
   try {
-    const gRes = await fetch(gScraperUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
-    console.log(`Google ScraperAPI Status: ${gRes.status}`);
-    const gData = await gRes.text();
-    fs.writeFileSync('google_njs_test.html', gData);
-    console.log(`Saved google_njs_test.html (${gData.length} bytes)`);
-    
-    // Extractor test
-    let rating = null, count = null;
-    const html = gData;
-    
-    // The unicode version of the regex to avoid encoding corruption in GAS string representations
-    const gBlock = html.match(new RegExp(`(\\d[\\.,]\\d)[\\s\\S]{0,200}?(\\d[\\s\\d]*)\\s*\u043e\u0442\u0437\u044b\u0432\\S*\\s+\u0432\\s+Google`));
-    if (gBlock) { rating = gBlock[1].replace(",", "."); count = gBlock[2].replace(/\D/g, ""); }
-    
-    console.log(`Google Extraction: rating=${rating}, count=${count}`);
-
-  } catch(e) { console.error("Google Fetch Error:", e); }
+    const res = await fetch(url);
+    console.log(`Status: ${res.status}`);
+    const data = await res.json();
+    console.log(JSON.stringify(data, null, 2).substring(0, 2000));
+  } catch(e) { console.error("2GIS API error:", e.message); }
 }
 
-testExtraction();
+async function testGoogleAutoparse() {
+  const scraperKey = "06eeb0519264e083ad4b9da58a7f6902";
+  const query = "Аллея Мебели Вологда отзывы";
+  const gUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=ru`;
+  // Try autoparse - ScraperAPI extracts structured data automatically
+  const scraperUrl = `http://api.scraperapi.com/?api_key=${scraperKey}&autoparse=true&country_code=ru&url=${encodeURIComponent(gUrl)}`;
+  
+  console.log("\n=== Google ScraperAPI autoparse ===");
+  try {
+    const res = await fetch(scraperUrl);
+    console.log(`Status: ${res.status}`);
+    const text = await res.text();
+    console.log(`Size: ${text.length}`);
+    console.log(text.substring(0, 1500));
+  } catch(e) { console.error("Google error:", e.message); }
+}
+
+(async () => {
+  await test2gisApi();
+  await testGoogleAutoparse();
+})();
