@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import { 
@@ -313,8 +313,7 @@ export default function BranchesPage() {
       '}'
     ];
 
-    return scriptLines.join('
-');
+    return scriptLines.join('\\n');
   };
 
   const handleTestSurvey = (branchId: string) => {
