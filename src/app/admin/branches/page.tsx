@@ -182,7 +182,7 @@ export default function BranchesPage() {
       'function syncAllRatings() {',
       '  const SUPABASE_URL = "' + supabaseUrl + '";',
       '  const SUPABASE_KEY = "' + sKey + '";',
-      '  const SCRAPER_KEY = "2f79d5dad217d73a81af41f23cb816e1";',
+      '  const SCRAPER_KEY = "06eeb0519264e083ad4b9da58a7f6902";',
       '  const branches = ' + branchesJson + ';',
       '',
       '  branches.forEach(function(branch) {',
