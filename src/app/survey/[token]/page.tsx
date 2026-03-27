@@ -76,14 +76,15 @@ export default function SurveyPage() {
         // Use setting for positive threshold
         setIsPositiveThreshold(minScoreThreshold);
 
-        // Log view event
-        if (!data.isTest) {
-          fetch("/api/analytics", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type: "VIEW", branchId: bId }),
-          });
-        }
+        // Log view event (always record for now to ensure visibility)
+        fetch("/api/analytics", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            type: "VIEW", 
+            branchId: bId,
+          }),
+        });
       } catch (err) {
         console.warn("API check failed, continuing for demo");
       } finally {

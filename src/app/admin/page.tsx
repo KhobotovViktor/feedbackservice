@@ -95,8 +95,8 @@ export default async function AdminDashboard({
   try {
     const results = await Promise.all([
       prisma.surveyResponse.count({ where: whereWithDate }),
-      (prisma as any).analyticsEvent?.count({ where: { ...whereWithDate, type: "VIEW" } }) || Promise.resolve(0),
-      (prisma as any).analyticsEvent?.count({ where: { ...whereWithDate, type: "CLICK" } }) || Promise.resolve(0),
+      prisma.analyticsEvent.count({ where: { ...whereWithDate, type: "VIEW" } }),
+      prisma.analyticsEvent.count({ where: { ...whereWithDate, type: "CLICK" } }),
       prisma.surveyResponse.count({ where: { ...whereWithDate, averageScore: { lt: 4 } } }),
       (prisma as any).branch.findMany({
         include: {
@@ -178,7 +178,7 @@ export default async function AdminDashboard({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 auto-rows-min">
         {/* Row 1: Key Metrics */}
         <BentoMetricCard 
-          label="Охват" 
+          label="Просмотр опроса" 
           value={totalViews} 
           icon={Eye} 
           color="text-indigo-600" 
@@ -187,7 +187,7 @@ export default async function AdminDashboard({
           className="md:row-span-1"
         />
         <BentoMetricCard 
-          label="Отклики" 
+          label="Прохождения опроса" 
           value={totalResponses} 
           icon={MessageSquare} 
           color="text-emerald-600" 
@@ -226,7 +226,7 @@ export default async function AdminDashboard({
               {/* Step 1 */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center px-4">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Просмотр</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Просмотр опроса</span>
                   <span className="text-2xl font-black text-slate-900">{totalViews}</span>
                 </div>
                 <div className="h-4 bg-slate-100/50 rounded-full border border-white/40 overflow-hidden">
@@ -237,7 +237,7 @@ export default async function AdminDashboard({
               {/* Step 2 */}
               <div className="space-y-3 pl-4 md:pl-16">
                 <div className="flex justify-between items-center px-4">
-                  <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">Заполнение ({openRate}%)</span>
+                  <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">Прохождения ({openRate}%)</span>
                   <span className="text-lg md:text-2xl font-black text-slate-900">{totalResponses}</span>
                 </div>
                 <div className="h-4 bg-slate-100/50 rounded-full border border-white/40 overflow-hidden">
