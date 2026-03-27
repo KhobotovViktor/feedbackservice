@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Plus, Trash2, Play, ExternalLink, X } from "lucide-react";
+import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -24,9 +24,6 @@ export default function IntegrationPage() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<null | "success" | "error">(null);
   const [branches, setBranches] = useState<any[]>([]);
-  const [testBranchId, setTestBranchId] = useState("");
-  const [testLoading, setTestLoading] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
   const [templates, setTemplates] = useState<any[]>([]);
 
   const webhookUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/api/b24/webhook?clientId={{ID}}&dealId={{DEAL_ID}}`;
@@ -52,7 +49,6 @@ export default function IntegrationPage() {
         });
         if (Array.isArray(branchesData)) {
           setBranches(branchesData);
-          if (branchesData.length > 0) setTestBranchId(branchesData[0].id);
         }
         if (Array.isArray(templatesData)) {
           setTemplates(templatesData);
@@ -85,24 +81,7 @@ export default function IntegrationPage() {
     }
   };
 
-  const handleSimulateWorkflow = async () => {
-    if (!testBranchId) return;
-    setTestLoading(true);
-    setTestResult(null);
-    try {
-      const res = await fetch("/api/admin/test/simulate-b24-workflow", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ branchId: testBranchId }),
-      });
-      const data = await res.json();
-      setTestResult(data);
-    } catch (e) {
-      setTestResult({ error: "Ошибка соединения" });
-    } finally {
-      setTestLoading(false);
-    }
-  };
+
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-5 duration-700 pb-12">
@@ -237,86 +216,7 @@ export default function IntegrationPage() {
                 </p>
               </div>
 
-              {/* End-to-End Test Simulation */}
-              <div className="pt-8 border-t border-slate-100/50 relative z-40">
-                <div className="flex items-center gap-3 text-indigo-600 mb-6">
-                  <Play className="w-6 h-6" />
-                  <h3 className="text-lg font-black text-slate-900 tracking-tight">Имитация рабочего процесса</h3>
-                </div>
-                
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 p-6 bg-slate-50/50 rounded-2xl border border-slate-100 relative z-50 overflow-visible">
-                  <div className="flex-1 space-y-2 w-full relative z-[60]">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                      Тестовый филиал
-                    </label>
-                    <div className="flex-1">
-                      <CustomSelect 
-                        options={branches.map(b => ({ value: b.id, label: b.name }))}
-                        value={testBranchId}
-                        onChange={(val) => setTestBranchId(val)}
-                        placeholder="Выберите филиал"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleSimulateWorkflow}
-                    disabled={testLoading || !testBranchId}
-                    className="px-6 py-4 premium-gradient text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-lg shadow-indigo-500/20 disabled:opacity-50 h-[46px] w-full sm:w-auto"
-                  >
-                    {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap size={16} />}
-                    Запустить тест
-                  </button>
-                </div>
 
-                {testResult && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className={cn(
-                      "mt-6 p-6 rounded-2xl border flex flex-col gap-4",
-                      testResult.error ? "bg-rose-50 border-rose-100" : "bg-emerald-50 border-emerald-100"
-                    )}
-                  >
-                    <div className="flex items-start gap-4">
-                      {testResult.error ? (
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-rose-500 shadow-sm shrink-0">
-                          <X size={20} />
-                        </div>
-                      ) : (
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-500 shadow-sm shrink-0">
-                          <CheckCircle2 size={20} />
-                        </div>
-                      )}
-                      <div className="space-y-1 py-1">
-                        <p className={cn("text-xs font-black uppercase tracking-widest", testResult.error ? "text-rose-500" : "text-emerald-600")}>
-                          {testResult.error ? "Ошибка симуляции" : "Успешная имитация"}
-                        </p>
-                        <p className="text-sm font-medium text-slate-600 leading-relaxed">
-                          {testResult.error || testResult.message}
-                        </p>
-                      </div>
-                    </div>
-                    {testResult.link && (
-                      <div className="flex items-center gap-3 p-4 bg-white rounded-xl border border-emerald-200/50">
-                        <div className="flex-1 truncate text-[10px] font-mono font-bold text-slate-400">
-                          {testResult.link}
-                        </div>
-                        <button 
-                          onClick={() => window.open(testResult.link, '_blank')}
-                          className="px-4 py-2 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-600 transition-all flex items-center gap-2"
-                        >
-                          <ExternalLink size={12} />
-                          Открыть
-                        </button>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-                
-                <p className="text-[10px] text-slate-400 font-medium mt-4 leading-relaxed px-1">
-                  Нажмите кнопку, чтобы имитировать завершение сделки в Битрикс24. Система сгенерирует ссылку и попытается отправить её через вебхук.
-                </p>
-              </div>
 
               <div className="pt-8 border-t border-slate-100/50">
                 <div className="flex items-center gap-3 text-emerald-500 mb-6">
