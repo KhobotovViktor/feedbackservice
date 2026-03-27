@@ -354,7 +354,7 @@ export default function BranchesPage() {
   };
 
   const handleTestSurvey = (branchId: string) => {
-    window.open(`/survey/qr?branchId=${branchId}&test=true`, '_blank');
+    window.open(`/api/admin/test/generate-survey-token?branchId=${branchId}`, '_blank');
   };
 
   return (

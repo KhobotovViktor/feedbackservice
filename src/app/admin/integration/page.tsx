@@ -244,8 +244,8 @@ export default function IntegrationPage() {
                   <h3 className="text-lg font-black text-slate-900 tracking-tight">Имитация рабочего процесса</h3>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 p-6 bg-slate-50/50 rounded-2xl border border-slate-100 relative z-50">
-                  <div className="flex-1 space-y-2 w-full">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 p-6 bg-slate-50/50 rounded-2xl border border-slate-100 relative z-50 overflow-visible">
+                  <div className="flex-1 space-y-2 w-full relative z-[60]">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                       Тестовый филиал
                     </label>
