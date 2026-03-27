@@ -35,8 +35,8 @@ export default async function ResultsPage({
       where.branchId = branchId;
     }
 
-    if (type === "positive") where.averageScore = { gte: 4 };
-    if (type === "negative") where.averageScore = { lt: 4 };
+    if (type === "positive") where.averageScore = { gte: 4.5 };
+    if (type === "negative") where.averageScore = { lt: 4.5 };
 
     const results = await Promise.all([
       prisma.surveyResponse.findMany({

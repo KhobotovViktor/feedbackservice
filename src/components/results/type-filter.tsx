@@ -19,8 +19,8 @@ export function TypeFilter({ defaultValue }: { defaultValue: string }) {
 
   const options = [
     { value: "all", label: "Все отзывы" },
-    { value: "positive", label: "Положительные (4-5 ★)" },
-    { value: "negative", label: "Отрицательные (< 4 ★)" },
+    { value: "positive", label: "Положительные (4.5-5 ★)" },
+    { value: "negative", label: "Отрицательные (< 4.5 ★)" },
   ];
 
   return (

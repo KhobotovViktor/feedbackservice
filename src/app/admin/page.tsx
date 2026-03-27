@@ -97,7 +97,7 @@ export default async function AdminDashboard({
       prisma.surveyResponse.count({ where: whereWithDate }),
       prisma.analyticsEvent.count({ where: { ...whereWithDate, type: "VIEW" } }),
       prisma.analyticsEvent.count({ where: { ...whereWithDate, type: "CLICK" } }),
-      prisma.surveyResponse.count({ where: { ...whereWithDate, averageScore: { lt: 4 } } }),
+      prisma.surveyResponse.count({ where: { ...whereWithDate, averageScore: { lt: 4.5 } } }),
       (prisma as any).branch.findMany({
         include: {
           surveyResponses: { 
@@ -210,7 +210,7 @@ export default async function AdminDashboard({
           icon={AlertCircle} 
           color="text-rose-600" 
           bg="bg-rose-50" 
-          desc="Количество прохождений опросов с оценкой ниже 4 звезд."
+          desc="Количество прохождений опросов с оценкой ниже 4.5 звезд."
           className="md:row-span-1"
         />
 
