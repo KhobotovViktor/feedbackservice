@@ -104,14 +104,19 @@ export default function SurveyPage() {
     setIsPositive(positive);
     
     if (positive) {
-      await submitFeedback(avg, positive);
+      // For positive reviews, we submit and go straight to success
+      await submitFeedback(avg, true);
     } else {
+      // For negative reviews, we ask for a comment first
       setStep("feedback");
     }
   };
 
   const submitFeedback = async (avg: number, positive: boolean) => {
     try {
+      // Update state immediately to avoid race conditions in UI
+      setIsPositive(positive);
+
       const res = await fetch("/api/surveys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -132,6 +137,8 @@ export default function SurveyPage() {
       if (!isTest) {
         localStorage.setItem("survey_completed", "true");
       }
+      
+      // Ensure state is updated before showing success
       setStep("success");
     } catch (err) {
       setError("Ошибка при отправке. Попробуйте позже.");

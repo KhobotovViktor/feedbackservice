@@ -13,9 +13,10 @@ export default function QRPrintPage() {
   useEffect(() => {
     async function fetchBranch() {
       try {
-        const res = await fetch(`/api/branches`);
+        const res = await fetch(`/api/branches?t=${Date.now()}`);
         const data = await res.json();
-        const found = data.find((b: any) => b.id === id);
+        const branches = Array.isArray(data) ? data : (data.branches || []);
+        const found = branches.find((b: any) => b.id === id);
         setBranch(found);
       } catch (err) {
         console.error(err);
@@ -36,13 +37,17 @@ export default function QRPrintPage() {
 
   if (!branch) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-xl font-bold text-slate-500">Филиал не найден</p>
+      <div className="min-h-screen flex items-center justify-center p-8 text-center">
+        <div className="space-y-4">
+          <p className="text-xl font-bold text-slate-500">Филиал не найден</p>
+          <p className="text-xs text-slate-300 font-mono">ID: {id}</p>
+        </div>
       </div>
     );
   }
 
-  const qrUrl = `https://alleyafeedbackservice.vercel.app/survey/qr?branchId=${branch.id}`;
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://alleyafeedbackservice.vercel.app';
+  const qrUrl = `${origin}/survey/qr?branchId=${branch.id}`;
   const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(qrUrl)}`;
 
   return (

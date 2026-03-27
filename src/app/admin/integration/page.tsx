@@ -31,7 +31,7 @@ export default function IntegrationPage() {
   useEffect(() => {
     Promise.all([
       fetch("/api/settings").then(res => res.json()),
-      fetch("/api/branches").then(res => res.json()),
+      fetch(`/api/branches?t=${Date.now()}`).then(res => res.json()),
       fetch("/api/templates").then(res => res.json())
     ]).then(([settingsData, branchesData, templatesData]) => {
         setSettings({
@@ -47,8 +47,10 @@ export default function IntegrationPage() {
           review_google_maps: settingsData.review_google_maps || "",
           b24_group_chat_id: settingsData.b24_group_chat_id || "",
         });
-        if (Array.isArray(branchesData)) {
-          setBranches(branchesData);
+        
+        const bList = Array.isArray(branchesData) ? branchesData : (branchesData.branches || []);
+        if (Array.isArray(bList)) {
+          setBranches(bList);
         }
         if (Array.isArray(templatesData)) {
           setTemplates(templatesData);
