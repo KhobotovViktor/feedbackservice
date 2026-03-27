@@ -137,8 +137,8 @@ export default async function ResultsPage({
                       <div className="flex items-center gap-3">
                         <Calendar className="w-5 h-5 text-indigo-400/40 shrink-0" />
                         <div className="flex flex-col leading-tight">
-                          <span className="text-xs font-black text-slate-900 whitespace-nowrap">{new Date(res.createdAt).toLocaleDateString('ru-RU')}</span>
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date(res.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-xs font-black text-slate-900 whitespace-nowrap">{new Date(res.createdAt).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date(res.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })}</span>
                         </div>
                       </div>
                     </td>
@@ -186,7 +186,7 @@ export default async function ResultsPage({
                      <div className="space-y-1.5">
                         <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                            <Calendar className="w-3.5 h-3.5" />
-                           {new Date(res.createdAt).toLocaleDateString()} {new Date(res.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                           {new Date(res.createdAt).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })} {new Date(res.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })}
                         </div>
                         <div className={cn(
                           "text-[9px] font-black px-3 py-1 rounded-lg border uppercase tracking-widest inline-block",

@@ -18,7 +18,7 @@ export function OverallMonitoring({ data }: Props) {
 
   // Aggregation logic: group by date
   const aggregated = data.reduce((acc: any, curr: any) => {
-    const date = new Date(curr.createdAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+    const date = new Date(curr.createdAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Moscow' });
     if (!acc[date]) acc[date] = { date, ratings: [], reviews: 0 };
     
     acc[date].ratings.push(curr.rating);

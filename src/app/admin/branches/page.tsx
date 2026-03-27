@@ -647,7 +647,7 @@ export default function BranchesPage() {
                             .filter(h => h.service === service)
                             .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                             .map(h => ({
-                              date: new Date(h.createdAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
+                              date: new Date(h.createdAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Moscow' }),
                               value: metric === 'rating' ? h.rating : h.reviewCount,
                               label: metric === 'rating' ? 'Оценка' : 'Отзывы'
                             }));

@@ -178,7 +178,7 @@ export default async function AdminDashboard({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 auto-rows-min">
         {/* Row 1: Key Metrics */}
         <BentoMetricCard 
-          label="Просмотр опроса" 
+          label="Просмотры опроса" 
           value={totalViews} 
           icon={Eye} 
           color="text-indigo-600" 
@@ -196,7 +196,7 @@ export default async function AdminDashboard({
           className="md:row-span-1"
         />
         <BentoMetricCard 
-          label="Конверсия" 
+          label="Переход на карты" 
           value={totalClicks} 
           icon={MousePointer2} 
           color="text-amber-600" 
@@ -205,12 +205,12 @@ export default async function AdminDashboard({
           className="md:row-span-1"
         />
         <BentoMetricCard 
-          label="Критично" 
+          label="Негативная обратная связь" 
           value={negativeResponses} 
           icon={AlertCircle} 
           color="text-rose-600" 
           bg="bg-rose-50" 
-          desc="Количество отзывов с оценкой ниже 4 звезд."
+          desc="Количество прохождений опросов с оценкой ниже 4 звезд."
           className="md:row-span-1"
         />
 
@@ -226,7 +226,7 @@ export default async function AdminDashboard({
               {/* Step 1 */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center px-4">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Просмотр опроса</span>
+                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Просмотры опроса</span>
                   <span className="text-2xl font-black text-slate-900">{totalViews}</span>
                 </div>
                 <div className="h-4 bg-slate-100/50 rounded-full border border-white/40 overflow-hidden">
