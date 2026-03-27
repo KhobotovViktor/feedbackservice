@@ -13,8 +13,9 @@ export async function createSurveyToken(clientId: string, dealId: string, branch
 }
 
 export async function createQRToken(branchId?: string | null) {
-  // Generic token for QR source
-  return await new SignJWT({ clientId: "QR_GUEST", dealId: "QR_GUEST", branchId })
+  // Generate a random ID so each scan is treated as a unique anonymous visit
+  const uniqueId = `QR_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  return await new SignJWT({ clientId: uniqueId, dealId: uniqueId, branchId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .sign(JWT_SECRET);

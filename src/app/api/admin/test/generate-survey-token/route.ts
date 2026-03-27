@@ -28,10 +28,7 @@ export async function GET(req: NextRequest) {
     // We'll use "TEST_CLIENT" and "TEST_DEAL" 
     const token = await createSurveyToken("TEST_CLIENT", "TEST_DEAL", branchId, true);
     
-    return NextResponse.json({ 
-      url: `${req.nextUrl.origin}/survey/${token}`,
-      token 
-    });
+    return NextResponse.redirect(`${req.nextUrl.origin}/survey/${token}`);
   } catch (error) {
     console.error("Test token generation error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

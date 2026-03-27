@@ -145,7 +145,7 @@ export default function IntegrationPage() {
                 </p>
               </div>
 
-              <div className="space-y-2">
+              <div className="relative z-50 space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                   Шаблон вопросов для Bitrix24
                 </label>
@@ -238,13 +238,13 @@ export default function IntegrationPage() {
               </div>
 
               {/* End-to-End Test Simulation */}
-              <div className="pt-8 border-t border-slate-100/50">
+              <div className="pt-8 border-t border-slate-100/50 relative z-40">
                 <div className="flex items-center gap-3 text-indigo-600 mb-6">
                   <Play className="w-6 h-6" />
                   <h3 className="text-lg font-black text-slate-900 tracking-tight">Имитация рабочего процесса</h3>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 p-6 bg-slate-50/50 rounded-2xl border border-slate-100">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 p-6 bg-slate-50/50 rounded-2xl border border-slate-100 relative z-50">
                   <div className="flex-1 space-y-2 w-full">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                       Тестовый филиал

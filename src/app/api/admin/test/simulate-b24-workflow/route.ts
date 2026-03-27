@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      link: data.link,
+      link: data.surveyUrl || data.url || data.link,
       message: "Сделка имитирована. Ссылка сгенерирована и (если настроено) отправлена в CRM/Чат." 
     });
   } catch (error) {
