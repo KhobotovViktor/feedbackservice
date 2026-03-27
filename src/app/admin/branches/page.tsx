@@ -393,7 +393,7 @@ export default function BranchesPage() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="glass p-8 md:p-12 rounded-[3.5rem] border-white/60 shadow-2xl space-y-8 relative overflow-hidden"
+            className="glass p-8 md:p-12 rounded-[3.5rem] border-white/60 shadow-2xl space-y-8 relative overflow-visible"
           >
             <div className="flex items-center justify-between relative z-10">
               <h3 className="text-2xl font-black text-slate-900 tracking-tight">
