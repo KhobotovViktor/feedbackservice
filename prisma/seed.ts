@@ -3,38 +3,29 @@ import { createHash } from "crypto";
 
 const prisma = new PrismaClient();
 
-async function hashPassword(password: string) {
+function hashPassword(password: string) {
   return createHash("sha256").update(password).digest("hex");
 }
 
 async function main() {
-  // 1. Create Admins
-  const adminPassword = await hashPassword("admin123"); // Default for first admin if not exists
-  const admin2Password = await hashPassword("admin2026"); // Second admin password
+  const adminUsername = process.env.ADMIN_USERNAME;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminUsername || !adminPassword) {
+    throw new Error("ADMIN_USERNAME and ADMIN_PASSWORD must be set in environment variables before seeding.");
+  }
 
   await prisma.user.upsert({
-    where: { username: "admin" },
+    where: { username: adminUsername },
     update: {},
     create: {
-      username: "admin",
-      password: adminPassword
+      username: adminUsername,
+      password: hashPassword(adminPassword),
     }
   });
 
-  await prisma.user.upsert({
-    where: { username: "admin2" },
-    update: {
-      password: admin2Password
-    },
-    create: {
-      username: "admin2",
-      password: admin2Password
-    }
-  });
-
-  // 2. Questions
   const questions = [
-    { text: "Как вы оцениваете качество обслуживания в “Аллея Мебели”?", order: 1 },
+    { text: "Как вы оцениваете качество обслуживания в «Аллея Мебели»?", order: 1 },
     { text: "Оцените, пожалуйста, работу сотрудника службы поддержки.", order: 2 },
     { text: "Насколько быстро был решен ваш вопрос?", order: 3 },
   ];
@@ -47,7 +38,7 @@ async function main() {
     });
   }
 
-  console.log("Seed successful: Admins and questions updated.");
+  console.log("Seed successful.");
 }
 
 main()

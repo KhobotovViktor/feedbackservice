@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSurveyToken } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 
+function isValidId(value: string): boolean {
+  return value.length > 0 && value.length <= 128 && !/[{}\n\r]/.test(value);
+}
+
 async function handleWebhook(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const clientId = searchParams.get("clientId");
@@ -9,10 +13,7 @@ async function handleWebhook(req: NextRequest) {
   const branchId = searchParams.get("branchId");
   const responsibleName = searchParams.get("responsible");
   const isTest = searchParams.get("isTest") === "true";
-  
-  console.log(`Incoming B24 Webhook: clientId=${clientId}, dealId=${dealId}, branchId=${branchId}, responsible=${responsibleName}, isTest=${isTest}`);
-  
-  // Resilience: if clientId is missing but dealId is present, use dealId as clientId
+
   const effectiveClientId = clientId || dealId;
   const effectiveDealId = dealId || clientId;
 
@@ -24,10 +25,17 @@ async function handleWebhook(req: NextRequest) {
     );
   }
 
-  // Handle placeholders like "{{DEAL_ID}}" which means B24 didn't replace them
-  if (effectiveDealId.includes("{") || effectiveClientId.includes("{")) {
-    console.warn("Detected unresolved Bitrix24 placeholders. Please check Robot configuration.");
+  if (!isValidId(effectiveClientId) || !isValidId(effectiveDealId)) {
+    console.warn("Rejected webhook: invalid or placeholder ID values.");
+    return NextResponse.json(
+      { error: "Invalid identity parameters" },
+      { status: 400 }
+    );
   }
+
+  const safeResponsibleName = responsibleName
+    ? responsibleName.replace(/[^\p{L}\p{N} \-.,]/gu, "").slice(0, 256) || null
+    : null;
   
   // DEDUPLICATION: Check if survey was already sent for this deal
   if (!isTest) {
@@ -50,7 +58,7 @@ async function handleWebhook(req: NextRequest) {
   }, {});
 
   const b24TemplateId = settingsMap.b24_template_id;
-  const token = await createSurveyToken(effectiveClientId, effectiveDealId, branchId, isTest, b24TemplateId, responsibleName);
+  const token = await createSurveyToken(effectiveClientId, effectiveDealId, branchId, isTest, b24TemplateId, safeResponsibleName);
   
   // Get base URL from env or request headers
   let appUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -84,7 +92,7 @@ async function handleWebhook(req: NextRequest) {
         data: {
           dealId: effectiveDealId,
           clientId: effectiveClientId,
-          responsibleName: responsibleName || null
+          responsibleName: safeResponsibleName
         }
       });
     } catch (shortError) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifySurveyToken } from "@/lib/auth-utils";
+import { getSession } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -209,6 +210,11 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await prisma.surveyResponse.deleteMany({});
     await prisma.sentSurvey.deleteMany({});
     return NextResponse.json({ success: true });

@@ -1,11 +1,14 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 
-const secretKey = "admin_secret_key_change_me_in_prod";
-const key = new TextEncoder().encode(process.env.AUTH_SECRET || secretKey);
+if (!process.env.AUTH_SECRET) {
+  throw new Error("AUTH_SECRET environment variable is not set.");
+}
 
-export async function encrypt(payload: any) {
+const key = new TextEncoder().encode(process.env.AUTH_SECRET);
+
+export async function encrypt(payload: Record<string, unknown>) {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -13,41 +16,49 @@ export async function encrypt(payload: any) {
     .sign(key);
 }
 
-export async function decrypt(input: string): Promise<any> {
+export async function decrypt(input: string): Promise<Record<string, unknown>> {
   const { payload } = await jwtVerify(input, key, {
     algorithms: ["HS256"],
   });
-  return payload;
+  return payload as Record<string, unknown>;
 }
 
 export async function getSession() {
   const session = (await cookies()).get("session")?.value;
   if (!session) return null;
-  return await decrypt(session);
+  try {
+    return await decrypt(session);
+  } catch {
+    return null;
+  }
 }
 
 export async function login(username: string) {
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const session = await encrypt({ username, expires });
+  const session = await encrypt({ username, expires: expires.toISOString() });
+  const isProduction = process.env.NODE_ENV === "production";
 
-  (await cookies()).set("session", session, { expires, httpOnly: true });
+  (await cookies()).set("session", session, {
+    expires,
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    path: "/",
+  });
 }
 
 export async function logout() {
-  (await cookies()).set("session", "", { expires: new Date(0) });
+  (await cookies()).set("session", "", {
+    expires: new Date(0),
+    httpOnly: true,
+    path: "/",
+  });
 }
 
-// Simple hash for password using Web Crypto
-export async function hashPassword(password: string) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+export function hashPassword(password: string): string {
+  return createHash("sha256").update(password).digest("hex");
 }
 
-export async function verifyPassword(password: string, hash: string) {
-  const hashed = await hashPassword(password);
-  return hashed === hash;
+export function verifyPassword(password: string, hash: string): boolean {
+  return hashPassword(password) === hash;
 }
