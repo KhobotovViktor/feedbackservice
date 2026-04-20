@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 import { createSurveyToken } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 
@@ -75,8 +76,7 @@ async function handleWebhook(req: NextRequest) {
   let surveyUrl = fullSurveyUrl;
   if (!isTest) {
     try {
-      const crypto = require("crypto");
-      const code = crypto.randomBytes(4).toString("hex"); // 8 chars
+      const code = randomBytes(4).toString("hex");
       await prisma.shortLink.create({
         data: {
           code,

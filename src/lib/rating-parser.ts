@@ -50,15 +50,7 @@ export function parseRating(service: string, html: string): RatingResult {
       /<span aria-hidden=\"true\">([0-5][.,]\d)<\/span>/i
     ];
 
-    for (const p of patterns) {
-      const m = html.match(p);
-      if (m && m.length >= 2) {
-        // Special case for patterns that only match one thing (like the new user count one)
-        // But we need both rating and count. So we'll refine the loop.
-      }
-    }
-
-    // Secondary pass for single captures
+    // First pass: patterns that capture both rating and count
     const gRating = html.match(/<span aria-hidden=\"true\">([0-5][.,]\d)<\/span>/i)?.[1];
     const gCount = html.match(/aria-label=\"([\d\s,]+)\s+reviews\"/i)?.[1] || 
                    html.match(/\(([\d\s,]+)\)\s*<\/span>\s*<\/span>/i)?.[1];

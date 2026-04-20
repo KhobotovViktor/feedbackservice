@@ -79,6 +79,10 @@ export async function POST(req: NextRequest) {
         // Map scores
         // We look for specific questions by keywords
         const questionsRes = await fetch(`${req.nextUrl.origin}/api/questions`);
+        if (!questionsRes.ok) {
+          console.error("Failed to fetch questions for B24 mapping, skipping field update");
+          return NextResponse.json({ success: true });
+        }
         const questions = await questionsRes.json();
         
         const answersMap = answers as Record<string, number>;

@@ -21,29 +21,24 @@ export async function GET(req: NextRequest) {
 
 async function handleSync(branchId: string, service: string, rating: string, reviewCount: string, apiKey: string) {
   try {
-    const SYNC_API_KEY = process.env.SYNC_API_KEY || "alleya-default-key-123";
-    if (apiKey !== SYNC_API_KEY) {
-      return NextResponse.json({ error: "Auth failed", debug: "Key mismatch", receivedKey: apiKey ? "provided" : "none" }, { status: 401 });
+    const SYNC_API_KEY = process.env.SYNC_API_KEY;
+    if (!SYNC_API_KEY || apiKey !== SYNC_API_KEY) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const branches = await prisma.branch.findMany({ select: { id: true, name: true } });
-    const branchExists = branches.find(b => b.id === branchId);
+    const ratingVal = parseFloat(rating);
+    const reviewCountVal = parseInt(reviewCount) || 0;
+    if (isNaN(ratingVal)) {
+      return NextResponse.json({ error: "Invalid rating value" }, { status: 400 });
+    }
 
-    if (!branchExists) {
-      return NextResponse.json({ 
-        error: "Branch not found", 
-        idRequested: branchId,
-        availableBranches: branches.map(b => `${b.name} (${b.id})`)
-      }, { status: 404 });
+    const branch = await prisma.branch.findUnique({ select: { id: true, name: true }, where: { id: branchId } });
+    if (!branch) {
+      return NextResponse.json({ error: "Branch not found" }, { status: 404 });
     }
 
     const record = await prisma.ratingHistory.create({
-      data: {
-        branchId,
-        service,
-        rating: parseFloat(rating),
-        reviewCount: parseInt(reviewCount) || 0,
-      }
+      data: { branchId, service, rating: ratingVal, reviewCount: reviewCountVal }
     });
 
     await prisma.branch.update({
@@ -51,25 +46,25 @@ async function handleSync(branchId: string, service: string, rating: string, rev
       data: { updatedAt: new Date() }
     });
 
-    // Revalidate paths to clear Next.js cache
     revalidatePath("/admin/branches");
     revalidatePath("/admin");
     revalidatePath("/api/branches");
 
-    const allRatings = await prisma.ratingHistory.count({ where: { branchId } });
-    
-    return NextResponse.json({ 
+    const totalRecords = await prisma.ratingHistory.count({ where: { branchId } });
+
+    return NextResponse.json({
       status: "success",
       syncId: record.id,
-      branchName: branchExists.name,
+      branchName: branch.name,
       service,
-      rating: parseFloat(rating),
-      reviewCount: parseInt(reviewCount) || 0,
-      totalRecordsForBranch: allRatings,
+      rating: ratingVal,
+      reviewCount: reviewCountVal,
+      totalRecordsForBranch: totalRecords,
       serverTimestamp: new Date().toISOString()
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message, type: "SYNC_EXCEPTION" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message, type: "SYNC_EXCEPTION" }, { status: 500 });
   }
 }
 
@@ -78,7 +73,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const apiKey = req.headers.get("x-api-key") || body.apiKey;
     return handleSync(body.branchId, body.service, body.rating, body.reviewCount, apiKey);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { StarRating } from "@/components/star-rating";
-import { CheckCircle, MessageSquare, ArrowRight, Loader2, Star } from "lucide-react";
+import { CheckCircle, MessageSquare, ArrowRight, Star } from "lucide-react";
 
 interface Question {
   id: string;
@@ -26,6 +26,7 @@ export default function SurveyPage() {
   const [comment, setComment] = useState("");
   const [step, setStep] = useState<"rating" | "feedback" | "success">("rating");
   const [isPositive, setIsPositive] = useState(false);
+  const [isPositiveThreshold, setIsPositiveThreshold] = useState(4);
   const [reviewLinks, setReviewLinks] = useState<{ yandex?: string; dgis?: string; google?: string }>({});
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
   const [isTest, setIsTest] = useState(false);
@@ -93,8 +94,6 @@ export default function SurveyPage() {
     }
     init();
   }, [token]);
-
-  const [isPositiveThreshold, setIsPositiveThreshold] = useState(4);
 
   const handleSubmitRating = async () => {
     const scores = Object.values(answers);
