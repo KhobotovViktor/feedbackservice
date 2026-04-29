@@ -33,7 +33,7 @@ export function parseRating(service: string, html: string): RatingResult {
     if (wRating && wCount) {
       return {
         rating: Math.round(parseFloat(wRating.replace(',', '.')) * 10) / 10,
-        reviewCount: parseInt(wCount.replace(/\s/g, '')),
+        reviewCount: parseInt(wCount.replace(/\s/g, ''), 10),
         success: true
       };
     }
@@ -58,7 +58,7 @@ export function parseRating(service: string, html: string): RatingResult {
     if (gRating && gCount) {
       return {
         rating: Math.round(parseFloat(gRating.replace(',', '.')) * 10) / 10,
-        reviewCount: parseInt(gCount.replace(/[^\d]/g, '')),
+        reviewCount: parseInt(gCount.replace(/[^\d]/g, ''), 10),
         success: true
       };
     }
@@ -69,7 +69,7 @@ export function parseRating(service: string, html: string): RatingResult {
       if (m && m[1] && m[2]) {
         return {
           rating: Math.round(parseFloat(m[1].replace(',', '.')) * 10) / 10,
-          reviewCount: parseInt(m[2].replace(/[^\d]/g, '')),
+          reviewCount: parseInt(m[2].replace(/[^\d]/g, ''), 10),
           success: true
         };
       }
@@ -83,13 +83,13 @@ export function parseRating(service: string, html: string): RatingResult {
     if (ogMatch) {
       return {
         rating: parseFloat(ogMatch[1]),
-        reviewCount: parseInt(ogMatch[2].replace(/[^\d]/g, '')),
+        reviewCount: parseInt(ogMatch[2].replace(/[^\d]/g, ''), 10),
         success: true
       };
     } else if (cssRating && cssCount) {
       return {
         rating: parseFloat(cssRating),
-        reviewCount: parseInt(cssCount.replace(/[^\d]/g, '')),
+        reviewCount: parseInt(cssCount.replace(/[^\d]/g, ''), 10),
         success: true
       };
     }

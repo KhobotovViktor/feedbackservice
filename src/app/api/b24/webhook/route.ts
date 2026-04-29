@@ -7,6 +7,32 @@ function isValidId(value: string): boolean {
   return value.length > 0 && value.length <= 128 && !/[{}\n\r]/.test(value);
 }
 
+/**
+ * Защита от SSRF: разрешаем только HTTPS-URL на домен *.bitrix24.* / *.bitrix24.ru
+ * Блокируем localhost, внутренние IP, произвольные домены.
+ */
+function isSafeB24Url(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    // Блокируем loopback и link-local
+    if (
+      host === "localhost" ||
+      host.startsWith("127.") ||
+      host.startsWith("10.") ||
+      host.startsWith("192.168.") ||
+      host.startsWith("169.254.") ||
+      host === "0.0.0.0" ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    ) return false;
+    // Разрешаем только Bitrix24-домены
+    return host.includes("bitrix24.");
+  } catch {
+    return false;
+  }
+}
+
 async function handleWebhook(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const clientId = searchParams.get("clientId");
@@ -111,6 +137,11 @@ async function handleWebhook(req: NextRequest) {
   }
   try {
     if (settingsMap.b24_webhook_url) {
+      if (!isSafeB24Url(settingsMap.b24_webhook_url)) {
+        console.error("Blocked SSRF attempt: invalid b24_webhook_url:", settingsMap.b24_webhook_url);
+        return NextResponse.json({ error: "Invalid webhook URL configuration" }, { status: 500 });
+      }
+
       const template = settingsMap.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}";
       const message = template.replace("{surveyUrl}", surveyUrl);
       const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");

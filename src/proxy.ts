@@ -38,7 +38,9 @@ export async function proxy(req: NextRequest) {
     path.startsWith("/api/test-b24-notification") ||
     // Sync-запросы с API ключом (внешние интеграции)
     path.startsWith("/api/rating-bridge") ||
-    path.startsWith("/api/sync-manual");
+    path.startsWith("/api/sync-manual") ||
+    // Analytics записывается со страницы опроса (без сессии)
+    path === "/api/analytics";
 
   if (isPublicPath) {
     return NextResponse.next();

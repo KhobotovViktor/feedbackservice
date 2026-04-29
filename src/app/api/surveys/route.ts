@@ -3,6 +3,26 @@ import { prisma } from "@/lib/prisma";
 import { verifySurveyToken } from "@/lib/auth-utils";
 import { getSession } from "@/lib/auth";
 
+function isSafeB24Url(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host.startsWith("127.") ||
+      host.startsWith("10.") ||
+      host.startsWith("192.168.") ||
+      host.startsWith("169.254.") ||
+      host === "0.0.0.0" ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    ) return false;
+    return host.includes("bitrix24.");
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { token, answers, comment, averageScore } = await req.json();
@@ -71,7 +91,7 @@ export async function POST(req: NextRequest) {
         return acc;
       }, {});
 
-      if (settingsMap.b24_webhook_url) {
+      if (settingsMap.b24_webhook_url && isSafeB24Url(settingsMap.b24_webhook_url)) {
         const cleanBaseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
         
         const updateData: any = {};

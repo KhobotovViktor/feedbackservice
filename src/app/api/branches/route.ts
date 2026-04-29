@@ -51,13 +51,9 @@ export async function GET() {
       _serverTime: new Date().toISOString(),
       _count: branches.length
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("FETCH_BRANCHES_ERROR:", error);
-    return NextResponse.json({ 
-      error: "Failed to fetch branches", 
-      details: error.message,
-      code: error.code 
-    }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch branches" }, { status: 500 });
   }
 }
 
