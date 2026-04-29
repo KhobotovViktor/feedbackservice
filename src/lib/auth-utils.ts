@@ -1,10 +1,17 @@
 import { SignJWT, jwtVerify } from "jose";
 
-if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET environment variable is not set.");
+// Lazy key initialization — проверка происходит в runtime, а не во время сборки
+let _jwtSecret: Uint8Array | null = null;
+function getJwtSecret(): Uint8Array {
+  if (!_jwtSecret) {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      throw new Error("JWT_SECRET environment variable is not set.");
+    }
+    _jwtSecret = new TextEncoder().encode(secret);
+  }
+  return _jwtSecret;
 }
-
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 export async function createSurveyToken(
   clientId: string,
@@ -17,7 +24,7 @@ export async function createSurveyToken(
   return await new SignJWT({ clientId, dealId, branchId, isTest, templateId, responsibleName })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function createQRToken(branchId?: string | null) {
@@ -25,12 +32,12 @@ export async function createQRToken(branchId?: string | null) {
   return await new SignJWT({ clientId: uniqueId, dealId: uniqueId, branchId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifySurveyToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return payload as {
       clientId: string;
       dealId: string;

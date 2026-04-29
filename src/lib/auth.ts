@@ -2,22 +2,29 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { createHash } from "crypto";
 
-if (!process.env.AUTH_SECRET) {
-  throw new Error("AUTH_SECRET environment variable is not set.");
+// Lazy key initialization — проверка происходит в runtime, а не во время сборки
+let _key: Uint8Array | null = null;
+function getKey(): Uint8Array {
+  if (!_key) {
+    const secret = process.env.AUTH_SECRET;
+    if (!secret) {
+      throw new Error("AUTH_SECRET environment variable is not set.");
+    }
+    _key = new TextEncoder().encode(secret);
+  }
+  return _key;
 }
-
-const key = new TextEncoder().encode(process.env.AUTH_SECRET);
 
 export async function encrypt(payload: Record<string, unknown>) {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("24h")
-    .sign(key);
+    .sign(getKey());
 }
 
 export async function decrypt(input: string): Promise<Record<string, unknown>> {
-  const { payload } = await jwtVerify(input, key, {
+  const { payload } = await jwtVerify(input, getKey(), {
     algorithms: ["HS256"],
   });
   return payload as Record<string, unknown>;
