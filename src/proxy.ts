@@ -1,73 +1,83 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-const secretKey = "admin_secret_key_change_me_in_prod";
-const key = new TextEncoder().encode(process.env.AUTH_SECRET || secretKey);
+// Lazy key initialization — не бросает во время сборки
+let _key: Uint8Array | null = null;
+function getKey(): Uint8Array | null {
+  if (_key) return _key;
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) return null;
+  _key = new TextEncoder().encode(secret);
+  return _key;
+}
 
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
 
-  // 1. Dynamic check for static assets (fallback for matcher)
+  // 1. Пропускаем статические ресурсы
   if (
-    path.includes(".") || 
-    path.startsWith("/_next") || 
+    path.includes(".") ||
+    path.startsWith("/_next") ||
     path.startsWith("/icons/") ||
     path === "/favicon.ico"
   ) {
     return NextResponse.next();
   }
 
-  // 2. Define public paths and bypasses
-  const isPublicPath = 
-    path === "/login" || 
-    path === "/privacy" || 
-    path.startsWith("/survey") || 
-    path.startsWith("/s/") || 
+  // 2. Публичные маршруты — не требуют авторизации
+  const isPublicPath =
+    path === "/" ||
+    path === "/login" ||
+    path === "/privacy" ||
+    path === "/terms" ||
+    path.startsWith("/survey") ||
+    path.startsWith("/s/") ||
     path.startsWith("/api/auth") ||
     path.startsWith("/api/surveys") ||
-    path.startsWith("/api/rating-bridge") ||
-    path.includes("rating-bridge") ||
     path.startsWith("/api/b24/webhook") ||
     path.startsWith("/api/test-b24-notification") ||
-    // Robust Sync Bypass: If it has an API Key in query or headers, it's a sync request
-    req.nextUrl.searchParams.has("apiKey") ||
-    req.headers.has("x-api-key");
+    // Sync-запросы с API ключом (внешние интеграции)
+    path.startsWith("/api/rating-bridge") ||
+    path.startsWith("/api/sync-manual");
 
   if (isPublicPath) {
     return NextResponse.next();
   }
 
-  // 3. Session validation for protected paths
-  const session = req.cookies.get("session")?.value;
-
-  if (!session) {
+  // 3. Если AUTH_SECRET не задан — сервер неправильно настроен
+  const key = getKey();
+  if (!key) {
     if (path.startsWith("/api/")) {
-      return NextResponse.json({ 
-        error: "Unauthorized", 
-        path 
-      }, { status: 401 });
+      return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
     }
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
+  // 4. Проверяем сессию
+  const session = req.cookies.get("session")?.value;
+
+  if (!session) {
+    if (path.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("from", path);
+    return NextResponse.redirect(loginUrl);
+  }
+
   try {
-    await jwtVerify(session, key);
+    await jwtVerify(session, key, { algorithms: ["HS256"] });
     return NextResponse.next();
-  } catch (error) {
-    console.error("Middleware Auth Error:", error);
+  } catch {
+    if (path.startsWith("/api/")) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL("/login", req.url));
   }
 }
 
-// Next.js config for the Edge Proxy / Middleware
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };
