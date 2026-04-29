@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     }
 
     const ratingVal = parseFloat(rating);
-    const reviewCountVal = parseInt(reviewCount);
+    const reviewCountVal = parseInt(reviewCount, 10);
     if (isNaN(ratingVal) || isNaN(reviewCountVal)) {
       return NextResponse.json({ error: "Invalid rating or reviewCount" }, { status: 400 });
     }

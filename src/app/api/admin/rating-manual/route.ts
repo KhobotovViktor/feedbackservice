@@ -34,7 +34,7 @@ export async function POST(req: Request) {
         branchId,
         service,
         rating: parseFloat(rating),
-        reviewCount: parseInt(reviewCount),
+        reviewCount: parseInt(reviewCount, 10),
       }
     });
 

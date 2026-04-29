@@ -74,8 +74,15 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({ where: { username } });
 
+    // Use the same error message for both wrong username and wrong password
+    // to prevent username enumeration attacks.
+    const invalidCredentials = NextResponse.json(
+      { error: "Неверное имя пользователя или пароль" },
+      { status: 401 }
+    );
+
     if (!user) {
-      return NextResponse.json({ error: "Неверное имя пользователя" }, { status: 401 });
+      return invalidCredentials;
     }
 
     // Verify with bcrypt first; fall back to legacy SHA-256 for transparent migration
@@ -88,7 +95,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!isValid) {
-      return NextResponse.json({ error: "Неверный пароль" }, { status: 401 });
+      return invalidCredentials;
     }
 
     // Upgrade legacy SHA-256 hash to bcrypt transparently

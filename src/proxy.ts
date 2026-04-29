@@ -76,7 +76,6 @@ export async function proxy(req: NextRequest) {
     path.startsWith("/api/auth") ||
     path.startsWith("/api/surveys") ||
     path.startsWith("/api/b24/webhook") ||
-    path.startsWith("/api/test-b24-notification") ||
     // Sync-requests with API key (external integrations)
     path.startsWith("/api/rating-bridge") ||
     path.startsWith("/api/sync-manual") ||

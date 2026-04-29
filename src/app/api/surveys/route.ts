@@ -25,7 +25,7 @@ function isSafeB24Url(url: string): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-    const { token, answers, comment, averageScore } = await req.json();
+    const { token, answers, comment } = await req.json();
 
     const payload = await verifySurveyToken(token);
     if (!payload) {
@@ -33,6 +33,19 @@ export async function POST(req: NextRequest) {
     }
 
     const { clientId, dealId, isTest } = payload;
+
+    // Validate answers
+    const answersMap = (answers ?? {}) as Record<string, number>;
+    const scores = Object.values(answersMap).filter(
+      (v) => typeof v === "number" && !isNaN(v)
+    );
+    if (scores.length === 0) {
+      return NextResponse.json({ error: "No valid answers provided" }, { status: 400 });
+    }
+
+    // Recalculate averageScore server-side — never trust client value
+    const averageScore =
+      Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
 
     // Sandbox mode for testing
     if (isTest) {
@@ -47,9 +60,7 @@ export async function POST(req: NextRequest) {
     const recentSurvey = await prisma.surveyResponse.findFirst({
       where: {
         clientId,
-        createdAt: {
-          gte: sixMonthsAgo,
-        },
+        createdAt: { gte: sixMonthsAgo },
       },
     });
 
@@ -65,7 +76,7 @@ export async function POST(req: NextRequest) {
       try {
         const sent = await prisma.sentSurvey.findUnique({ where: { dealId } });
         if (sent?.responsibleName) responsibleName = sent.responsibleName;
-      } catch (e) {}
+      } catch (_) {}
     }
 
     // Save response
@@ -81,10 +92,10 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Handle B24 Field Mapping
+    // Handle B24 Field Mapping + Group Chat Notification
     try {
       const settings = await prisma.settings.findMany({
-        where: { key: { startsWith: "b24_" } }
+        where: { key: { startsWith: "b24_" } },
       });
       const settingsMap = settings.reduce((acc: Record<string, string>, curr: any) => {
         acc[curr.key] = curr.value;
@@ -92,132 +103,143 @@ export async function POST(req: NextRequest) {
       }, {});
 
       if (settingsMap.b24_webhook_url && isSafeB24Url(settingsMap.b24_webhook_url)) {
-        const cleanBaseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
-        
-        const updateData: any = {};
-        
-        // Map scores
-        // We look for specific questions by keywords
-        const questionsRes = await fetch(`${req.nextUrl.origin}/api/questions`);
-        if (!questionsRes.ok) {
-          console.error("Failed to fetch questions for B24 mapping, skipping field update");
-          return NextResponse.json({ success: true });
+        const cleanBaseUrl = settingsMap.b24_webhook_url
+          .replace(/\/$/, "")
+          .replace(/\/(profile\.json|profile)$/, "");
+
+        // Fetch questions — used for both field mapping and notification message.
+        // If the fetch fails we skip field mapping but still attempt the chat notification.
+        let questions: any[] = [];
+        try {
+          const questionsRes = await fetch(`${req.nextUrl.origin}/api/questions`);
+          if (questionsRes.ok) {
+            questions = await questionsRes.json();
+          } else {
+            console.error("Failed to fetch questions for B24 mapping");
+          }
+        } catch (qErr) {
+          console.error("Questions fetch threw:", qErr);
         }
-        const questions = await questionsRes.json();
-        
-        const answersMap = answers as Record<string, number>;
-        
-        // 1. Quality of service
-        if (settingsMap.b24_field_quality) {
-          const q = questions.find((q: any) => 
-            q.text.toLowerCase().includes("качество обслуживания") || 
-            q.text.toLowerCase().includes("аллея мебели")
-          );
-          if (q && answersMap[q.id]) {
-            updateData[settingsMap.b24_field_quality] = answersMap[q.id];
-          } else if (questions[0] && answersMap[questions[0].id]) {
-            // Fallback to first question
-            updateData[settingsMap.b24_field_quality] = answersMap[questions[0].id];
+
+        // 1–4. Update Bitrix24 deal fields
+        if (questions.length > 0) {
+          const updateData: any = {};
+
+          // 1. Quality of service
+          if (settingsMap.b24_field_quality) {
+            const q = questions.find(
+              (q: any) =>
+                q.text.toLowerCase().includes("качество обслуживания") ||
+                q.text.toLowerCase().includes("аллея мебели")
+            );
+            if (q && answersMap[q.id]) {
+              updateData[settingsMap.b24_field_quality] = answersMap[q.id];
+            } else if (questions[0] && answersMap[questions[0].id]) {
+              updateData[settingsMap.b24_field_quality] = answersMap[questions[0].id];
+            }
+          }
+
+          // 2. Support worker
+          if (settingsMap.b24_field_support) {
+            const q = questions.find(
+              (q: any) =>
+                q.text.toLowerCase().includes("работу сотрудника") ||
+                q.text.toLowerCase().includes("службы поддержки")
+            );
+            if (q && answersMap[q.id]) {
+              updateData[settingsMap.b24_field_support] = answersMap[q.id];
+            } else if (questions[1] && answersMap[questions[1].id]) {
+              updateData[settingsMap.b24_field_support] = answersMap[questions[1].id];
+            }
+          }
+
+          // 3. Average
+          if (settingsMap.b24_field_average) {
+            updateData[settingsMap.b24_field_average] = averageScore;
+          }
+
+          // 4. Comment (only if negative)
+          if (settingsMap.b24_field_comment && averageScore < 4 && comment) {
+            updateData[settingsMap.b24_field_comment] = comment;
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            console.log(
+              `Updating Bitrix24 Deal ${dealId} with:`,
+              JSON.stringify(updateData)
+            );
+            await fetch(`${cleanBaseUrl}/crm.deal.update.json`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: dealId, fields: updateData }),
+            });
           }
         }
 
-        // 2. Support worker
-        if (settingsMap.b24_field_support) {
-          const q = questions.find((q: any) => 
-            q.text.toLowerCase().includes("работу сотрудника") || 
-            q.text.toLowerCase().includes("службы поддержки")
-          );
-          if (q && answersMap[q.id]) {
-            updateData[settingsMap.b24_field_support] = answersMap[q.id];
-          } else if (questions[1] && answersMap[questions[1].id]) {
-            // Fallback to second question
-            updateData[settingsMap.b24_field_support] = answersMap[questions[1].id];
-          }
-        }
-
-        // 3. Average
-        if (settingsMap.b24_field_average) {
-          updateData[settingsMap.b24_field_average] = averageScore;
-        }
-
-        // 4. Comment (only if negative, e.g. < 4)
-        if (settingsMap.b24_field_comment && averageScore < 4 && comment) {
-          updateData[settingsMap.b24_field_comment] = comment;
-        }
-
-        if (Object.keys(updateData).length > 0) {
-          console.log(`Updating Bitrix24 Deal ${dealId} with:`, JSON.stringify(updateData));
-          await fetch(`${cleanBaseUrl}/crm.deal.update.json`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id: dealId,
-              fields: updateData
-            })
-          });
-        }
-
-        // 5. SEND GROUP CHAT NOTIFICATION FOR NEGATIVE FEEDBACK
+        // 5. Group chat notification for negative feedback
         const notifyThreshold = 4;
         if (averageScore < notifyThreshold && settingsMap.b24_group_chat_id) {
           const branchId = payload.branchId;
           let branchName = "Неизвестный филиал";
-          
+
           if (branchId) {
             const b = await prisma.branch.findUnique({ where: { id: branchId } });
             if (b) branchName = b.name;
           }
 
-          console.log(`Negative feedback detected (Score: ${averageScore}) for ${branchName}. Sending notification to group chat ${settingsMap.b24_group_chat_id}`);
-          
+          console.log(
+            `Negative feedback (Score: ${averageScore}) for ${branchName}. Notifying chat ${settingsMap.b24_group_chat_id}`
+          );
+
           let alertMessage = `⚠️ [b]ОТРИЦАТЕЛЬНЫЙ ОТЗЫВ[/b]\n\n`;
           alertMessage += `🏢 [b]Филиал:[/b] ${branchName}\n`;
           alertMessage += `👤 [b]Клиент:[/b] ${clientId}\n`;
-          alertMessage += `🔗 [b]Сделка:[/b] [url=${cleanBaseUrl.replace('/rest/', '/crm/deal/details/')}${dealId}/]${dealId}[/url]\n`;
+          alertMessage += `🔗 [b]Сделка:[/b] [url=${cleanBaseUrl.replace(
+            "/rest/",
+            "/crm/deal/details/"
+          )}${dealId}/]${dealId}[/url]\n`;
           alertMessage += `⭐ [b]Средняя оценка:[/b] ${averageScore.toFixed(1)}\n\n`;
-          
-          // List ratings
-          alertMessage += `[b]Оценки:[/b]\n`;
+
+          // List ratings per question (use fetched questions if available)
           let displayQuestions = questions;
-          
           if (branchId) {
-            const branchData = await prisma.branch.findUnique({
-              where: { id: branchId },
-              include: { 
-                template: { include: { questions: { orderBy: { order: 'asc' } } } }
-              }
-            });
-            
-            if (branchData) {
-              const templateQs = branchData.template?.questions;
-              
+            try {
+              const branchData = await prisma.branch.findUnique({
+                where: { id: branchId },
+                include: {
+                  template: {
+                    include: { questions: { orderBy: { order: "asc" } } },
+                  },
+                },
+              });
+              const templateQs = branchData?.template?.questions;
               if (templateQs && templateQs.length > 0) {
                 displayQuestions = templateQs as any;
+              }
+            } catch (_) {}
+          }
+
+          if (displayQuestions.length > 0) {
+            alertMessage += `[b]Оценки:[/b]\n`;
+            for (const q of displayQuestions) {
+              const score = answersMap[q.id];
+              if (score !== undefined) {
+                alertMessage += `- ${q.text}: ${score}\n`;
               }
             }
           }
 
-          for (const q of displayQuestions) {
-            const score = answersMap[q.id];
-            if (score !== undefined) {
-              alertMessage += `- ${q.text}: ${score}\n`;
-            }
-          }
-          
           if (comment) {
             alertMessage += `\n💬 [b]Комментарий:[/b] ${comment}`;
           }
 
           const rawChatId = settingsMap.b24_group_chat_id.trim();
-          const dialogId = rawChatId.startsWith('chat') ? rawChatId : `chat${rawChatId}`;
+          const dialogId = rawChatId.startsWith("chat") ? rawChatId : `chat${rawChatId}`;
 
           await fetch(`${cleanBaseUrl}/im.message.add.json`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              DIALOG_ID: dialogId,
-              MESSAGE: alertMessage
-            })
+            body: JSON.stringify({ DIALOG_ID: dialogId, MESSAGE: alertMessage }),
           });
         }
       }

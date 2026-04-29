@@ -39,7 +39,12 @@ export default function SurveyPage() {
         const data = await res.json();
         
         if (!res.ok) {
-          setError(data.error || "Ошибка загрузки");
+          // 429 means survey already completed — show "already done" screen, not error
+          if (res.status === 429) {
+            setAlreadyCompleted(true);
+          } else {
+            setError(data.error || "Ошибка загрузки");
+          }
           return;
         }
 
@@ -96,7 +101,8 @@ export default function SurveyPage() {
   }, [token]);
 
   const handleSubmitRating = async () => {
-    const scores = Object.values(answers);
+    const scores = Object.values(answers).filter((v) => typeof v === "number");
+    if (scores.length === 0) return;
     const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
     
     // Positive if average is >= threshold
@@ -146,7 +152,8 @@ export default function SurveyPage() {
   };
 
   const handleSubmitFeedback = async () => {
-    const scores = Object.values(answers);
+    const scores = Object.values(answers).filter((v) => typeof v === "number");
+    if (scores.length === 0) return;
     const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
     await submitFeedback(avg, false);
   };
