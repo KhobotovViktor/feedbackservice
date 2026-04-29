@@ -1,10 +1,10 @@
 import { PrismaClient } from "@prisma/client";
-import { createHash } from "crypto";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-function hashPassword(password: string) {
-  return createHash("sha256").update(password).digest("hex");
+async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 12);
 }
 
 async function main() {
@@ -17,10 +17,10 @@ async function main() {
 
   await prisma.user.upsert({
     where: { username: adminUsername },
-    update: {},
+    update: { password: await hashPassword(adminPassword) },
     create: {
       username: adminUsername,
-      password: hashPassword(adminPassword),
+      password: await hashPassword(adminPassword),
     }
   });
 

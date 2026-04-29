@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyPassword, login as setSession } from "@/lib/auth";
+import { verifyPassword, isSha256Hash, verifySha256Password, hashPassword, login as setSession } from "@/lib/auth";
 
 // In-memory rate limiter (сбрасывается при рестарте, достаточно для Edge/Serverless)
 // Структура: IP -> { count: number; lockedUntil: number; windowStart: number }
@@ -78,9 +78,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Неверное имя пользователя" }, { status: 401 });
     }
 
-    const isValid = verifyPassword(password, user.password);
+    // Verify with bcrypt first; fall back to legacy SHA-256 for transparent migration
+    let isValid = await verifyPassword(password, user.password);
+    let needsUpgrade = false;
+
+    if (!isValid && isSha256Hash(user.password)) {
+      isValid = verifySha256Password(password, user.password);
+      if (isValid) needsUpgrade = true;
+    }
+
     if (!isValid) {
       return NextResponse.json({ error: "Неверный пароль" }, { status: 401 });
+    }
+
+    // Upgrade legacy SHA-256 hash to bcrypt transparently
+    if (needsUpgrade) {
+      const newHash = await hashPassword(password);
+      await prisma.user.update({ where: { id: user.id }, data: { password: newHash } });
     }
 
     // Успешный вход — сбросить счётчик попыток

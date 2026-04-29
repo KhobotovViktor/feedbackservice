@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { createHash } from "crypto";
+import bcrypt from "bcryptjs";
 
 // Lazy key initialization — проверка происходит в runtime, а не во время сборки
 let _key: Uint8Array | null = null;
@@ -62,10 +63,21 @@ export async function logout() {
   });
 }
 
-export function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
+const BCRYPT_ROUNDS = 12;
+
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
-export function verifyPassword(password: string, hash: string): boolean {
-  return hashPassword(password) === hash;
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
+}
+
+// Migration helpers: detect and verify legacy SHA-256 (unsalted) hashes
+export function isSha256Hash(hash: string): boolean {
+  return /^[0-9a-f]{64}$/.test(hash);
+}
+
+export function verifySha256Password(password: string, hash: string): boolean {
+  return createHash("sha256").update(password).digest("hex") === hash;
 }
