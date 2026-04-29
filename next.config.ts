@@ -1,17 +1,7 @@
 import type { NextConfig } from "next";
 
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "form-action 'self'",
-  "base-uri 'self'",
-].join("; ");
-
+// CSP is generated dynamically per-request in src/proxy.ts (nonce-based).
+// Static security headers that do not need per-request values live here.
 const nextConfig: NextConfig = {
   async headers() {
     return [
@@ -30,7 +20,6 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
           },
-          { key: "Content-Security-Policy", value: CSP },
         ],
       },
     ];

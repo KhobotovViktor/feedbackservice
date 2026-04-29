@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Printer, Loader2 } from "lucide-react";
+import "./print.css";
 
 export default function QRPrintPage() {
   const params = useParams();
@@ -127,35 +128,6 @@ export default function QRPrintPage() {
         <div className="w-full h-6 premium-gradient absolute bottom-0 left-0" />
       </div>
 
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          body, html {
-            background: white !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            height: 100% !important;
-            overflow: hidden !important;
-          }
-          @page {
-            size: A4 portrait;
-            margin: 0 !important;
-          }
-          .min-h-screen {
-            min-height: 0 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            height: auto !important;
-          }
-          /* Fix for container shadow and exact sizing */
-          div[class*="w-[210mm]"] {
-            box-shadow: none !important;
-            border: none !important;
-            margin: 0 !important;
-            page-break-after: avoid;
-            page-break-before: avoid;
-          }
-        }
-      ` }} />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -31,11 +32,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+// Reading x-nonce causes Next.js App Router to automatically apply the nonce
+// to all inline scripts it generates (hydration bootstrap, etc.).
+// The nonce itself is generated per-request in src/proxy.ts.
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _nonce = (await headers()).get("x-nonce") ?? "";
+
   return (
     <html lang="ru">
       <body className={`${inter.className} antialiased noise-overlay min-h-screen bg-slate-50 text-slate-900`}>
