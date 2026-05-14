@@ -53,3 +53,6 @@ google_njs_test.html
 /scripts/**/*.html
 /scripts/**/*.json
 /tmp_test*.js
+
+# deployment helpers (contain credentials)
+/.deploy
