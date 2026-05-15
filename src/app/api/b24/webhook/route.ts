@@ -87,11 +87,14 @@ async function handleWebhook(req: NextRequest) {
   const b24TemplateId = settingsMap.b24_template_id;
   const token = await createSurveyToken(effectiveClientId, effectiveDealId, branchId, isTest, b24TemplateId, safeResponsibleName);
   
-  // Get base URL from env or request headers
+  // Get base URL from env or request headers.
+  // NEXT_PUBLIC_APP_URL is inlined at build time — must be set when building.
+  // Fallback strips default ports (:80/:443) so that nginx upstreams that
+  // pass "Host $host:443" don't produce ugly survey links.
   let appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (!appUrl || appUrl.includes("localhost")) {
-    const host = req.headers.get("host");
-    const protocol = host?.includes("localhost") ? "http" : "https";
+    let host = (req.headers.get("host") || "").replace(/:(?:80|443)$/, "");
+    const protocol = host.includes("localhost") ? "http" : "https";
     appUrl = `${protocol}://${host}`;
   }
   
