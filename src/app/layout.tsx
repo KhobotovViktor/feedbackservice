@@ -5,7 +5,13 @@ import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
 
+// Public origin, baked in at build time (.env.production). Used as the base
+// for OG/canonical URLs. metadataBase lets Next resolve relative metadata
+// URLs against the right host instead of a hard-coded deploy domain.
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://feedback.alleyadoma.ru";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(APP_URL),
   title: "Аллея Мебели — Сервис сбора отзывов",
   description: "Официальный сервис сбора обратной связи для клиентов сети мебельных салонов «Аллея Мебели». Ваше мнение помогает нам стать лучше.",
   keywords: ["отзывы", "аллея мебели", "обратная связь", "оценка сервиса"],
@@ -13,7 +19,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Аллея Мебели — Сервис сбора отзывов",
     description: "Поделитесь вашим мнением о нашей работе",
-    url: "https://alleyafeedbackservice.vercel.app",
+    url: APP_URL,
     siteName: "Аллея Фидбек",
     locale: "ru_RU",
     type: "website",

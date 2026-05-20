@@ -7,7 +7,7 @@
 - **Фреймворк**: Next.js (App Router)
 - **Стилизация**: Tailwind CSS + Framer Motion
 - **База данных**: PostgreSQL (Supabase) + Prisma ORM
-- **Деплой**: Vercel
+- **Деплой**: Node.js за nginx, процесс-менеджер PM2 (self-host на Linux VM)
 
 ## Быстрый старт (Локально)
 
@@ -16,19 +16,27 @@
 3. Синхронизируйте базу: `npx prisma db push`
 4. Запустите: `npm run dev`
 
-## Деплой на Vercel
+## Сборка и деплой (self-host)
 
-1. Создайте новый репозиторий на GitHub и загрузите туда содержимое папки `feedback-service`.
-2. В Vercel нажмите **Add New Project** и выберите ваш репозиторий.
-3. В разделе **Environment Variables** добавьте следующие переменные:
-   - `DATABASE_URL`: Строка подключения Supabase (Transaction mode, порт 6543)
-   - `DIRECT_URL`: Строка подключения Supabase (Session mode, порт 5432)
-   - `NEXT_PUBLIC_APP_URL`: Публичный адрес вашего проекта (после деплоя)
-   - `JWT_SECRET`: Любая секретная строка для подписи ссылок
-4. Нажмите **Deploy**.
-5. После завершения деплоя, не забудьте обновить `NEXT_PUBLIC_APP_URL` значением реального адреса вашего сайта.
+Прод работает на `https://feedback.alleyadoma.ru` (Node.js + PM2 за nginx).
+
+1. Публичные переменные на этапе сборки задаются в `.env.production`
+   (например, `NEXT_PUBLIC_APP_URL=https://feedback.alleyadoma.ru`). Они
+   **впекаются в бандл** на `next build`, поэтому должны быть заданы до сборки.
+2. Серверные секреты (`DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`,
+   `AUTH_SECRET`, `ADMIN_*`) лежат в `.env` на сервере (mode 600, не в git)
+   и читаются в рантайме.
+3. Сборка: `npm run build` (используется webpack; Turbopack отключён —
+   он несовместим с Prisma в режиме `next start`).
+4. На сервере: `npx prisma generate`, затем запуск через PM2
+   (`pm2 start ecosystem.config.js`). Автозапуск после ребута — через
+   `crontab @reboot`.
+5. nginx проксирует `feedback.alleyadoma.ru` на `127.0.0.1:3000`.
 
 ## Интеграция с Битрикс24
 
 1. В админ-панели сервиса (`/admin/integration`) укажите ваш **Входящий вебхук** из Битрикс24.
-2. В Битрикс24 настройте Робота на стадию "Завершено", используя URL вебхука нашего сервиса: `https://ваша-ссылка.vercel.app/api/b24/webhook?clientId={{ID}}&dealId={{DEAL_ID}}`
+2. В Битрикс24 настройте Робота на финальную стадию воронки (сделки или лида),
+   используя URL вебхука нашего сервиса:
+   - для сделок: `https://feedback.alleyadoma.ru/api/b24/webhook?clientId={{ID}}&dealId={{ID}}`
+   - для лидов: `https://feedback.alleyadoma.ru/api/b24/webhook?clientId={{ID}}&leadId={{ID}}&entityType=lead`

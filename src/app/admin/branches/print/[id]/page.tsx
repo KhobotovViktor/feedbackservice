@@ -47,7 +47,12 @@ export default function QRPrintPage() {
     );
   }
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://alleyafeedbackservice.vercel.app';
+  // window.location.origin wins in the browser; the env value (baked at build
+  // time) is the SSR fallback so the printed QR never points at a stale deploy.
+  const origin =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL || "";
   const qrUrl = `${origin}/survey/qr?branchId=${branch.id}`;
   const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(qrUrl)}`;
 
