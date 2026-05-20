@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { 
   QrCode, X, Copy, Download, LayoutDashboard, Star, Printer, Play,
   TrendingUp, BarChart3, Plus, Loader2, Building2, MapPin, Trash2, 
-  Settings, Bot, ExternalLink, Zap, AlertTriangle
+  Settings, Bot, ExternalLink, Zap
 } from "lucide-react";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -59,7 +59,12 @@ export default function BranchesPage() {
   });
 
   const [showAutomationHub, setShowAutomationHub] = useState(false);
-  const [supabaseKey, setSupabaseKey] = useState("");
+  // SYNC_API_KEY — narrow key used by the Google Apps Script to push ratings
+  // into /api/sync-manual. (Replaces the old approach of handing the GAS a
+  // Supabase service_role key, which had full DB access.)
+  const [syncApiKey, setSyncApiKey] = useState("");
+  // Optional Serper.dev key for Google ratings (Google has no public scrape).
+  const [serperKey, setSerperKey] = useState("");
   const [templates, setTemplates] = useState<QuestionTemplate[]>([]);
   const [selectedForQR, setSelectedForQR] = useState<Branch | null>(null);
   const [selectedMetrics, setSelectedMetrics] = useState<Record<string, string>>({});
@@ -183,10 +188,10 @@ export default function BranchesPage() {
   };
 
   const generateGASScript = () => {
-    const supabaseProjectId = "wzwiuveclaldltkthbhl";
-    const supabaseUrl = `https://${supabaseProjectId}.supabase.co`;
-    const sKey = supabaseKey || "ВСТАВЬТЕ_SUPABASE_SERVICE_ROLE_KEY";
-    
+    const apiUrl = `${baseUrl}/api/sync-manual`;
+    const sKey = syncApiKey || "ВСТАВЬТЕ_SYNC_API_KEY";
+    const serper = serperKey || "";
+
     const branchesJson = JSON.stringify(branches.map(b => ({
       id: b.id,
       name: b.name,
@@ -196,15 +201,16 @@ export default function BranchesPage() {
     })));
 
     const scriptLines = [
-      '// --- Alleya Feedback: Direct Supabase Sync ---',
-      '// Используем Serper.dev (2500 бесплатных запросов, без СМС) для Google.',
+      '// --- Alleya Feedback: сбор рейтингов через Google Apps Script ---',
+      '// Запускается на серверах Google (не блокируется Яндекс/2ГИС) и',
+      '// отправляет результат в наш API /api/sync-manual по защищённому ключу.',
+      '// Google-рейтинг берётся через Serper.dev (нужен свой ключ; если поле',
+      '// пустое — Google просто пропускается, а Яндекс/2ГИС работают).',
       '',
       'function syncAllRatings() {',
-      '  const SUPABASE_URL = "' + supabaseUrl + '";',
-      '  const SUPABASE_KEY = "' + sKey + '";',
-      '  ',
-      '  // Вставьте ваш скопированный ключ от Serper.dev сюда:',
-      '  const SERPER_KEY = "0ab1c6f2b4d142fc488975965a37821d1626a3b9"; ',
+      '  const API_URL = "' + apiUrl + '";',
+      '  const SYNC_API_KEY = "' + sKey + '";',
+      '  const SERPER_KEY = "' + serper + '";',
       '',
       '  const branches = ' + branchesJson + ';',
       '',
@@ -212,19 +218,19 @@ export default function BranchesPage() {
       '    console.log("--- Синхронизация: " + branch.name + " ---");',
       '    ',
       '    if (branch.yandex) {',
-      '      syncService(branch.id, "yandex", branch.yandex, SUPABASE_URL, SUPABASE_KEY, SERPER_KEY);',
+      '      syncService(branch.id, "yandex", branch.yandex, API_URL, SYNC_API_KEY, SERPER_KEY);',
       '    }',
-      '    if (branch.googleSearch) {',
-      '      syncService(branch.id, "google", branch.googleSearch, SUPABASE_URL, SUPABASE_KEY, SERPER_KEY);',
+      '    if (branch.googleSearch && SERPER_KEY) {',
+      '      syncService(branch.id, "google", branch.googleSearch, API_URL, SYNC_API_KEY, SERPER_KEY);',
       '    }',
       '    if (branch.dgis) {',
-      '      syncService(branch.id, "2gis", branch.dgis, SUPABASE_URL, SUPABASE_KEY, SERPER_KEY);',
+      '      syncService(branch.id, "2gis", branch.dgis, API_URL, SYNC_API_KEY, SERPER_KEY);',
       '    }',
       '  });',
       '}',
       '',
-      'function syncService(branchId, service, urlOrQuery, supabaseUrl, supabaseKey, serperKey) {',
-      '  if (!urlOrQuery || !supabaseUrl) {',
+      'function syncService(branchId, service, urlOrQuery, apiUrl, syncApiKey, serperKey) {',
+      '  if (!urlOrQuery || !apiUrl) {',
       '    console.warn("⚠️ [" + (service || "UNKNOWN") + "] Пропуск: Отсутствуют данные.");',
       '    return;',
       '  }',
@@ -240,7 +246,7 @@ export default function BranchesPage() {
       '    if (service === "google" && serperKey) {',
       '      console.log("⏳ [GOOGLE] Отправка запроса в Serper API...");',
       '      ',
-      '      const apiUrl = "https://google.serper.dev/places";',
+      '      const apiUrlSerper = "https://google.serper.dev/places";',
       '      const payload = {',
       '        "q": urlOrQuery,',
       '        "gl": "ru",',
@@ -255,7 +261,7 @@ export default function BranchesPage() {
       '        muteHttpExceptions: true',
       '      };',
       '      ',
-      '      const resp = UrlFetchApp.fetch(apiUrl, options);',
+      '      const resp = UrlFetchApp.fetch(apiUrlSerper, options);',
       '      ',
       '      if (resp.getResponseCode() === 200) {',
       '        const json = JSON.parse(resp.getContentText());',
@@ -327,7 +333,7 @@ export default function BranchesPage() {
       '    }',
       '',
       '    // ==========================================',
-      '    // ФИНАЛИЗАЦИЯ И ЗАПИСЬ В SUPABASE',
+      '    // ФИНАЛИЗАЦИЯ И ОТПРАВКА В НАШ API',
       '    // ==========================================',
       '    if (!rating) {',
       '      console.warn("❌ [" + service.toUpperCase() + "] Данные не найдены.");',
@@ -338,30 +344,25 @@ export default function BranchesPage() {
       '    console.log("📍 [" + service.toUpperCase() + "] Найдено: " + rating + " (" + (count || 0) + " отз.)");',
       '',
       '    const payload = {',
-      '      id: Utilities.getUuid(),',
       '      branchId: branchId,',
       '      service: service,',
       '      rating: parseFloat(rating),',
-      '      reviewCount: parseInt(count || 0),',
-      '      createdAt: new Date().toISOString()',
+      '      reviewCount: parseInt(count || 0)',
       '    };',
       '',
-      '    const resp = UrlFetchApp.fetch(supabaseUrl + "/rest/v1/RatingHistory", {',
-      '      method: "POST",',
+      '    const resp = UrlFetchApp.fetch(apiUrl, {',
+      '      method: "post",',
       '      contentType: "application/json",',
-      '      headers: {',
-      '        "apikey": supabaseKey,',
-      '        "Authorization": "Bearer " + supabaseKey,',
-      '        "Prefer": "return=representation"',
-      '      },',
+      '      headers: { "x-api-key": syncApiKey },',
       '      payload: JSON.stringify(payload),',
       '      muteHttpExceptions: true',
       '    });',
       '',
-      '    if (resp.getResponseCode() === 201 || resp.getResponseCode() === 200) {',
-      '      console.log("✅ [" + service.toUpperCase() + "] Записано в Supabase: " + rating + " (" + (count || 0) + " отз.)");',
+      '    const code = resp.getResponseCode();',
+      '    if (code === 200 || code === 201) {',
+      '      console.log("✅ [" + service.toUpperCase() + "] Отправлено: " + rating + " (" + (count || 0) + " отз.)");',
       '    } else {',
-      '      console.error("❌ [" + service.toUpperCase() + "] Ошибка Supabase: " + resp.getResponseCode());',
+      '      console.error("❌ [" + service.toUpperCase() + "] Ошибка API: " + code);',
       '      console.error("   " + resp.getContentText().substring(0, 200));',
       '    }',
       '  } catch (e) {',
@@ -890,31 +891,48 @@ export default function BranchesPage() {
                </div>
 
                <div className="space-y-4">
-                   <div className="p-5 bg-amber-50/50 rounded-3xl border border-amber-200/50 space-y-3">
-                     <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-2">
-                       <AlertTriangle className="w-3.5 h-3.5" />
-                       Supabase Service Role Key
-                     </label>
-                     <input
-                       type="password"
-                       placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                       className="w-full px-5 py-3 bg-white border border-amber-200 rounded-2xl focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 outline-none transition-all text-xs font-mono"
-                       value={supabaseKey}
-                       onChange={e => setSupabaseKey(e.target.value)}
-                     />
-                     <p className="text-[10px] text-amber-600/70 font-bold">{"Supabase Dashboard \u2192 Settings \u2192 API \u2192 service_role (secret)"}</p>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div className="p-5 bg-indigo-50/40 rounded-3xl border border-indigo-200/50 space-y-3">
+                       <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                         <Bot className="w-3.5 h-3.5" />
+                         SYNC_API_KEY
+                       </label>
+                       <input
+                         type="password"
+                         placeholder="\u043a\u043b\u044e\u0447 \u0438\u0437 .env \u0441\u0435\u0440\u0432\u0435\u0440\u0430"
+                         className="w-full px-5 py-3 bg-white border border-indigo-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-xs font-mono"
+                         value={syncApiKey}
+                         onChange={e => setSyncApiKey(e.target.value)}
+                       />
+                       <p className="text-[10px] text-indigo-600/70 font-bold">\u041a\u043b\u044e\u0447 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u0438 (\u043f\u0435\u0440\u0435\u043c\u0435\u043d\u043d\u0430\u044f SYNC_API_KEY \u043d\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435)</p>
+                     </div>
+
+                     <div className="p-5 bg-slate-50/60 rounded-3xl border border-slate-200/50 space-y-3">
+                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                         <Star className="w-3.5 h-3.5" />
+                         Serper.dev API Key (\u043e\u043f\u0446.)
+                       </label>
+                       <input
+                         type="password"
+                         placeholder="\u0434\u043b\u044f \u0440\u0435\u0439\u0442\u0438\u043d\u0433\u0430 Google (\u043d\u0435\u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u043e)"
+                         className="w-full px-5 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-500/10 focus:border-slate-400 outline-none transition-all text-xs font-mono"
+                         value={serperKey}
+                         onChange={e => setSerperKey(e.target.value)}
+                       />
+                       <p className="text-[10px] text-slate-500/70 font-bold">serper.dev \u2192 2500 \u0431\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0445 \u0437\u0430\u043f\u0440\u043e\u0441\u043e\u0432. \u041f\u0443\u0441\u0442\u043e = Google \u043f\u0440\u043e\u043f\u0443\u0441\u043a\u0430\u0435\u0442\u0441\u044f.</p>
+                     </div>
                    </div>
 
                    <div className="flex justify-between items-center px-1">
                      <div className="flex items-center gap-2">
                         <Bot className="w-4 h-4 text-indigo-500" />
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Direct Supabase Sync Script</label>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Google Apps Script (push \u0432 \u043d\u0430\u0448 API)</label>
                      </div>
                      <button
                        onClick={() => {
-                         if (!supabaseKey) { alert("Paste Supabase service_role key first!"); return; }
+                         if (!syncApiKey) { alert("\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0432\u0441\u0442\u0430\u0432\u044c\u0442\u0435 SYNC_API_KEY!"); return; }
                          navigator.clipboard.writeText(generateGASScript());
-                         alert("Code copied!");
+                         alert("\u041a\u043e\u0434 \u0441\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d!");
                        }}
                        className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all flex items-center gap-2"
                      >
