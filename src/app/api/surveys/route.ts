@@ -72,12 +72,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let responsibleName = (payload as any).responsibleName || null;
+    // payload is typed by verifySurveyToken — responsibleName lives there.
+    let responsibleName: string | null = payload.responsibleName || null;
     if (!responsibleName && dealId) {
       try {
         const sent = await prisma.sentSurvey.findUnique({ where: { dealId } });
         if (sent?.responsibleName) responsibleName = sent.responsibleName;
-      } catch (_) {}
+      } catch {
+        // best-effort lookup — fall through to null
+      }
     }
 
     // Save response. SurveyResponse.dealId is @unique — two concurrent
@@ -112,10 +115,13 @@ export async function POST(req: NextRequest) {
       const settings = await prisma.settings.findMany({
         where: { key: { startsWith: "b24_" } },
       });
-      const settingsMap = settings.reduce((acc: Record<string, string>, curr: any) => {
-        acc[curr.key] = curr.value;
-        return acc;
-      }, {});
+      const settingsMap = settings.reduce<Record<string, string>>(
+        (acc, curr) => {
+          acc[curr.key] = curr.value;
+          return acc;
+        },
+        {}
+      );
 
       if (settingsMap.b24_webhook_url && isSafeB24Url(settingsMap.b24_webhook_url)) {
         const cleanBaseUrl = settingsMap.b24_webhook_url
@@ -124,11 +130,13 @@ export async function POST(req: NextRequest) {
 
         // Fetch questions — used for both field mapping and notification message.
         // If the fetch fails we skip field mapping but still attempt the chat notification.
-        let questions: any[] = [];
+        type Q = { id: string; text: string };
+        let questions: Q[] = [];
         try {
           const questionsRes = await fetch(`${getAppOrigin(req)}/api/questions`);
           if (questionsRes.ok) {
-            questions = await questionsRes.json();
+            const data = await questionsRes.json();
+            questions = Array.isArray(data) ? data : [];
           } else {
             console.error("Failed to fetch questions for B24 mapping");
           }
@@ -138,12 +146,12 @@ export async function POST(req: NextRequest) {
 
         // 1–4. Update Bitrix24 deal fields
         if (questions.length > 0) {
-          const updateData: any = {};
+          const updateData: Record<string, string | number> = {};
 
           // 1. Quality of service
           if (settingsMap.b24_field_quality) {
             const q = questions.find(
-              (q: any) =>
+              (q) =>
                 q.text.toLowerCase().includes("качество обслуживания") ||
                 q.text.toLowerCase().includes("аллея мебели")
             );
@@ -157,7 +165,7 @@ export async function POST(req: NextRequest) {
           // 2. Support worker
           if (settingsMap.b24_field_support) {
             const q = questions.find(
-              (q: any) =>
+              (q) =>
                 q.text.toLowerCase().includes("работу сотрудника") ||
                 q.text.toLowerCase().includes("службы поддержки")
             );

@@ -261,10 +261,18 @@ export default function SurveyPage() {
               <div className="space-y-10">
                 {questions.map((q) => (
                   <div key={q.id} className="space-y-4">
-                    <p className="font-bold text-slate-800 text-lg md:text-xl tracking-tight leading-snug">{q.text}</p>
-                    <StarRating 
-                      value={answers[q.id] || 0} 
-                      onChange={(val) => setAnswers(prev => ({ ...prev, [q.id]: val }))} 
+                    <p
+                      id={`question-${q.id}`}
+                      className="font-bold text-slate-800 text-lg md:text-xl tracking-tight leading-snug"
+                    >
+                      {q.text}
+                    </p>
+                    <StarRating
+                      label={q.text}
+                      value={answers[q.id] || 0}
+                      onChange={(val) =>
+                        setAnswers((prev) => ({ ...prev, [q.id]: val }))
+                      }
                     />
                   </div>
                 ))}
@@ -300,10 +308,15 @@ export default function SurveyPage() {
                 <p className="text-slate-500 font-medium">Ваш отзыв поможет нам стать лучше</p>
               </div>
 
+              <label htmlFor="survey-comment" className="sr-only">
+                Ваш комментарий
+              </label>
               <textarea
+                id="survey-comment"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Расскажите подробнее о вашем опыте..."
+                aria-label="Ваш комментарий"
                 className="w-full h-40 p-6 rounded-[1.5rem] bg-slate-50/50 border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all resize-none font-medium placeholder:text-slate-400"
               />
 

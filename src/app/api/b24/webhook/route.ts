@@ -106,7 +106,7 @@ async function handleWebhook(req: NextRequest) {
     where: { key: { in: ["b24_webhook_url", "b24_message_template", "b24_link_field", "b24_template_id"] } }
   });
   
-  const settingsMap = settings.reduce((acc: Record<string, string>, curr: any) => {
+  const settingsMap = settings.reduce<Record<string, string>>((acc, curr) => {
     acc[curr.key] = curr.value;
     return acc;
   }, {});
@@ -166,13 +166,21 @@ async function handleWebhook(req: NextRequest) {
       // 0. Fetch Deal data once to use for both Open Channel and Field Protection.
       // encodeURIComponent is belt-and-suspenders on top of isValidId() — neutralises
       // any odd character that slipped past validation when forming the URL.
-      let dealData: any = null;
+      // Shape of the Bitrix24 crm.deal.get response varies (custom UF_* fields
+      // are user-defined), so we type it as a permissive index map plus the
+      // few well-known fields we actually read.
+      type DealData = Record<string, unknown> & {
+        ASSIGNED_BY_ID?: string;
+        LEAD_ID?: string;
+        CONTACT_ID?: string;
+      };
+      let dealData: DealData | null = null;
       try {
         const dealRes = await fetch(
           `${baseUrl}/crm.deal.get.json?id=${encodeURIComponent(effectiveDealId)}`
         );
         const dealDataRaw = await dealRes.json();
-        dealData = dealDataRaw.result;
+        dealData = (dealDataRaw.result as DealData) ?? null;
       } catch (e) {
         console.error("Failed to fetch deal data for protection check:", e);
       }
@@ -204,7 +212,7 @@ async function handleWebhook(req: NextRequest) {
         sendCandidates.push(norm);
       };
       const assignedWebhook = assignedById
-        ? perOperatorWebhooks.find((w: { userId: string; url: string }) => w.userId === assignedById)
+        ? perOperatorWebhooks.find((w) => w.userId === assignedById)
         : undefined;
       if (assignedWebhook) {
         console.log(
@@ -227,23 +235,30 @@ async function handleWebhook(req: NextRequest) {
         // Modern way: a deal may have multiple contacts. crm.deal.contact.items.get
         // returns the full list (each with CONTACT_ID + IS_PRIMARY). Falling back
         // to the legacy primary-only dealData.CONTACT_ID if that call fails.
+        type DealContactItem = { CONTACT_ID?: string; IS_PRIMARY?: string };
         const dealContactIds: string[] = [];
         try {
           const contactsRes = await fetch(
             `${cleanBaseUrl}/crm.deal.contact.items.get.json?id=${encodeURIComponent(effectiveDealId)}`
           );
           const contactsRaw = await contactsRes.json();
-          const items = Array.isArray(contactsRaw.result) ? contactsRaw.result : [];
+          const items: DealContactItem[] = Array.isArray(contactsRaw.result)
+            ? contactsRaw.result
+            : [];
           // Put primary contact first so it gets the priority try.
           items
-            .sort((a: any, b: any) =>
-              (a.IS_PRIMARY === "Y" ? -1 : 0) - (b.IS_PRIMARY === "Y" ? -1 : 0)
+            .sort(
+              (a, b) =>
+                (a.IS_PRIMARY === "Y" ? -1 : 0) - (b.IS_PRIMARY === "Y" ? -1 : 0)
             )
-            .forEach((c: any) => {
+            .forEach((c) => {
               if (c?.CONTACT_ID) dealContactIds.push(String(c.CONTACT_ID));
             });
         } catch (e) {
-          console.error("crm.deal.contact.items.get failed, will fall back to dealData.CONTACT_ID", e);
+          console.error(
+            "crm.deal.contact.items.get failed, will fall back to dealData.CONTACT_ID",
+            e
+          );
         }
         if (dealContactIds.length === 0 && dealData?.CONTACT_ID) {
           dealContactIds.push(String(dealData.CONTACT_ID));

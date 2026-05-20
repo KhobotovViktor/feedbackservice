@@ -69,10 +69,16 @@ export default function LoginPage() {
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
                     <User size={18} />
                   </span>
+                  <label htmlFor="login-username" className="sr-only">
+                    Имя пользователя
+                  </label>
                   <input
+                    id="login-username"
                     type="text"
                     required
+                    autoComplete="username"
                     placeholder="Имя пользователя"
+                    aria-label="Имя пользователя"
                     className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-700 font-medium"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -83,10 +89,16 @@ export default function LoginPage() {
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
                     <Lock size={18} />
                   </span>
+                  <label htmlFor="login-password" className="sr-only">
+                    Пароль
+                  </label>
                   <input
+                    id="login-password"
                     type="password"
                     required
+                    autoComplete="current-password"
                     placeholder="Пароль"
+                    aria-label="Пароль"
                     className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-700 font-medium"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
