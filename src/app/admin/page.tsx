@@ -1,13 +1,15 @@
 import { prisma } from "@/lib/prisma";
-import { Star, MessageSquare, Users, TrendingUp, QrCode, Eye, MousePointer2, AlertCircle, ArrowRight } from "lucide-react";
-import { CopyLinkButton } from "@/components/copy-link-button";
+import type { Prisma, Branch, RatingHistory, SurveyResponse } from "@prisma/client";
+import type { LucideIcon } from "lucide-react";
+import { Star, MessageSquare, Users, TrendingUp, Eye, MousePointer2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OverallMonitoring } from "@/components/dashboard/overall-monitoring";
+import { PeriodFilter } from "@/components/dashboard/period-filter";
 
 interface BentoCardProps {
   label: string;
   value: string | number;
-  icon: any;
+  icon: LucideIcon;
   color: string;
   bg: string;
   desc: string;
@@ -33,22 +35,21 @@ function BentoMetricCard({ label, value, icon: Icon, color, bg, desc, className 
   );
 }
 
-import { PeriodFilter } from "@/components/dashboard/period-filter";
-
-export default async function AdminDashboard({ 
-  searchParams 
-}: { 
-  searchParams: Promise<{ period?: string; from?: string; to?: string }> 
+export default async function AdminDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string; from?: string; to?: string }>;
 }) {
   const { period, from, to } = (await searchParams) || {};
-  
-  const safeDate = (dateStr: string | undefined) => {
+
+  const safeDate = (dateStr: string | undefined): Date | null => {
     if (!dateStr) return null;
     const d = new Date(dateStr);
     return isNaN(d.getTime()) ? null : d;
   };
 
-  let dateFilter: any = {};
+  type DateFilter = Prisma.DateTimeFilter;
+  let dateFilter: DateFilter = {};
   if (period === "30d") {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -63,10 +64,11 @@ export default async function AdminDashboard({
     }
   }
 
-  const whereWithDate = Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
+  const whereWithDate: { createdAt?: DateFilter } =
+    Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
 
   // Fetch Previous Period for Trends
-  let prevDateFilter: any = {};
+  let prevDateFilter: DateFilter = {};
   if (period === "30d") {
     const startOfPrev30 = new Date();
     startOfPrev30.setDate(startOfPrev30.getDate() - 60);
@@ -78,18 +80,23 @@ export default async function AdminDashboard({
     const toDate = safeDate(to);
     if (fromDate && toDate) {
       const diff = toDate.getTime() - fromDate.getTime();
-      prevDateFilter = { 
-        gte: new Date(fromDate.getTime() - diff), 
-        lt: fromDate 
+      prevDateFilter = {
+        gte: new Date(fromDate.getTime() - diff),
+        lt: fromDate,
       };
     }
   }
+
+  type BranchRow = Branch & {
+    surveyResponses: Pick<SurveyResponse, "averageScore">[];
+    ratingHistory: RatingHistory[];
+  };
 
   let totalResponses = 0;
   let totalViews = 0;
   let totalClicks = 0;
   let negativeResponses = 0;
-  let branchesRaw: any[] = [];
+  let branchesRaw: BranchRow[] = [];
   let prevResponsesCount = 0;
 
   try {
@@ -97,20 +104,24 @@ export default async function AdminDashboard({
       prisma.surveyResponse.count({ where: whereWithDate }),
       prisma.analyticsEvent.count({ where: { ...whereWithDate, type: "VIEW" } }),
       prisma.analyticsEvent.count({ where: { ...whereWithDate, type: "CLICK" } }),
-      prisma.surveyResponse.count({ where: { ...whereWithDate, averageScore: { lt: 4.5 } } }),
-      (prisma as any).branch.findMany({
+      prisma.surveyResponse.count({
+        where: { ...whereWithDate, averageScore: { lt: 4.5 } },
+      }),
+      prisma.branch.findMany({
         include: {
-          surveyResponses: { 
+          surveyResponses: {
             where: whereWithDate,
-            select: { averageScore: true } 
+            select: { averageScore: true },
           },
           ratingHistory: {
             where: whereWithDate,
-            orderBy: { createdAt: 'asc' }
-          }
-        }
+            orderBy: { createdAt: "asc" },
+          },
+        },
       }),
-      Object.keys(prevDateFilter).length > 0 ? prisma.surveyResponse.count({ where: { createdAt: prevDateFilter } }) : Promise.resolve(0)
+      Object.keys(prevDateFilter).length > 0
+        ? prisma.surveyResponse.count({ where: { createdAt: prevDateFilter } })
+        : Promise.resolve(0),
     ]);
 
     totalResponses = results[0];
@@ -123,13 +134,18 @@ export default async function AdminDashboard({
     console.error("Dashboard data fetch error:", err);
   }
 
-  let allScores: number[] = [];
-  const branchStats = (branchesRaw || []).map((branch: any) => {
-    const scores = (branch.surveyResponses || []).map((r: any) => r.averageScore);
-    allScores = [...allScores, ...scores];
-    const avg = scores.length > 0 ? (scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : 0;
+  const branchStats = branchesRaw.map((branch) => {
+    const scores = branch.surveyResponses.map((r) => r.averageScore);
+    const avg =
+      scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
     return { id: branch.id, name: branch.name, avg, count: scores.length };
   });
+  // `allScores` was being built by mutation inside the .map above, which
+  // React 19's immutability lint flags as a render-side effect. Compute it
+  // separately via flatMap — the result is identical and the linter is happy.
+  const allScores: number[] = branchesRaw.flatMap((b) =>
+    b.surveyResponses.map((r) => r.averageScore)
+  );
 
   const totalMeanValue = allScores.length > 0 
     ? (allScores.reduce((a, b) => a + b, 0) / allScores.length)
@@ -154,7 +170,7 @@ export default async function AdminDashboard({
   const clickThroughRate = totalResponses > 0 ? Math.round((totalClicks / totalResponses) * 100) : 0;
 
   // Aggregate history from all branches
-  const allHistory = (branchesRaw || []).flatMap((b: any) => b.ratingHistory || []);
+  const allHistory = branchesRaw.flatMap((b) => b.ratingHistory);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-1000">
@@ -291,7 +307,7 @@ export default async function AdminDashboard({
           </div>
           
           <div className="space-y-3 overflow-y-auto pr-2 flex-1 custom-scrollbar">
-            {branchStats.map((branch: any) => (
+            {branchStats.map((branch) => (
               <div key={branch.id} className="p-5 glass rounded-2xl hover:scale-[1.02] transition-all border-white/60 mb-1">
                 <div className="flex justify-between items-start mb-2">
                   <p className="font-bold text-slate-800 text-sm truncate pr-2">{branch.name}</p>
