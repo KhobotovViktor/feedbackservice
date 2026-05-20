@@ -63,7 +63,14 @@ export default function BranchesPage() {
   const [templates, setTemplates] = useState<QuestionTemplate[]>([]);
   const [selectedForQR, setSelectedForQR] = useState<Branch | null>(null);
   const [selectedMetrics, setSelectedMetrics] = useState<Record<string, string>>({});
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://alleyafeedbackservice.vercel.app';
+  // Public origin for QR codes / share links. Falls back to the build-time
+  // NEXT_PUBLIC_APP_URL during SSR. NEVER hard-code a deploy-specific host
+  // here — when the service moved off Vercel, every QR code in the field
+  // started pointing at the wrong domain.
+  const baseUrl =
+    typeof window !== 'undefined'
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL || '';
 
   const METRIC_OPTIONS = [
     { label: "Рейтинг Яндекс", value: "yandex-rating" },
@@ -129,7 +136,7 @@ export default function BranchesPage() {
     try {
       const url = editingBranch ? `/api/branches/${editingBranch.id}` : "/api/branches";
       const method = editingBranch ? "PATCH" : "POST";
-      
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -140,9 +147,16 @@ export default function BranchesPage() {
         setEditingBranch(null);
         setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", externalId: "", templateId: "" });
         fetchBranches();
+      } else {
+        // Surface backend rejection instead of silently doing nothing — the
+        // previous behavior left the modal open with no feedback when the
+        // user pressed Save against a 400/500.
+        const data = await res.json().catch(() => ({}));
+        alert(`Не удалось сохранить филиал: ${data.error || res.statusText}`);
       }
     } catch (err) {
       console.error(err);
+      alert("Ошибка сети при сохранении филиала. Проверьте соединение.");
     } finally {
       setSaving(false);
     }
@@ -150,13 +164,19 @@ export default function BranchesPage() {
 
   const handleDeleteBranch = async (id: string, name: string) => {
     if (!confirm(`Вы уверены, что хотите удалить филиал "${name}"? Это удалит все связанные вопросы и отзывы.`)) return;
-    
+
     try {
       setLoading(true);
       const res = await fetch(`/api/branches/${id}`, { method: "DELETE" });
-      if (res.ok) fetchBranches();
+      if (res.ok) {
+        fetchBranches();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`Не удалось удалить филиал: ${data.error || res.statusText}`);
+      }
     } catch (err) {
       console.error(err);
+      alert("Ошибка сети при удалении филиала.");
     } finally {
       setLoading(false);
     }
@@ -347,7 +367,7 @@ export default function BranchesPage() {
       '  } catch (e) {',
       '    console.error("🛑 Критическая ошибка " + service + ": " + e.toString());',
       '  }',
-      ']'
+      '}',
     ];
 
     return scriptLines.join('\\n');
@@ -785,17 +805,17 @@ export default function BranchesPage() {
               </div>
 
               <div className="aspect-square glass border-white/60 rounded-[3rem] p-8 md:p-10 flex items-center justify-center shadow-inner relative z-10">
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(`https://alleyafeedbackservice.vercel.app/survey/qr?branchId=${selectedForQR.id}`)}`}
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(`${baseUrl}/survey/qr?branchId=${selectedForQR.id}`)}`}
                   alt="Branch QR"
                   className="w-full h-full rounded-2xl shadow-sm"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
-                <button 
+                <button
                   onClick={() => {
-                    const url = `https://alleyafeedbackservice.vercel.app/survey/qr?branchId=${selectedForQR.id}`;
+                    const url = `${baseUrl}/survey/qr?branchId=${selectedForQR.id}`;
                     navigator.clipboard.writeText(url);
                     alert("Ссылка скопирована!");
                   }}
@@ -804,8 +824,8 @@ export default function BranchesPage() {
                   <Copy className="w-5 h-5" />
                   Ссылка
                 </button>
-                <a 
-                  href={`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(`https://alleyafeedbackservice.vercel.app/survey/qr?branchId=${selectedForQR.id}`)}`}
+                <a
+                  href={`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(`${baseUrl}/survey/qr?branchId=${selectedForQR.id}`)}`}
                   target="_blank"
                   download={`qr-${selectedForQR.name}.png`}
                   className="flex items-center justify-center gap-3 px-6 py-4 premium-gradient text-white rounded-2xl font-black shadow-2xl shadow-indigo-500/20 hover:scale-[1.03] transition-all text-sm"

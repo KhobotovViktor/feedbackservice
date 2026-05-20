@@ -63,8 +63,13 @@ async function handleSync(branchId: string, service: string, rating: string, rev
       serverTimestamp: new Date().toISOString()
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message, type: "SYNC_EXCEPTION" }, { status: 500 });
+    // Log details internally but never leak Prisma/SQL fragments to the
+    // anonymous caller (this route is reachable without auth — see proxy.ts).
+    console.error("rating-bridge sync exception:", err);
+    return NextResponse.json(
+      { error: "Sync failed", type: "SYNC_EXCEPTION" },
+      { status: 500 }
+    );
   }
 }
 
@@ -74,7 +79,7 @@ export async function POST(req: NextRequest) {
     const apiKey = req.headers.get("x-api-key") || body.apiKey;
     return handleSync(body.branchId, body.service, body.rating, body.reviewCount, apiKey);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("rating-bridge POST error:", err);
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }

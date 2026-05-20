@@ -44,9 +44,12 @@ export default function TemplatesPage() {
     try {
       const res = await fetch("/api/templates");
       const data = await res.json();
-      setTemplates(data);
+      // Guard against {error} responses — .map() in the JSX would crash
+      // the page if we let a non-array through.
+      setTemplates(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error(err);
+      console.error("fetchTemplates failed:", err);
+      setTemplates([]);
     } finally {
       setLoading(false);
     }

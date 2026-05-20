@@ -65,14 +65,40 @@ async function handleWebhook(req: NextRequest) {
     ? responsibleName.replace(/[^\p{L}\p{N} \-.,]/gu, "").slice(0, 256) || null
     : null;
   
-  // DEDUPLICATION: Check if survey was already sent for this deal
+  // DEDUPLICATION: race-safe variant. Two robot retries firing at the same
+  // moment could both pass a plain findUnique-then-create check and both
+  // generate tokens / short links / send messages. Instead we attempt the
+  // INSERT first and rely on the @unique(dealId) constraint to reject the
+  // duplicate. The winning call proceeds; the losing one bails immediately
+  // without side effects. (Survey URL/token are generated *after* this
+  // claim, so a loser never publishes anything.)
   if (!isTest) {
-    const existingDispatch = await prisma.sentSurvey.findUnique({
-      where: { dealId: effectiveDealId }
-    });
-    if (existingDispatch) {
-      console.log(`Survey already dispatched for deal ${effectiveDealId}. Skipping to prevent duplicates.`);
-      return NextResponse.json({ message: "Survey already sent for this deal", skip: true });
+    try {
+      await prisma.sentSurvey.create({
+        data: {
+          dealId: effectiveDealId,
+          clientId: effectiveClientId,
+          responsibleName: safeResponsibleName,
+        },
+      });
+    } catch (e: unknown) {
+      // P2002 = unique constraint violation on the @unique(dealId).
+      const code = (e as { code?: string } | null)?.code;
+      if (code === "P2002") {
+        console.log(
+          `Survey already dispatched for deal ${effectiveDealId}. Skipping to prevent duplicates.`
+        );
+        return NextResponse.json({
+          message: "Survey already sent for this deal",
+          skip: true,
+        });
+      }
+      // Some other DB failure — surface it instead of silently double-sending.
+      console.error("SentSurvey insert failed:", e);
+      return NextResponse.json(
+        { error: "Failed to record dispatch" },
+        { status: 500 }
+      );
     }
   }
 
@@ -96,7 +122,8 @@ async function handleWebhook(req: NextRequest) {
   const fullSurveyUrl = `${appUrl}/survey/${token}`;
   console.log(`Generated Full Survey URL: ${fullSurveyUrl}`);
 
-  // Generate Short Link
+  // Generate Short Link. The SentSurvey claim above already prevents
+  // duplicate dispatch, so we only need to mint a short code here.
   let surveyUrl = fullSurveyUrl;
   if (!isTest) {
     try {
@@ -105,22 +132,13 @@ async function handleWebhook(req: NextRequest) {
         data: {
           code,
           url: fullSurveyUrl,
-          branchId: branchId || null
-        }
+          branchId: branchId || null,
+        },
       });
       surveyUrl = `${appUrl}/s/${code}`;
       console.log(`Generated Short Survey URL: ${surveyUrl}`);
-      
-      // Record dispatch to prevent duplicates
-      await prisma.sentSurvey.create({
-        data: {
-          dealId: effectiveDealId,
-          clientId: effectiveClientId,
-          responsibleName: safeResponsibleName
-        }
-      });
     } catch (shortError) {
-      console.error("Shortening/Recording failed, using full URL:", shortError);
+      console.error("Shortening failed, using full URL:", shortError);
     }
   }
 

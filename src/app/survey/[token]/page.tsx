@@ -37,7 +37,7 @@ export default function SurveyPage() {
       try {
         const res = await fetch(`/api/surveys/check?token=${token}`);
         const data = await res.json();
-        
+
         if (!res.ok) {
           // 429 means survey already completed — show "already done" screen, not error
           if (res.status === 429) {
@@ -48,10 +48,14 @@ export default function SurveyPage() {
           return;
         }
 
-        // Check for device lock (SKIP IF TEST)
-        if (!data.isTest && localStorage.getItem("survey_completed")) {
+        // Per-survey device lock (SKIP IF TEST). Previously stored a single
+        // flag "survey_completed", which locked the entire device after any
+        // user finished — fatal for shared / kiosk devices. We now key the
+        // flag by the actual token so multiple clients on the same device
+        // can each take their own survey independently. The DB-side
+        // duplicate-submit check on the backend is the real source of truth.
+        if (!data.isTest && localStorage.getItem(`survey_completed:${token}`)) {
           setAlreadyCompleted(true);
-          setLoading(false);
           return;
         }
 
@@ -59,11 +63,17 @@ export default function SurveyPage() {
         const bId = data.branchId;
         setBranchId(bId);
         const branchInfo = data.branch;
-        
-        // Fetch global settings for fallback review links
-        const sRes = await fetch("/api/settings");
-        const sData = await sRes.json();
-        
+
+        // Fetch global settings for fallback review links — don't let a
+        // settings fetch failure abort the whole init.
+        let sData: Record<string, string> = {};
+        try {
+          const sRes = await fetch("/api/settings");
+          if (sRes.ok) sData = await sRes.json();
+        } catch {
+          // best-effort: review links will just fall back to branch-level values
+        }
+
         // Use template-specific min score or fallback to 4.0
         const minScoreThreshold = branchInfo?.template?.minScore || 4.0;
 
@@ -78,21 +88,25 @@ export default function SurveyPage() {
           dgis: branchInfo?.dgisUrl || sData.review_2gis || "",
           google: branchInfo?.googleUrl || sData.review_google_maps || ""
         });
-        
+
         // Use setting for positive threshold
         setIsPositiveThreshold(minScoreThreshold);
 
-        // Log view event (always record for now to ensure visibility)
+        // Log view event (fire and forget — analytics is not critical).
         fetch("/api/analytics", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            type: "VIEW", 
+          body: JSON.stringify({
+            type: "VIEW",
             branchId: bId,
           }),
-        });
+        }).catch(() => {});
       } catch (err) {
-        console.warn("API check failed, continuing for demo");
+        // Network failure or unparseable JSON. Show an actual error to the
+        // user instead of silently proceeding with hard-coded fallback
+        // questions and posting bogus submissions to the backend.
+        console.error("Survey init failed:", err);
+        setError("Не удалось загрузить опрос. Проверьте соединение и обновите страницу.");
       } finally {
         setTimeout(() => setLoading(false), 800);
       }
@@ -135,13 +149,22 @@ export default function SurveyPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error);
+        // Try to read a JSON error body, but tolerate non-JSON (e.g. 502 HTML
+        // from nginx) — we still want to show *something* to the user.
+        let errMsg = "Не удалось отправить ответ. Попробуйте позже.";
+        try {
+          const data = await res.json();
+          if (data?.error) errMsg = data.error;
+        } catch {
+          // body wasn't JSON
+        }
+        setError(errMsg);
         return;
       }
-      
+
       if (!isTest) {
-        localStorage.setItem("survey_completed", "true");
+        // Per-token device lock — see init() for rationale.
+        localStorage.setItem(`survey_completed:${token}`, "true");
       }
       
       // Ensure state is updated before showing success

@@ -36,14 +36,17 @@ export default function IntegrationPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/settings").then(res => res.json()),
-      fetch(`/api/branches?t=${Date.now()}`).then(res => res.json()),
-      fetch("/api/templates").then(res => res.json()),
-      fetch("/api/admin/b24-webhooks").then(res => res.ok ? res.json() : []),
-    ]).then(([settingsData, branchesData, templatesData, webhooksData]) => {
+      fetch("/api/settings").then((res) => res.json()),
+      fetch(`/api/branches?t=${Date.now()}`).then((res) => res.json()),
+      fetch("/api/templates").then((res) => res.json()),
+      fetch("/api/admin/b24-webhooks").then((res) => (res.ok ? res.json() : [])),
+    ])
+      .then(([settingsData, branchesData, templatesData, webhooksData]) => {
         setSettings({
           b24_webhook_url: settingsData.b24_webhook_url || "",
-          b24_message_template: settingsData.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}",
+          b24_message_template:
+            settingsData.b24_message_template ||
+            "Оцените качество обслуживания по ссылке: {surveyUrl}",
           b24_field_quality: settingsData.b24_field_quality || "",
           b24_field_support: settingsData.b24_field_support || "",
           b24_field_average: settingsData.b24_field_average || "",
@@ -54,32 +57,60 @@ export default function IntegrationPage() {
           review_google_maps: settingsData.review_google_maps || "",
           b24_group_chat_id: settingsData.b24_group_chat_id || "",
         });
-        
-        const bList = Array.isArray(branchesData) ? branchesData : (branchesData.branches || []);
-        if (Array.isArray(bList)) {
-          setBranches(bList);
-        }
-        if (Array.isArray(templatesData)) {
-          setTemplates(templatesData);
-        }
-        if (Array.isArray(webhooksData)) {
-          setOpWebhooks(webhooksData);
-        }
-        setLoading(false);
-    });
+
+        const bList = Array.isArray(branchesData)
+          ? branchesData
+          : branchesData.branches || [];
+        if (Array.isArray(bList)) setBranches(bList);
+        if (Array.isArray(templatesData)) setTemplates(templatesData);
+        if (Array.isArray(webhooksData)) setOpWebhooks(webhooksData);
+      })
+      .catch((err) => {
+        // Without this catch, a network blip during initial load would leave
+        // `loading` stuck on true forever — the page would render nothing
+        // and the user would think the site is broken.
+        console.error("Integration page initial load failed:", err);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const handleAddWebhook = async () => {
     setOpError(null);
+    // Client-side validation — give immediate feedback instead of waiting
+    // for the round-trip rejection. The same checks live on the backend
+    // (src/app/api/admin/b24-webhooks/route.ts) and are the source of truth.
+    const userIdTrim = newOp.userId.trim();
+    const urlTrim = newOp.url.trim();
+    if (!/^\d{1,12}$/.test(userIdTrim)) {
+      setOpError("ID должен состоять только из цифр (например, 706).");
+      return;
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(urlTrim);
+    } catch {
+      setOpError("URL некорректен — ожидается полный https://… адрес.");
+      return;
+    }
+    if (parsed.protocol !== "https:" || !parsed.hostname.toLowerCase().includes("bitrix24.")) {
+      setOpError("URL должен начинаться с https:// и указывать на *.bitrix24.* домен.");
+      return;
+    }
+    const m = urlTrim.match(/\/rest\/(\d+)\//);
+    if (m && m[1] !== userIdTrim) {
+      setOpError(`ID (${userIdTrim}) не совпадает с пользователем в URL (${m[1]}).`);
+      return;
+    }
+
     setOpSaving(true);
     try {
       const res = await fetch("/api/admin/b24-webhooks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: newOp.userId.trim(),
+          userId: userIdTrim,
           displayName: newOp.displayName.trim() || null,
-          url: newOp.url.trim(),
+          url: urlTrim,
         }),
       });
       const data = await res.json();
@@ -87,13 +118,12 @@ export default function IntegrationPage() {
         setOpError(data.error || "Не удалось добавить вебхук");
         return;
       }
-      // Replace existing row with same userId if present, else append.
       setOpWebhooks((prev) => {
         const without = prev.filter((w) => w.userId !== data.userId);
         return [...without, data];
       });
       setNewOp({ userId: "", displayName: "", url: "" });
-    } catch (e: any) {
+    } catch {
       setOpError("Ошибка соединения");
     } finally {
       setOpSaving(false);
@@ -478,13 +508,23 @@ export default function IntegrationPage() {
                 </button>
                 <AnimatePresence>
                   {status === "success" && (
-                    <motion.span 
+                    <motion.span
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0 }}
                       className="text-emerald-500 flex items-center gap-2 text-sm font-black uppercase tracking-widest"
                     >
                       <CheckCircle2 size={18} /> Сохранено
+                    </motion.span>
+                  )}
+                  {status === "error" && (
+                    <motion.span
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="text-rose-500 flex items-center gap-2 text-sm font-black uppercase tracking-widest"
+                    >
+                      Не удалось сохранить
                     </motion.span>
                   )}
                 </AnimatePresence>

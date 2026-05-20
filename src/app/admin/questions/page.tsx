@@ -100,27 +100,51 @@ export default function QuestionsPage() {
 
   const fetchQuestions = async () => {
     setLoading(true);
-    const url = selectedBranch === "all" ? "/api/questions" : `/api/questions?branchId=${selectedBranch}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    setQuestions(data);
-    setLoading(false);
+    try {
+      const url =
+        selectedBranch === "all"
+          ? "/api/questions"
+          : `/api/questions?branchId=${selectedBranch}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      // Backend may return either an array of questions or an {error}
+      // object — only swap state in if we got the array shape, otherwise
+      // .map() in the JSX would crash the whole page.
+      setQuestions(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("fetchQuestions failed:", err);
+      setQuestions([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newQuestion.trim()) return;
     setAdding(true);
-    await fetch("/api/questions", {
-      method: "POST",
-      body: JSON.stringify({ 
-        text: newQuestion, 
-        branchId: selectedBranch === "all" ? null : selectedBranch 
-      }),
-    });
-    setNewQuestion("");
-    await fetchQuestions();
-    setAdding(false);
+    try {
+      const res = await fetch("/api/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: newQuestion,
+          branchId: selectedBranch === "all" ? null : selectedBranch,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`Не удалось добавить вопрос: ${data.error || res.statusText}`);
+        return;
+      }
+      setNewQuestion("");
+      await fetchQuestions();
+    } catch (err) {
+      console.error("Add question failed:", err);
+      alert("Ошибка сети при добавлении вопроса.");
+    } finally {
+      setAdding(false);
+    }
   };
 
   const handleDelete = async (id: string) => {

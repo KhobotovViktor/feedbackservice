@@ -80,18 +80,32 @@ export async function POST(req: NextRequest) {
       } catch (_) {}
     }
 
-    // Save response
-    await prisma.surveyResponse.create({
-      data: {
-        clientId,
-        dealId,
-        averageScore,
-        answers,
-        comment,
-        branchId: payload.branchId || null,
-        responsibleName: responsibleName || null,
-      },
-    });
+    // Save response. SurveyResponse.dealId is @unique — two concurrent
+    // submissions of the same survey can both pass the 6-month findFirst
+    // check above, but only one INSERT survives. The other gets P2002 and
+    // we treat it as "already submitted" rather than a server error.
+    try {
+      await prisma.surveyResponse.create({
+        data: {
+          clientId,
+          dealId,
+          averageScore,
+          answers,
+          comment,
+          branchId: payload.branchId || null,
+          responsibleName: responsibleName || null,
+        },
+      });
+    } catch (e: unknown) {
+      const code = (e as { code?: string } | null)?.code;
+      if (code === "P2002") {
+        return NextResponse.json(
+          { error: "Вы уже отправили ответ на этот опрос." },
+          { status: 429 }
+        );
+      }
+      throw e;
+    }
 
     // Handle B24 Field Mapping + Group Chat Notification
     try {

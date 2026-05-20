@@ -47,13 +47,17 @@ model Question {
 }
 
 model SurveyResponse {
-  id           String   @id @default(cuid())
-  clientId     String
-  dealId       String
-  averageScore Float
-  answers      Json
-  comment      String?
-  createdAt    DateTime @default(now())
+  id              String   @id @default(cuid())
+  clientId        String
+  // Each dealId can receive exactly one submission. Race-protects against
+  // a client double-clicking "submit" — both requests reach the handler,
+  // both pass the 6-month findFirst check, only one INSERT wins; the other
+  // gets a Prisma P2002 error which the handler turns into 429.
+  dealId          String   @unique
+  averageScore    Float
+  answers         Json
+  comment         String?
+  createdAt       DateTime @default(now())
   branchId        String?
   responsibleName String?
   branch          Branch?  @relation(fields: [branchId], references: [id])
