@@ -102,6 +102,11 @@ export default async function AdminDashboard({
   // branchId). The old code averaged only branch-attached responses, which
   // undercounted whenever surveys came through Bitrix24 without a branch.
   let networkAvg = 0;
+  // Average over only CRM-originated responses — i.e. surveys dispatched via
+  // the Bitrix24 webhook (dealId/leadId), excluding QR scans (dealId "QR_…")
+  // and local tests (dealId "TEST…").
+  let crmAvg = 0;
+  let crmCount = 0;
   // Click breakdown per review service (YANDEX / 2GIS / GOOGLE).
   const clicksByTarget: Record<string, number> = { YANDEX: 0, "2GIS": 0, GOOGLE: 0 };
 
@@ -139,6 +144,19 @@ export default async function AdminDashboard({
         where: { ...whereWithDate, type: "CLICK" },
         _count: { _all: true },
       }),
+      // CRM-only average: responses whose dealId is a real Bitrix24 id —
+      // exclude QR scans ("QR_…") and local tests ("TEST…").
+      prisma.surveyResponse.aggregate({
+        where: {
+          ...whereWithDate,
+          NOT: [
+            { dealId: { startsWith: "QR" } },
+            { dealId: { startsWith: "TEST" } },
+          ],
+        },
+        _avg: { averageScore: true },
+        _count: { _all: true },
+      }),
     ]);
 
     totalResponses = results[0];
@@ -153,6 +171,8 @@ export default async function AdminDashboard({
         clicksByTarget[row.target] = row._count._all;
       }
     }
+    crmAvg = results[8]._avg.averageScore ?? 0;
+    crmCount = results[8]._count._all;
   } catch (err) {
     console.error("Dashboard data fetch error:", err);
   }
@@ -174,8 +194,9 @@ export default async function AdminDashboard({
     "Good": "Хорошо",
     "Needs Review": "Требует внимания"
   };
-  const statusLabel = totalMeanValue >= 4.5 ? "Excellent" : totalMeanValue >= 4 ? "Very Good" : totalMeanValue >= 3 ? "Good" : "Needs Review";
+  const statusLabel = totalMeanValue >= 4.8 ? "Excellent" : totalMeanValue >= 4.5 ? "Very Good" : totalMeanValue >= 4 ? "Good" : "Needs Review";
   const excellenceStatus = excellenceStatusMap[statusLabel];
+  const statusLegend = "Отлично (≥4.8), Очень хорошо (≥4.5), Хорошо (≥4), Требует внимания (<4)";
   
   const trend = prevResponsesCount > 0 
     ? Math.round(((totalResponses - prevResponsesCount) / prevResponsesCount) * 100) 
@@ -307,27 +328,40 @@ export default async function AdminDashboard({
               </div>
             </div>
 
-            <div className="mt-12 flex flex-col sm:flex-row gap-6">
-                <div className="p-6 rounded-[2rem] bg-indigo-50/50 border border-indigo-100/50 flex-1">
+            <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div className="p-6 rounded-[2rem] bg-indigo-50/50 border border-indigo-100/50">
                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">Лояльность сети</p>
                    <p className="text-3xl font-black text-indigo-600 tracking-tighter">{globalMean}</p>
+                   <p className="text-[9px] font-bold text-slate-400 mt-1">средняя оценка</p>
                    <div className="flex items-center gap-0.5 mt-2">
                       {[1,2,3,4,5].map(s => <Star key={s} className={`w-3 h-3 ${s <= Number(globalMean) ? "fill-amber-400 text-amber-400" : "text-slate-200"}`} />)}
                    </div>
                 </div>
-                <div className="p-6 rounded-[2rem] bg-slate-900 text-white flex-1 relative overflow-hidden group">
+                <div
+                  className="p-6 rounded-[2rem] bg-slate-900 text-white relative overflow-hidden group cursor-help"
+                  title={statusLegend}
+                >
                    <div className="relative z-10">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Общий статус</p>
                       <p className="text-3xl font-black text-white tracking-tighter">{excellenceStatus}</p>
+                      <p className="text-[9px] font-bold text-slate-500 mt-1">текстовая оценка</p>
                       <p className={cn(
                         "text-[10px] font-bold mt-2 flex items-center gap-1",
                         trend >= 0 ? "text-emerald-400" : "text-rose-400"
                       )}>
-                        <TrendingUp className={cn("w-3 h-3", trend < 0 && "rotate-180")} /> 
+                        <TrendingUp className={cn("w-3 h-3", trend < 0 && "rotate-180")} />
                         {trend > 0 ? `+${trend}%` : `${trend}%`} к прошлому периоду
                       </p>
                    </div>
                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[40px] rounded-full group-hover:bg-indigo-500/20 transition-all" />
+                </div>
+                <div className="p-6 rounded-[2rem] bg-emerald-50/50 border border-emerald-100/50">
+                   <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Оценка из CRM</p>
+                   <p className="text-3xl font-black text-emerald-600 tracking-tighter">{crmAvg.toFixed(1)}</p>
+                   <p className="text-[9px] font-bold text-slate-400 mt-1">{crmCount} {crmCount === 1 ? "опрос" : "опросов"} по ссылкам из CRM</p>
+                   <div className="flex items-center gap-0.5 mt-2">
+                      {[1,2,3,4,5].map(s => <Star key={s} className={`w-3 h-3 ${s <= Number(crmAvg) ? "fill-amber-400 text-amber-400" : "text-slate-200"}`} />)}
+                   </div>
                 </div>
             </div>
           </div>
