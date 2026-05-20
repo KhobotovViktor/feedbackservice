@@ -13,28 +13,49 @@ async function handleWebhook(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const clientId = searchParams.get("clientId");
   const dealId = searchParams.get("dealId");
+  const leadId = searchParams.get("leadId");
   const branchId = searchParams.get("branchId");
   const responsibleName = searchParams.get("responsible");
   const isTest = searchParams.get("isTest") === "true";
 
-  const effectiveClientId = clientId || dealId;
-  const effectiveDealId = dealId || clientId;
+  // The robot can fire from either the Deals funnel or the Leads funnel.
+  // entityType lets callers pick which CRM entity the rest of this handler
+  // operates against. Defaults to "deal" for backwards compatibility — old
+  // robots configured before Lead support shipped will continue working
+  // unchanged. Accepted: "deal" | "lead".
+  const entityTypeRaw = searchParams.get("entityType")?.toLowerCase();
+  const entityType: "deal" | "lead" =
+    entityTypeRaw === "lead" ? "lead" : "deal";
 
-  if (!effectiveClientId || !effectiveDealId) {
-    console.error("Missing both clientId and dealId in request");
+  // Backwards-compat: the original robots template was
+  //   ?clientId={{ID}}&dealId={{ID}}
+  // For leads we accept either ?leadId=... explicitly, or ?dealId=... with
+  // ?entityType=lead. clientId remains the canonical "who is this person"
+  // identifier — for leads it's usually the same as the lead id.
+  const entityId = leadId || dealId || clientId;
+  const effectiveClientId = clientId || entityId;
+
+  if (!effectiveClientId || !entityId) {
+    console.error("Missing both clientId and dealId/leadId in request");
     return NextResponse.json(
       { error: "Missing identity parameters" },
       { status: 400 }
     );
   }
 
-  if (!isValidId(effectiveClientId) || !isValidId(effectiveDealId)) {
+  if (!isValidId(effectiveClientId) || !isValidId(entityId)) {
     console.warn("Rejected webhook: invalid or placeholder ID values.");
     return NextResponse.json(
       { error: "Invalid identity parameters" },
       { status: 400 }
     );
   }
+
+  // The SentSurvey table has a single @unique(dealId) — we reuse it for
+  // leads too by namespacing the key. New leads get "lead:123", deals stay
+  // bare ("123") so old rows keep matching. This avoids a schema change
+  // while preventing collisions between unrelated deal/lead ids.
+  const dedupKey = entityType === "lead" ? `lead:${entityId}` : entityId;
 
   const safeResponsibleName = responsibleName
     ? responsibleName.replace(/[^\p{L}\p{N} \-.,]/gu, "").slice(0, 256) || null
@@ -51,7 +72,7 @@ async function handleWebhook(req: NextRequest) {
     try {
       await prisma.sentSurvey.create({
         data: {
-          dealId: effectiveDealId,
+          dealId: dedupKey,
           clientId: effectiveClientId,
           responsibleName: safeResponsibleName,
         },
@@ -61,10 +82,10 @@ async function handleWebhook(req: NextRequest) {
       const code = (e as { code?: string } | null)?.code;
       if (code === "P2002") {
         console.log(
-          `Survey already dispatched for deal ${effectiveDealId}. Skipping to prevent duplicates.`
+          `Survey already dispatched for ${entityType} ${entityId}. Skipping to prevent duplicates.`
         );
         return NextResponse.json({
-          message: "Survey already sent for this deal",
+          message: "Survey already sent",
           skip: true,
         });
       }
@@ -87,7 +108,16 @@ async function handleWebhook(req: NextRequest) {
   }, {});
 
   const b24TemplateId = settingsMap.b24_template_id;
-  const token = await createSurveyToken(effectiveClientId, effectiveDealId, branchId, isTest, b24TemplateId, safeResponsibleName);
+  // The survey token still carries `dealId` as the legacy field name (for
+  // schema/back-compat reasons) but holds either the deal or the lead id.
+  const token = await createSurveyToken(
+    effectiveClientId,
+    entityId,
+    branchId,
+    isTest,
+    b24TemplateId,
+    safeResponsibleName
+  );
   
   // Resolve the public origin (env-baked NEXT_PUBLIC_APP_URL or Host header
   // with default-port stripping). See src/lib/url.ts for why we can't use
@@ -138,26 +168,30 @@ async function handleWebhook(req: NextRequest) {
       const baseUrl = normalizeB24Url(settingsMap.b24_webhook_url);
 
 
-      // 0. Fetch Deal data once to use for both Open Channel and Field Protection.
-      // encodeURIComponent is belt-and-suspenders on top of isValidId() — neutralises
-      // any odd character that slipped past validation when forming the URL.
-      // Shape of the Bitrix24 crm.deal.get response varies (custom UF_* fields
-      // are user-defined), so we type it as a permissive index map plus the
-      // few well-known fields we actually read.
-      type DealData = Record<string, unknown> & {
+      // 0. Fetch the entity (deal or lead) once. The same shape covers both —
+      // crm.{deal,lead}.get return a flat record of all fields, and we only
+      // touch a handful of well-known ones plus the configurable UF_* field.
+      type EntityData = Record<string, unknown> & {
         ASSIGNED_BY_ID?: string;
         LEAD_ID?: string;
         CONTACT_ID?: string;
       };
-      let dealData: DealData | null = null;
+      const entityGetMethod =
+        entityType === "lead" ? "crm.lead.get.json" : "crm.deal.get.json";
+      let dealData: EntityData | null = null;
       try {
         const dealRes = await fetch(
-          `${baseUrl}/crm.deal.get.json?id=${encodeURIComponent(effectiveDealId)}`
+          `${baseUrl}/${entityGetMethod}?id=${encodeURIComponent(entityId)}`
         );
         const dealDataRaw = await dealRes.json();
-        dealData = (dealDataRaw.result as DealData) ?? null;
+        dealData = (dealDataRaw.result as EntityData) ?? null;
+        if (!dealData) {
+          console.log(
+            `${entityGetMethod} returned no result for ${entityType} ${entityId} — ${dealDataRaw.error_description || dealDataRaw.error || "empty result"}`
+          );
+        }
       } catch (e) {
-        console.error("Failed to fetch deal data for protection check:", e);
+        console.error(`Failed to fetch ${entityType} data for protection check:`, e);
       }
 
       // Build the ordered list of webhook base URLs to try for im.message.add.
@@ -199,39 +233,49 @@ async function handleWebhook(req: NextRequest) {
       // 1. Try to send via Open Channel (Direct Chat)
       try {
         const cleanBaseUrl = baseUrl;
-        console.log(`Open Channel Delivery attempt for Deal ${effectiveDealId}`);
+        console.log(
+          `Open Channel Delivery attempt for ${entityType} ${entityId}`
+        );
 
-        const dealLeadId = dealData?.LEAD_ID
-          ? String(dealData.LEAD_ID)
-          : null;
+        // If we started from a deal, gather its LEAD_ID + contact list.
+        // If we started from a lead, we don't have a LEAD_ID to fall through
+        // to — but the lead itself may have a CONTACT_ID.
+        const dealLeadId =
+          entityType === "deal" && dealData?.LEAD_ID
+            ? String(dealData.LEAD_ID)
+            : null;
 
-        // Modern way: a deal may have multiple contacts. crm.deal.contact.items.get
-        // returns the full list (each with CONTACT_ID + IS_PRIMARY). Falling back
-        // to the legacy primary-only dealData.CONTACT_ID if that call fails.
         type DealContactItem = { CONTACT_ID?: string; IS_PRIMARY?: string };
         const dealContactIds: string[] = [];
-        try {
-          const contactsRes = await fetch(
-            `${cleanBaseUrl}/crm.deal.contact.items.get.json?id=${encodeURIComponent(effectiveDealId)}`
-          );
-          const contactsRaw = await contactsRes.json();
-          const items: DealContactItem[] = Array.isArray(contactsRaw.result)
-            ? contactsRaw.result
-            : [];
-          // Put primary contact first so it gets the priority try.
-          items
-            .sort(
-              (a, b) =>
-                (a.IS_PRIMARY === "Y" ? -1 : 0) - (b.IS_PRIMARY === "Y" ? -1 : 0)
-            )
-            .forEach((c) => {
-              if (c?.CONTACT_ID) dealContactIds.push(String(c.CONTACT_ID));
-            });
-        } catch (e) {
-          console.error(
-            "crm.deal.contact.items.get failed, will fall back to dealData.CONTACT_ID",
-            e
-          );
+        if (entityType === "deal") {
+          // Modern way: a deal may have multiple contacts.
+          // crm.deal.contact.items.get returns the full list (each with
+          // CONTACT_ID + IS_PRIMARY). Falling back to the legacy primary-only
+          // dealData.CONTACT_ID if that call fails.
+          try {
+            const contactsRes = await fetch(
+              `${cleanBaseUrl}/crm.deal.contact.items.get.json?id=${encodeURIComponent(entityId)}`
+            );
+            const contactsRaw = await contactsRes.json();
+            const items: DealContactItem[] = Array.isArray(contactsRaw.result)
+              ? contactsRaw.result
+              : [];
+            // Put primary contact first so it gets the priority try.
+            items
+              .sort(
+                (a, b) =>
+                  (a.IS_PRIMARY === "Y" ? -1 : 0) -
+                  (b.IS_PRIMARY === "Y" ? -1 : 0)
+              )
+              .forEach((c) => {
+                if (c?.CONTACT_ID) dealContactIds.push(String(c.CONTACT_ID));
+              });
+          } catch (e) {
+            console.error(
+              "crm.deal.contact.items.get failed, will fall back to dealData.CONTACT_ID",
+              e
+            );
+          }
         }
         if (dealContactIds.length === 0 && dealData?.CONTACT_ID) {
           dealContactIds.push(String(dealData.CONTACT_ID));
@@ -357,8 +401,12 @@ async function handleWebhook(req: NextRequest) {
           return false;
         };
 
-        // Try order: Deal -> Lead -> every contact of the deal -> Lead's contact
-        let sent = await sendMessage("deal", effectiveDealId);
+        // Try order:
+        //   - the root entity (deal or lead) itself,
+        //   - the deal's lead if we started from a deal,
+        //   - every contact bound to the deal,
+        //   - the lead's own contact.
+        let sent = await sendMessage(entityType, entityId);
         if (!sent && dealLeadId) sent = await sendMessage("lead", dealLeadId);
         if (!sent) {
           for (const cid of dealContactIds) {
@@ -379,15 +427,15 @@ async function handleWebhook(req: NextRequest) {
         console.error("FATAL: Open Channel block error:", ocError);
       }
 
-      // 2. Log to Deal Timeline (always — independent of OL outcome).
+      // 2. Log to Deal/Lead Timeline (always — independent of OL outcome).
       try {
         const timelineRes = await fetch(baseUrl + "/crm.timeline.comment.add.json", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             fields: {
-              ENTITY_ID: effectiveDealId,
-              ENTITY_TYPE: "deal",
+              ENTITY_ID: entityId,
+              ENTITY_TYPE: entityType, // "deal" or "lead"
               COMMENT: message,
             },
           }),
@@ -405,28 +453,32 @@ async function handleWebhook(req: NextRequest) {
       }
 
       // 3. Update the custom field for automated delivery (SMS/WhatsApp robots).
+      // The same UF_-style field works on both Deals and Leads; we just dispatch
+      // to crm.deal.update or crm.lead.update accordingly.
       const linkField = settingsMap.b24_link_field || "UF_CRM_1773746121";
       const existingValue = dealData ? dealData[linkField] : null;
 
       if (!existingValue || String(existingValue).trim() === "") {
         console.log(`Field ${linkField} is empty. Updating with survey link.`);
+        const updateMethod =
+          entityType === "lead" ? "crm.lead.update.json" : "crm.deal.update.json";
         try {
-          const updateRes = await fetch(baseUrl + "/crm.deal.update.json", {
+          const updateRes = await fetch(`${baseUrl}/${updateMethod}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              id: effectiveDealId,
+              id: entityId,
               fields: { [linkField]: surveyUrl },
             }),
           });
           const updateData = await updateRes.json();
           if (updateData.error) {
             console.error(
-              `crm.deal.update error: ${updateData.error_description || updateData.error}`
+              `${updateMethod} error: ${updateData.error_description || updateData.error}`
             );
           }
         } catch (e) {
-          console.error("crm.deal.update request failed:", e);
+          console.error(`${updateMethod} request failed:`, e);
         }
       } else {
         console.log(
