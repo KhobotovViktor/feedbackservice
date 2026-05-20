@@ -71,16 +71,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
+    // The form sends "" for unselected optional fields. For templateId that's
+    // fatal — Prisma treats "" as a real FK value and the create fails with
+    // P2003 (Branch_templateId_fkey) because no template has an empty id.
+    // Coerce blanks to null so "no template / no external id" works.
+    // (PATCH already did this; POST didn't, hence the 500 on first create.)
     const branch = await prisma.branch.create({
       data: {
         name,
-        city,
-        yandexUrl,
-        dgisUrl,
-        googleUrl,
-        externalId,
-        templateId
-      }
+        city: city || null,
+        yandexUrl: yandexUrl || null,
+        dgisUrl: dgisUrl || null,
+        googleUrl: googleUrl || null,
+        externalId: externalId || null,
+        templateId: templateId || null,
+      },
     });
 
     return NextResponse.json(branch);
