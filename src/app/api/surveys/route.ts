@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifySurveyToken } from "@/lib/auth-utils";
 import { getSession } from "@/lib/auth";
-import { getAppOrigin } from "@/lib/url";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 
 export async function POST(req: NextRequest) {
@@ -108,19 +107,26 @@ export async function POST(req: NextRequest) {
         const cleanBaseUrl = normalizeB24Url(settingsMap.b24_webhook_url);
 
         // Fetch questions — used for both field mapping and notification message.
-        // If the fetch fails we skip field mapping but still attempt the chat notification.
+        // Read straight from the DB instead of self-calling /api/questions:
+        // that endpoint is admin-gated by proxy.ts, so a server-side fetch
+        // (which has no session cookie) gets a 401 and the field-mapping
+        // block silently no-ops. The user-visible symptom was the survey
+        // link reaching the deal but the UF_-graded fields staying empty.
+        // If the token carried a templateId we narrow to its questions;
+        // otherwise we fall back to all questions (legacy behavior).
         type Q = { id: string; text: string };
         let questions: Q[] = [];
         try {
-          const questionsRes = await fetch(`${getAppOrigin(req)}/api/questions`);
-          if (questionsRes.ok) {
-            const data = await questionsRes.json();
-            questions = Array.isArray(data) ? data : [];
-          } else {
-            console.error("Failed to fetch questions for B24 mapping");
-          }
+          const tokenTemplateId =
+            (payload as { templateId?: string | null }).templateId || null;
+          const dbQuestions = await prisma.question.findMany({
+            where: tokenTemplateId ? { templateId: tokenTemplateId } : {},
+            orderBy: { order: "asc" },
+            select: { id: true, text: true },
+          });
+          questions = dbQuestions;
         } catch (qErr) {
-          console.error("Questions fetch threw:", qErr);
+          console.error("Direct question load failed:", qErr);
         }
 
         // 1–4. Update Bitrix24 deal fields
