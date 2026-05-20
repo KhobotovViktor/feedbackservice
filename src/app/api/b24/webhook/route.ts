@@ -150,10 +150,14 @@ async function handleWebhook(req: NextRequest) {
       const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
 
 
-      // 0. Fetch Deal data once to use for both Open Channel and Field Protection
+      // 0. Fetch Deal data once to use for both Open Channel and Field Protection.
+      // encodeURIComponent is belt-and-suspenders on top of isValidId() — neutralises
+      // any odd character that slipped past validation when forming the URL.
       let dealData: any = null;
       try {
-        const dealRes = await fetch(`${baseUrl}/crm.deal.get.json?id=${effectiveDealId}`);
+        const dealRes = await fetch(
+          `${baseUrl}/crm.deal.get.json?id=${encodeURIComponent(effectiveDealId)}`
+        );
         const dealDataRaw = await dealRes.json();
         dealData = dealDataRaw.result;
       } catch (e) {
@@ -203,33 +207,77 @@ async function handleWebhook(req: NextRequest) {
         const cleanBaseUrl = baseUrl;
         console.log(`Open Channel Delivery attempt for Deal ${effectiveDealId}`);
 
-        const dealContactId = dealData?.CONTACT_ID;
-        const dealLeadId = dealData?.LEAD_ID;
+        const dealLeadId = dealData?.LEAD_ID
+          ? String(dealData.LEAD_ID)
+          : null;
 
-        // Also fetch Lead details
-        let leadContactId = null;
+        // Modern way: a deal may have multiple contacts. crm.deal.contact.items.get
+        // returns the full list (each with CONTACT_ID + IS_PRIMARY). Falling back
+        // to the legacy primary-only dealData.CONTACT_ID if that call fails.
+        const dealContactIds: string[] = [];
+        try {
+          const contactsRes = await fetch(
+            `${cleanBaseUrl}/crm.deal.contact.items.get.json?id=${encodeURIComponent(effectiveDealId)}`
+          );
+          const contactsRaw = await contactsRes.json();
+          const items = Array.isArray(contactsRaw.result) ? contactsRaw.result : [];
+          // Put primary contact first so it gets the priority try.
+          items
+            .sort((a: any, b: any) =>
+              (a.IS_PRIMARY === "Y" ? -1 : 0) - (b.IS_PRIMARY === "Y" ? -1 : 0)
+            )
+            .forEach((c: any) => {
+              if (c?.CONTACT_ID) dealContactIds.push(String(c.CONTACT_ID));
+            });
+        } catch (e) {
+          console.error("crm.deal.contact.items.get failed, will fall back to dealData.CONTACT_ID", e);
+        }
+        if (dealContactIds.length === 0 && dealData?.CONTACT_ID) {
+          dealContactIds.push(String(dealData.CONTACT_ID));
+        }
+
+        // Fetch the lead's primary contact too — sometimes the OL chat is bound
+        // to the contact rather than to the deal/lead directly.
+        let leadContactId: string | null = null;
         if (dealLeadId) {
           try {
-            const leadRes = await fetch(`${cleanBaseUrl}/crm.lead.get.json?id=${dealLeadId}`);
+            const leadRes = await fetch(
+              `${cleanBaseUrl}/crm.lead.get.json?id=${encodeURIComponent(dealLeadId)}`
+            );
             const leadData = await leadRes.json();
-            leadContactId = leadData.result?.CONTACT_ID;
-          } catch (e) {}
+            leadContactId = leadData.result?.CONTACT_ID
+              ? String(leadData.result.CONTACT_ID)
+              : null;
+          } catch (e) {
+            console.error("crm.lead.get failed", e);
+          }
         }
 
         const sendMessage = async (type: string, id: string) => {
           const entityType = type.toLowerCase();
           console.log(`Searching for chat bound to ${entityType} ${id}...`);
           try {
-            const chatUrl = `${cleanBaseUrl}/imopenlines.crm.chat.get.json?CRM_ENTITY_TYPE=${entityType}&CRM_ENTITY=${id}&ACTIVE_ONLY=N`;
+            const chatUrl =
+              `${cleanBaseUrl}/imopenlines.crm.chat.get.json` +
+              `?CRM_ENTITY_TYPE=${encodeURIComponent(entityType)}` +
+              `&CRM_ENTITY=${encodeURIComponent(id)}` +
+              `&ACTIVE_ONLY=N`;
             const chatRes = await fetch(chatUrl);
             const chatData = await chatRes.json();
-            
+            if (chatData.error) {
+              console.log(
+                `imopenlines.crm.chat.get error for ${entityType} ${id}: ${chatData.error_description || chatData.error}`
+              );
+              return false;
+            }
+
             let chats = chatData.result;
             if (!Array.isArray(chats)) chats = chats ? [chats] : [];
-            
+
             for (const chat of chats) {
-              const chatId = chat.CHAT_ID || chat;
-              if (!chatId) continue;
+              const chatId = chat?.CHAT_ID ?? chat;
+              const chatIdNum = parseInt(String(chatId), 10);
+              if (!chatId || Number.isNaN(chatIdNum)) continue;
 
               // Try each candidate webhook in priority order. The first one
               // whose user is allowed to write into this chat wins.
@@ -237,8 +285,8 @@ async function handleWebhook(req: NextRequest) {
                 const sendWebhookUserId =
                   sendBase.match(/\/rest\/(\d+)\//)?.[1] || "1";
 
-                // Method 1: im.message.add — works when the webhook owner is a
-                // member/operator of the Open Line the chat belongs to.
+                // Method 1: im.message.add — works when the webhook owner is
+                // a member/operator of the Open Line the chat belongs to.
                 console.log(
                   `Attempting im.message.add via user ${sendWebhookUserId} to Chat ${chatId}...`
                 );
@@ -251,15 +299,31 @@ async function handleWebhook(req: NextRequest) {
                   }),
                 });
                 const imData = await imRes.json();
-                console.log(`IM Result:`, JSON.stringify(imData));
-                if (imData.result) return true;
+                if (imData.result) {
+                  console.log(
+                    `im.message.add OK (msg id ${imData.result}) — user ${sendWebhookUserId} → chat ${chatId}`
+                  );
+                  return true;
+                }
+                if (imData.error === "CANCELED") {
+                  console.log(
+                    `im.message.add denied — user ${sendWebhookUserId} is not a member of chat ${chatId}'s Open Line`
+                  );
+                } else {
+                  console.log(
+                    `im.message.add error: ${imData.error_description || imData.error || "unknown"}`
+                  );
+                }
 
-                // Method 2: imopenlines.crm.message.add — sometimes works
-                // even when im.message.add returns CANCELED, by routing the
-                // message through the CRM-bound chat resolver.
+                // Method 2: imopenlines.crm.message.add — CRM-routed fallback.
                 console.log(
                   `Attempting imopenlines.crm.message.add via user ${sendWebhookUserId} for ${entityType} ${id}...`
                 );
+                const entityIdNum = parseInt(id, 10);
+                if (Number.isNaN(entityIdNum)) {
+                  console.log(`Non-numeric entity id "${id}" — skipping CRM fallback`);
+                  continue;
+                }
                 const crmRes = await fetch(
                   `${sendBase}/imopenlines.crm.message.add.json`,
                   {
@@ -267,15 +331,23 @@ async function handleWebhook(req: NextRequest) {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       CRM_ENTITY_TYPE: entityType,
-                      CRM_ENTITY: parseInt(id),
-                      CHAT_ID: parseInt(chatId),
-                      USER_ID: parseInt(sendWebhookUserId),
+                      CRM_ENTITY: entityIdNum,
+                      CHAT_ID: chatIdNum,
+                      USER_ID: parseInt(sendWebhookUserId, 10) || 1,
                       MESSAGE: message,
                     }),
                   }
                 );
                 const crmData = await crmRes.json();
-                if (crmData.result) return true;
+                if (crmData.result) {
+                  console.log(
+                    `imopenlines.crm.message.add OK — user ${sendWebhookUserId} → chat ${chatId}`
+                  );
+                  return true;
+                }
+                console.log(
+                  `imopenlines.crm.message.add error: ${crmData.error_description || crmData.error || "unknown"}`
+                );
               }
             }
           } catch (e) {
@@ -284,54 +356,81 @@ async function handleWebhook(req: NextRequest) {
           return false;
         };
 
-        // Try order: Deal -> Lead -> Contact (from Deal) -> Contact (from Lead)
+        // Try order: Deal -> Lead -> every contact of the deal -> Lead's contact
         let sent = await sendMessage("deal", effectiveDealId);
         if (!sent && dealLeadId) sent = await sendMessage("lead", dealLeadId);
-        if (!sent && dealContactId) sent = await sendMessage("contact", dealContactId);
-        if (!sent && leadContactId) sent = await sendMessage("contact", leadContactId);
+        if (!sent) {
+          for (const cid of dealContactIds) {
+            sent = await sendMessage("contact", cid);
+            if (sent) break;
+          }
+        }
+        if (!sent && leadContactId && !dealContactIds.includes(leadContactId)) {
+          sent = await sendMessage("contact", leadContactId);
+        }
 
         if (sent) {
           console.log("SUCCESS: Message delivered to Open Channel.");
         } else {
-          console.log("No active Open Channel session could be targeted.");
+          console.log("No Open Channel session accepted the message via any registered webhook.");
         }
       } catch (ocError) {
         console.error("FATAL: Open Channel block error:", ocError);
       }
 
-      // 2. Log to Deal Timeline (Standard Fallback)
-      const timelineUrl = baseUrl + "/crm.timeline.comment.add";
-      await fetch(timelineUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fields: {
-            ENTITY_ID: effectiveDealId,
-            ENTITY_TYPE: "deal",
-            COMMENT: message
-          }
-        })
-      });
+      // 2. Log to Deal Timeline (always — independent of OL outcome).
+      try {
+        const timelineRes = await fetch(baseUrl + "/crm.timeline.comment.add.json", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fields: {
+              ENTITY_ID: effectiveDealId,
+              ENTITY_TYPE: "deal",
+              COMMENT: message,
+            },
+          }),
+        });
+        const timelineData = await timelineRes.json();
+        if (timelineData.error) {
+          console.error(
+            `crm.timeline.comment.add error: ${timelineData.error_description || timelineData.error}`
+          );
+        } else {
+          console.log(`Timeline comment added (id ${timelineData.result})`);
+        }
+      } catch (e) {
+        console.error("crm.timeline.comment.add request failed:", e);
+      }
 
-      // 3. Update the custom field for automated delivery (SMS/WhatsApp robots)
+      // 3. Update the custom field for automated delivery (SMS/WhatsApp robots).
       const linkField = settingsMap.b24_link_field || "UF_CRM_1773746121";
       const existingValue = dealData ? dealData[linkField] : null;
 
       if (!existingValue || String(existingValue).trim() === "") {
         console.log(`Field ${linkField} is empty. Updating with survey link.`);
-        const updateUrl = baseUrl + "/crm.deal.update";
-        await fetch(updateUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: effectiveDealId,
-            fields: {
-              [linkField]: surveyUrl
-            }
-          })
-        });
+        try {
+          const updateRes = await fetch(baseUrl + "/crm.deal.update.json", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: effectiveDealId,
+              fields: { [linkField]: surveyUrl },
+            }),
+          });
+          const updateData = await updateRes.json();
+          if (updateData.error) {
+            console.error(
+              `crm.deal.update error: ${updateData.error_description || updateData.error}`
+            );
+          }
+        } catch (e) {
+          console.error("crm.deal.update request failed:", e);
+        }
       } else {
-        console.log(`Field ${linkField} already contains data ("${existingValue}"). Skipping update to prevent overwriting.`);
+        console.log(
+          `Field ${linkField} already contains data ("${existingValue}"). Skipping update to prevent overwriting.`
+        );
       }
     } else {
       console.warn("b24_webhook_url is NOT configured in settings.");
