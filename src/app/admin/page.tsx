@@ -98,6 +98,12 @@ export default async function AdminDashboard({
   let negativeResponses = 0;
   let branchesRaw: BranchRow[] = [];
   let prevResponsesCount = 0;
+  // Network-wide average over ALL responses (including CRM/QR ones with no
+  // branchId). The old code averaged only branch-attached responses, which
+  // undercounted whenever surveys came through Bitrix24 without a branch.
+  let networkAvg = 0;
+  // Click breakdown per review service (YANDEX / 2GIS / GOOGLE).
+  const clicksByTarget: Record<string, number> = { YANDEX: 0, "2GIS": 0, GOOGLE: 0 };
 
   try {
     const results = await Promise.all([
@@ -122,6 +128,17 @@ export default async function AdminDashboard({
       Object.keys(prevDateFilter).length > 0
         ? prisma.surveyResponse.count({ where: { createdAt: prevDateFilter } })
         : Promise.resolve(0),
+      // Network-wide average across every response in the period.
+      prisma.surveyResponse.aggregate({
+        where: whereWithDate,
+        _avg: { averageScore: true },
+      }),
+      // CLICK events grouped by which map service was opened.
+      prisma.analyticsEvent.groupBy({
+        by: ["target"],
+        where: { ...whereWithDate, type: "CLICK" },
+        _count: { _all: true },
+      }),
     ]);
 
     totalResponses = results[0];
@@ -130,6 +147,12 @@ export default async function AdminDashboard({
     negativeResponses = results[3];
     branchesRaw = results[4];
     prevResponsesCount = results[5];
+    networkAvg = results[6]._avg.averageScore ?? 0;
+    for (const row of results[7]) {
+      if (row.target && row.target in clicksByTarget) {
+        clicksByTarget[row.target] = row._count._all;
+      }
+    }
   } catch (err) {
     console.error("Dashboard data fetch error:", err);
   }
@@ -140,17 +163,10 @@ export default async function AdminDashboard({
       scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
     return { id: branch.id, name: branch.name, avg, count: scores.length };
   });
-  // `allScores` was being built by mutation inside the .map above, which
-  // React 19's immutability lint flags as a render-side effect. Compute it
-  // separately via flatMap — the result is identical and the linter is happy.
-  const allScores: number[] = branchesRaw.flatMap((b) =>
-    b.surveyResponses.map((r) => r.averageScore)
-  );
 
-  const totalMeanValue = allScores.length > 0 
-    ? (allScores.reduce((a, b) => a + b, 0) / allScores.length)
-    : 0;
-
+  // Network loyalty = average of ALL responses in the period (branch + CRM/QR),
+  // taken from the DB aggregate above rather than only branch-attached rows.
+  const totalMeanValue = networkAvg;
   const globalMean = totalMeanValue.toFixed(1);
   const excellenceStatusMap: { [key: string]: string } = {
     "Excellent": "Отлично",
@@ -269,6 +285,24 @@ export default async function AdminDashboard({
                 </div>
                 <div className="h-4 bg-slate-100/50 rounded-full border border-white/40 overflow-hidden">
                   <div className="h-full bg-amber-500 w-full rounded-full shadow-lg shadow-amber-500/20" style={{ width: `${(Number(openRate) * Number(clickThroughRate) / 100) || 0}%` }}></div>
+                </div>
+                {/* Breakdown: which map service customers opened */}
+                <div className="flex flex-wrap gap-2 px-4 pt-1">
+                  {[
+                    { key: "YANDEX", label: "Яндекс", icon: "yandex" },
+                    { key: "2GIS", label: "2ГИС", icon: "2gis" },
+                    { key: "GOOGLE", label: "Google", icon: "googlemaps" },
+                  ].map((s) => (
+                    <div
+                      key={s.key}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-white/70 border border-amber-100 rounded-xl shadow-sm"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/icons/${s.icon}.png`} alt="" className="w-3.5 h-3.5 object-contain" />
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{s.label}</span>
+                      <span className="text-xs font-black text-amber-600">{clicksByTarget[s.key] || 0}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
