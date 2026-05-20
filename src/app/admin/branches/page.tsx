@@ -318,16 +318,16 @@ export default function BranchesPage() {
       '',
       '      if (isSuccess && html) {',
       '        if (service === "yandex") {',
-      '          const rMatch = html.match(/itemprop="ratingValue" content="([\\\\d.]+)"/i) || html.match(/"ratingValue":\\\\s*"([\\\\d,.]+)"/i) || html.match(/class="business-rating-badge-view__rating-text[^>]*>([\\\\d,.]+)/i) || html.match(/rating-text">([\\\\d,.]+)/i);',
-      '          const cMatch = html.match(/itemprop="reviewCount" content="(\\\\d+)"/i) || html.match(/"reviewCount":\\\\s*"(\\\\d+)"/i) || html.match(/class="business-header-rating-view__text[^>]*>([\\\\d\\\\s]+)\\\\s*(?:оцен|отзыв)/i) || html.match(/class="business-rating-amount-view[^>]*>([\\\\d\\\\s]+)\\\\s*(?:оцен|отзыв)/i);',
+      '          const rMatch = html.match(/itemprop="ratingValue" content="([\\d.]+)"/i) || html.match(/"ratingValue":\\s*"([\\d,.]+)"/i) || html.match(/class="business-rating-badge-view__rating-text[^>]*>([\\d,.]+)/i) || html.match(/rating-text">([\\d,.]+)/i);',
+      '          const cMatch = html.match(/itemprop="reviewCount" content="(\\d+)"/i) || html.match(/"reviewCount":\\s*"(\\d+)"/i) || html.match(/class="business-header-rating-view__text[^>]*>([\\d\\s]+)\\s*(?:оцен|отзыв)/i) || html.match(/class="business-rating-amount-view[^>]*>([\\d\\s]+)\\s*(?:оцен|отзыв)/i);',
       '          if (rMatch) rating = parseFloat(rMatch[1].replace(",", "."));',
-      '          if (cMatch) count = parseInt(cMatch[1].replace(/\\\\s/g, ""));',
+      '          if (cMatch) count = parseInt(cMatch[1].replace(/\\s/g, ""));',
       '          ',
       '        } else if (service === "2gis") {',
-      '          const rMatch = html.match(/"ratingValue"\\\\s*:\\\\s*"?([\\\\d.]+)"?/i) || html.match(/class="_y10azs">([\\\\d.]+)/i) || html.match(/Оценка\\\\s*([\\\\d.]+)/i);',
-      '          const cMatch = html.match(/"reviewCount"\\\\s*:\\\\s*"?(\\\\d+)"?/i) || html.match(/class="_jspzdm">(\\\\d+)\\\\s+оцен/i) || html.match(/([\\\\d\\\\s]+)\\\\s*отзыв/i);',
+      '          const rMatch = html.match(/"ratingValue"\\s*:\\s*"?([\\d.]+)"?/i) || html.match(/class="_y10azs">([\\d.]+)/i) || html.match(/Оценка\\s*([\\d.]+)/i);',
+      '          const cMatch = html.match(/"reviewCount"\\s*:\\s*"?(\\d+)"?/i) || html.match(/class="_jspzdm">(\\d+)\\s+оцен/i) || html.match(/([\\d\\s]+)\\s*отзыв/i);',
       '          if (rMatch) rating = parseFloat(rMatch[1]);',
-      '          if (cMatch) count = parseInt(cMatch[1].replace(/\\\\s/g, ""));',
+      '          if (cMatch) count = parseInt(cMatch[1].replace(/\\s/g, ""));',
       '        }',
       '      }',
       '    }',
@@ -371,7 +371,7 @@ export default function BranchesPage() {
       '}',
     ];
 
-    return scriptLines.join('\\n');
+    return scriptLines.join('\n');
   };
 
   const handleTestSurvey = (branchId: string) => {
