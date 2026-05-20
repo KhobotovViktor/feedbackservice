@@ -105,6 +105,18 @@ model SentSurvey {
   createdAt       DateTime @default(now())
 }
 
+model B24Webhook {
+  id          String   @id @default(cuid())
+  // Bitrix24 user ID this webhook acts as (e.g. "706", "847").
+  // The /api/b24/webhook flow picks the webhook whose userId matches
+  // the deal's ASSIGNED_BY_ID, falling back to others on CANCELED errors.
+  userId      String   @unique
+  displayName String?
+  url         String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model RatingHistory {
   id          String   @id @default(cuid())
   branchId    String

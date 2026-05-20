@@ -160,6 +160,44 @@ async function handleWebhook(req: NextRequest) {
         console.error("Failed to fetch deal data for protection check:", e);
       }
 
+      // Build the ordered list of webhook base URLs to try for im.message.add.
+      // Priority:
+      //   1) Per-operator webhook for the deal's ASSIGNED_BY_ID, if registered.
+      //      This is the operator who handled the case and should be in the
+      //      Open Line's queue, so im.message.add from their token will pass.
+      //   2) Every other registered per-operator webhook (round-robin fallback).
+      //   3) The default webhook (settings.b24_webhook_url).
+      // Duplicates are removed while preserving order. CRM/timeline calls keep
+      // using the default webhook so they all show up under the same author.
+      const assignedById: string | undefined = dealData?.ASSIGNED_BY_ID
+        ? String(dealData.ASSIGNED_BY_ID)
+        : undefined;
+      const perOperatorWebhooks = await prisma.b24Webhook.findMany({
+        select: { userId: true, url: true },
+      });
+      const normalize = (u: string) =>
+        u.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
+      const sendCandidates: string[] = [];
+      const seen = new Set<string>();
+      const pushCandidate = (raw?: string | null) => {
+        if (!raw) return;
+        const norm = normalize(raw);
+        if (seen.has(norm)) return;
+        seen.add(norm);
+        sendCandidates.push(norm);
+      };
+      const assignedWebhook = assignedById
+        ? perOperatorWebhooks.find((w: { userId: string; url: string }) => w.userId === assignedById)
+        : undefined;
+      if (assignedWebhook) {
+        console.log(
+          `Routing to per-operator webhook for ASSIGNED_BY_ID=${assignedById}`
+        );
+        pushCandidate(assignedWebhook.url);
+      }
+      for (const w of perOperatorWebhooks) pushCandidate(w.url);
+      pushCandidate(baseUrl);
+
       // 1. Try to send via Open Channel (Direct Chat)
       try {
         const cleanBaseUrl = baseUrl;
@@ -193,41 +231,52 @@ async function handleWebhook(req: NextRequest) {
               const chatId = chat.CHAT_ID || chat;
               if (!chatId) continue;
 
-              const webhookUserId = cleanBaseUrl.match(/\/rest\/(\d+)\//)?.[1] || "1";
-              
-              // Method 1: im.message.add (Winning Method - Most reliable for Open Lines)
-              console.log(`Attempting message (im.message.add) to Chat ${chatId}...`);
-              const imPayload = {
-                DIALOG_ID: `chat${chatId}`,
-                MESSAGE: message
-              };
-              
-              const imRes = await fetch(`${cleanBaseUrl}/im.message.add.json`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(imPayload)
-              });
-              const imData = await imRes.json();
-              console.log(`IM Result:`, JSON.stringify(imData));
-              if (imData.result) return true;
+              // Try each candidate webhook in priority order. The first one
+              // whose user is allowed to write into this chat wins.
+              for (const sendBase of sendCandidates) {
+                const sendWebhookUserId =
+                  sendBase.match(/\/rest\/(\d+)\//)?.[1] || "1";
 
-              // Method 2: imopenlines.crm.message.add (Original CRM Fallback)
-              console.log(`Attempting CRM fallback (imopenlines.crm.message.add) for ${entityType} ${id}...`);
-              const crmPayload = {
-                CRM_ENTITY_TYPE: entityType,
-                CRM_ENTITY: parseInt(id),
-                CHAT_ID: parseInt(chatId),
-                USER_ID: parseInt(webhookUserId),
-                MESSAGE: message
-              };
-              
-              const crmRes = await fetch(`${cleanBaseUrl}/imopenlines.crm.message.add.json`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(crmPayload)
-              });
-              const crmData = await crmRes.json();
-              if (crmData.result) return true;
+                // Method 1: im.message.add — works when the webhook owner is a
+                // member/operator of the Open Line the chat belongs to.
+                console.log(
+                  `Attempting im.message.add via user ${sendWebhookUserId} to Chat ${chatId}...`
+                );
+                const imRes = await fetch(`${sendBase}/im.message.add.json`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    DIALOG_ID: `chat${chatId}`,
+                    MESSAGE: message,
+                  }),
+                });
+                const imData = await imRes.json();
+                console.log(`IM Result:`, JSON.stringify(imData));
+                if (imData.result) return true;
+
+                // Method 2: imopenlines.crm.message.add — sometimes works
+                // even when im.message.add returns CANCELED, by routing the
+                // message through the CRM-bound chat resolver.
+                console.log(
+                  `Attempting imopenlines.crm.message.add via user ${sendWebhookUserId} for ${entityType} ${id}...`
+                );
+                const crmRes = await fetch(
+                  `${sendBase}/imopenlines.crm.message.add.json`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      CRM_ENTITY_TYPE: entityType,
+                      CRM_ENTITY: parseInt(id),
+                      CHAT_ID: parseInt(chatId),
+                      USER_ID: parseInt(sendWebhookUserId),
+                      MESSAGE: message,
+                    }),
+                  }
+                );
+                const crmData = await crmRes.json();
+                if (crmData.result) return true;
+              }
             }
           } catch (e) {
             console.error(`Error in sendMessage logic:`, e);

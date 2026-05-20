@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2 } from "lucide-react";
+import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Users, Plus, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -25,6 +25,12 @@ export default function IntegrationPage() {
   const [status, setStatus] = useState<null | "success" | "error">(null);
   const [branches, setBranches] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
+  // Per-operator webhooks
+  type OpWebhook = { id: string; userId: string; displayName: string | null; url: string };
+  const [opWebhooks, setOpWebhooks] = useState<OpWebhook[]>([]);
+  const [newOp, setNewOp] = useState({ userId: "", displayName: "", url: "" });
+  const [opSaving, setOpSaving] = useState(false);
+  const [opError, setOpError] = useState<string | null>(null);
 
   const webhookUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/api/b24/webhook?clientId={{ID}}&dealId={{DEAL_ID}}`;
 
@@ -32,8 +38,9 @@ export default function IntegrationPage() {
     Promise.all([
       fetch("/api/settings").then(res => res.json()),
       fetch(`/api/branches?t=${Date.now()}`).then(res => res.json()),
-      fetch("/api/templates").then(res => res.json())
-    ]).then(([settingsData, branchesData, templatesData]) => {
+      fetch("/api/templates").then(res => res.json()),
+      fetch("/api/admin/b24-webhooks").then(res => res.ok ? res.json() : []),
+    ]).then(([settingsData, branchesData, templatesData, webhooksData]) => {
         setSettings({
           b24_webhook_url: settingsData.b24_webhook_url || "",
           b24_message_template: settingsData.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}",
@@ -55,9 +62,51 @@ export default function IntegrationPage() {
         if (Array.isArray(templatesData)) {
           setTemplates(templatesData);
         }
+        if (Array.isArray(webhooksData)) {
+          setOpWebhooks(webhooksData);
+        }
         setLoading(false);
     });
   }, []);
+
+  const handleAddWebhook = async () => {
+    setOpError(null);
+    setOpSaving(true);
+    try {
+      const res = await fetch("/api/admin/b24-webhooks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: newOp.userId.trim(),
+          displayName: newOp.displayName.trim() || null,
+          url: newOp.url.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setOpError(data.error || "Не удалось добавить вебхук");
+        return;
+      }
+      // Replace existing row with same userId if present, else append.
+      setOpWebhooks((prev) => {
+        const without = prev.filter((w) => w.userId !== data.userId);
+        return [...without, data];
+      });
+      setNewOp({ userId: "", displayName: "", url: "" });
+    } catch (e: any) {
+      setOpError("Ошибка соединения");
+    } finally {
+      setOpSaving(false);
+    }
+  };
+
+  const handleDeleteWebhook = async (id: string) => {
+    if (!confirm("Удалить этот вебхук?")) return;
+    const res = await fetch(`/api/admin/b24-webhooks/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setOpWebhooks((prev) => prev.filter((w) => w.id !== id));
+    }
+  };
 
 // No global questions anymore
 
@@ -155,6 +204,94 @@ export default function IntegrationPage() {
                    <div className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-mono text-indigo-500">{"{surveyUrl}"}</div>
                    <p className="text-[10px] text-slate-400 font-medium italic">ссылка на персональный опрос</p>
                 </div>
+              </div>
+
+              {/* Per-operator webhooks */}
+              <div className="pt-8 border-t border-slate-100/50">
+                <div className="flex items-center gap-3 text-indigo-600 mb-2">
+                  <Users className="w-6 h-6" />
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                    Вебхуки операторов
+                  </h3>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium leading-relaxed px-1 mb-6">
+                  Для отправки сообщения клиенту в Открытую линию нужно, чтобы автор сообщения был
+                  оператором этой линии. Добавьте сюда отдельный вебхук для каждого менеджера —
+                  сервис выберет вебхук ответственного за сделку, а если его права не подойдут —
+                  переберёт остальные.
+                  <span className="block mt-1 text-slate-400">
+                    Основной вебхук (поле выше) используется для CRM-операций
+                    и как последний fallback.
+                  </span>
+                </p>
+
+                {opWebhooks.length > 0 && (
+                  <div className="space-y-2 mb-4">
+                    {opWebhooks.map((w) => (
+                      <div
+                        key={w.id}
+                        className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-slate-100 bg-slate-50/40 hover:bg-slate-50 transition-colors group"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-black shrink-0">
+                          {w.userId}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-slate-800 truncate">
+                            {w.displayName || `Пользователь ${w.userId}`}
+                          </div>
+                          <div className="text-[11px] font-mono text-slate-400 truncate">
+                            {w.url}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteWebhook(w.id)}
+                          className="opacity-40 group-hover:opacity-100 text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-all"
+                          title="Удалить"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-[110px_1fr] gap-3">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="ID, напр. 706"
+                    className="px-4 py-3 rounded-xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-mono font-bold"
+                    value={newOp.userId}
+                    onChange={(e) => setNewOp({ ...newOp, userId: e.target.value.replace(/\D/g, "") })}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Имя сотрудника (опционально, для удобства)"
+                    className="px-4 py-3 rounded-xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-bold"
+                    value={newOp.displayName}
+                    onChange={(e) => setNewOp({ ...newOp, displayName: e.target.value })}
+                  />
+                </div>
+                <div className="mt-3 flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="text"
+                    placeholder="https://am35.bitrix24.ru/rest/706/xxxxxxxxxxxxxxxx/"
+                    className="flex-1 px-4 py-3 rounded-xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-mono font-bold"
+                    value={newOp.url}
+                    onChange={(e) => setNewOp({ ...newOp, url: e.target.value })}
+                  />
+                  <button
+                    onClick={handleAddWebhook}
+                    disabled={opSaving || !newOp.userId || !newOp.url}
+                    className="px-5 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {opSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Добавить
+                  </button>
+                </div>
+                {opError && (
+                  <p className="text-xs text-rose-600 font-bold mt-2 px-1">{opError}</p>
+                )}
               </div>
 
               <div className="pt-8 border-t border-slate-100/50">
