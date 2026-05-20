@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { getAppOrigin } from "@/lib/url";
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,7 +11,9 @@ export async function POST(req: NextRequest) {
 
     if (!branchId) return NextResponse.json({ error: "Missing branchId" }, { status: 400 });
 
-    const webhookUrl = `${req.nextUrl.origin}/api/b24/webhook?dealId=${dealId}&contactId=${contactId}&branchId=${branchId}&isTest=true`;
+    // Build the self-call through the public origin (req.nextUrl.origin is
+    // unreliable behind nginx — see src/lib/url.ts).
+    const webhookUrl = `${getAppOrigin(req)}/api/b24/webhook?dealId=${dealId}&contactId=${contactId}&branchId=${branchId}&isTest=true`;
 
     const res = await fetch(webhookUrl, { method: "POST" });
     const data = await res.json();

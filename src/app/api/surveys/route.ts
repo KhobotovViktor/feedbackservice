@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifySurveyToken } from "@/lib/auth-utils";
 import { getSession } from "@/lib/auth";
+import { getAppOrigin } from "@/lib/url";
 
 function isSafeB24Url(url: string): boolean {
   try {
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
         // If the fetch fails we skip field mapping but still attempt the chat notification.
         let questions: any[] = [];
         try {
-          const questionsRes = await fetch(`${req.nextUrl.origin}/api/questions`);
+          const questionsRes = await fetch(`${getAppOrigin(req)}/api/questions`);
           if (questionsRes.ok) {
             questions = await questionsRes.json();
           } else {

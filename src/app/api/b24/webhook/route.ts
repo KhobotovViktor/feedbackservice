@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { createSurveyToken } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
+import { getAppOrigin } from "@/lib/url";
 
 function isValidId(value: string): boolean {
   return value.length > 0 && value.length <= 128 && !/[{}\n\r]/.test(value);
@@ -87,16 +88,10 @@ async function handleWebhook(req: NextRequest) {
   const b24TemplateId = settingsMap.b24_template_id;
   const token = await createSurveyToken(effectiveClientId, effectiveDealId, branchId, isTest, b24TemplateId, safeResponsibleName);
   
-  // Get base URL from env or request headers.
-  // NEXT_PUBLIC_APP_URL is inlined at build time — must be set when building.
-  // Fallback strips default ports (:80/:443) so that nginx upstreams that
-  // pass "Host $host:443" don't produce ugly survey links.
-  let appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!appUrl || appUrl.includes("localhost")) {
-    let host = (req.headers.get("host") || "").replace(/:(?:80|443)$/, "");
-    const protocol = host.includes("localhost") ? "http" : "https";
-    appUrl = `${protocol}://${host}`;
-  }
+  // Resolve the public origin (env-baked NEXT_PUBLIC_APP_URL or Host header
+  // with default-port stripping). See src/lib/url.ts for why we can't use
+  // req.nextUrl.origin here.
+  const appUrl = getAppOrigin(req);
   
   const fullSurveyUrl = `${appUrl}/survey/${token}`;
   console.log(`Generated Full Survey URL: ${fullSurveyUrl}`);
