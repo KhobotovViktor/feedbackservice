@@ -175,10 +175,10 @@ export default function IntegrationPage() {
         <p className="text-slate-500 text-lg font-medium">Бесшовная синхронизация с Битрикс24 и внешними сервисами</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         <div className="lg:col-span-2 space-y-8">
           {/* Outbound Integration Settings */}
-          <div className="bento-card bg-white/60 p-8 md:p-12 space-y-10 flex flex-col h-full border-white/40">
+          <div className="bento-card bg-white/60 p-8 md:p-12 space-y-10 flex flex-col border-white/40">
             <div className="flex items-center gap-4 text-indigo-600 mb-2">
               <div className="w-14 h-14 premium-gradient rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-500/20">
                  <Zap className="w-8 h-8" />
@@ -189,7 +189,7 @@ export default function IntegrationPage() {
               </div>
             </div>
             
-            <div className="space-y-8 flex-1">
+            <div className="space-y-8">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                   Входящий вебхук Битрикс24

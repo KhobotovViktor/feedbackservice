@@ -417,8 +417,8 @@ export default async function AdminDashboard({
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/5 blur-[120px] -mr-64 -mt-64 rounded-full"></div>
         </div>
 
-        <div className="lg:row-span-2 bento-card flex flex-col h-full bg-white/40 min-h-[400px] md:min-h-[500px]">
-          <div className="flex items-center justify-between mb-8">
+        <div className="lg:row-span-2 bento-card flex flex-col bg-white/40 min-h-[400px] max-h-[640px] overflow-hidden">
+          <div className="flex items-center justify-between mb-8 shrink-0">
              <h3 className="text-xl font-black text-slate-900">По филиалам</h3>
              <Users className="w-6 h-6 text-slate-300" />
           </div>
@@ -437,20 +437,20 @@ export default async function AdminDashboard({
 
                 {/* Funnel counts */}
                 <div className="grid grid-cols-3 gap-2 mb-3">
-                  <div className="flex flex-col items-center py-2 rounded-xl bg-indigo-50/50 border border-indigo-100/40">
+                  <div className="flex flex-col items-center justify-start py-2 px-1 rounded-xl bg-indigo-50/50 border border-indigo-100/40">
                     <Eye className="w-3.5 h-3.5 text-indigo-400 mb-1" />
                     <span className="text-sm font-black text-slate-900 leading-none">{branch.views}</span>
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">просмотры</span>
+                    <span className="text-[9px] font-bold text-slate-400 text-center leading-tight mt-1">просмотры</span>
                   </div>
-                  <div className="flex flex-col items-center py-2 rounded-xl bg-emerald-50/50 border border-emerald-100/40">
+                  <div className="flex flex-col items-center justify-start py-2 px-1 rounded-xl bg-emerald-50/50 border border-emerald-100/40">
                     <MessageSquare className="w-3.5 h-3.5 text-emerald-500 mb-1" />
                     <span className="text-sm font-black text-slate-900 leading-none">{branch.count}</span>
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">прохождения</span>
+                    <span className="text-[9px] font-bold text-slate-400 text-center leading-tight mt-1">прохождения</span>
                   </div>
-                  <div className="flex flex-col items-center py-2 rounded-xl bg-amber-50/50 border border-amber-100/40">
+                  <div className="flex flex-col items-center justify-start py-2 px-1 rounded-xl bg-amber-50/50 border border-amber-100/40">
                     <MousePointer2 className="w-3.5 h-3.5 text-amber-500 mb-1" />
                     <span className="text-sm font-black text-slate-900 leading-none">{branch.clicks}</span>
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">переходы</span>
+                    <span className="text-[9px] font-bold text-slate-400 text-center leading-tight mt-1">переходы</span>
                   </div>
                 </div>
 
