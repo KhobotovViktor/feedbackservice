@@ -207,7 +207,7 @@ async function handleWebhook(req: NextRequest) {
         ? String(dealData.ASSIGNED_BY_ID)
         : undefined;
       const perOperatorWebhooks = await prisma.b24Webhook.findMany({
-        select: { userId: true, url: true },
+        select: { userId: true, url: true, displayName: true },
       });
       const sendCandidates: string[] = [];
       const seen = new Set<string>();
@@ -229,6 +229,25 @@ async function handleWebhook(req: NextRequest) {
       }
       for (const w of perOperatorWebhooks) pushCandidate(w.url);
       pushCandidate(baseUrl);
+
+      // If the robot didn't pass ?responsible=, derive the operator name from
+      // the webhook mapping (deal/lead ASSIGNED_BY_ID → registered displayName)
+      // and persist it on the dispatch row, so the survey result later shows
+      // who sent the link. (The submit handler reads SentSurvey.responsibleName
+      // by dealId; for deals dedupKey === the id, which is the common case.)
+      if (!safeResponsibleName && assignedWebhook?.displayName) {
+        try {
+          await prisma.sentSurvey.update({
+            where: { dealId: dedupKey },
+            data: { responsibleName: assignedWebhook.displayName },
+          });
+          console.log(
+            `responsibleName set from webhook mapping: ${assignedWebhook.displayName}`
+          );
+        } catch (e) {
+          console.error("Failed to backfill responsibleName on SentSurvey:", e);
+        }
+      }
 
       // 1. Try to send via Open Channel (Direct Chat)
       try {

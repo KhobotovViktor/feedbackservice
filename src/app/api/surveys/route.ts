@@ -269,6 +269,28 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Optional body { ids: [...] } → delete just those responses.
+    // No body / empty ids → wipe everything (the "Очистить" button).
+    let ids: string[] | null = null;
+    try {
+      const body = await req.json();
+      if (Array.isArray(body?.ids)) {
+        ids = body.ids.filter((x: unknown): x is string => typeof x === "string");
+      }
+    } catch {
+      // no JSON body — fall through to full wipe
+    }
+
+    if (ids && ids.length > 0) {
+      // Targeted delete. We only remove the responses themselves, not the
+      // SentSurvey dispatch rows, so a deleted result won't cause the survey
+      // to be re-sent for that deal.
+      const result = await prisma.surveyResponse.deleteMany({
+        where: { id: { in: ids } },
+      });
+      return NextResponse.json({ success: true, deleted: result.count });
+    }
+
     await prisma.surveyResponse.deleteMany({});
     await prisma.sentSurvey.deleteMany({});
     return NextResponse.json({ success: true });

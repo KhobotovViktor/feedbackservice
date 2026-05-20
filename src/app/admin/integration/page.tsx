@@ -32,7 +32,11 @@ export default function IntegrationPage() {
   const [opSaving, setOpSaving] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
 
-  const webhookUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/api/b24/webhook?clientId={{ID}}&dealId={{DEAL_ID}}`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  // Two robot URLs — Bitrix24's {{ID}} macro resolves to the current
+  // document's id (the deal in a Deals funnel, the lead in a Leads funnel).
+  const webhookUrlDeal = `${origin}/api/b24/webhook?clientId={{ID}}&dealId={{ID}}`;
+  const webhookUrlLead = `${origin}/api/b24/webhook?clientId={{ID}}&leadId={{ID}}&entityType=lead`;
 
   useEffect(() => {
     Promise.all([
@@ -541,12 +545,28 @@ export default function IntegrationPage() {
               </div>
             </div>
             <p className="text-slate-400 text-sm font-bold relative z-10 leading-relaxed">
-              Скопируйте этот URL и вставьте его в настройки робота <span className="text-indigo-300">"Входящий вебхук"</span> в Битрикс24 для автоматизации сбора отзывов.
+              Вставьте нужный URL в робота <span className="text-indigo-300">«Исходящий вебхук»</span> в Битрикс24: один — для воронки <span className="text-indigo-300">Сделок</span>, другой — для воронки <span className="text-indigo-300">Лидов</span>.
             </p>
-            <div className="bg-white/5 p-6 rounded-2xl font-mono text-sm text-indigo-300 break-all select-all flex items-center justify-between border border-white/5 group hover:bg-white/10 transition-all relative z-10">
-              <span className="truncate">{webhookUrl}</span>
-              <Terminal className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-opacity ml-4 shrink-0" />
+
+            <div className="space-y-2 relative z-10">
+              <p className="text-[10px] font-black text-indigo-300/70 uppercase tracking-widest ml-1">Для робота в воронке Сделок</p>
+              <div className="bg-white/5 p-5 rounded-2xl font-mono text-xs md:text-sm text-indigo-300 break-all select-all flex items-center justify-between border border-white/5 group hover:bg-white/10 transition-all">
+                <span className="break-all">{webhookUrlDeal}</span>
+                <Terminal className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-opacity ml-4 shrink-0" />
+              </div>
             </div>
+
+            <div className="space-y-2 relative z-10">
+              <p className="text-[10px] font-black text-emerald-300/70 uppercase tracking-widest ml-1">Для робота в воронке Лидов</p>
+              <div className="bg-white/5 p-5 rounded-2xl font-mono text-xs md:text-sm text-emerald-200 break-all select-all flex items-center justify-between border border-white/5 group hover:bg-white/10 transition-all">
+                <span className="break-all">{webhookUrlLead}</span>
+                <Terminal className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-opacity ml-4 shrink-0" />
+              </div>
+            </div>
+
+            <p className="text-[10px] text-slate-500 font-medium relative z-10 leading-relaxed">
+              Метод запроса — GET. Не вешайте оба робота сразу (на сделку и на лид одного клиента), иначе клиент получит две ссылки.
+            </p>
 
             <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-indigo-500/10 blur-[100px] rounded-full" />
           </div>

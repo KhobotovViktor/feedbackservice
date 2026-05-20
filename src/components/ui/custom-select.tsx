@@ -51,7 +51,12 @@ export function CustomSelect({ options, value, onChange, className, placeholder 
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 4, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-100 rounded-xl shadow-2xl overflow-hidden py-1 z-[100]"
+            // min-w-full keeps the menu at least as wide as the trigger, while
+            // w-max + max-w let it grow to fit long option labels (branch names,
+            // "Битрикс24 (Самара)" etc.) instead of truncating them. right-0
+            // anchors it to the trigger's right edge so it doesn't overflow the
+            // viewport for right-aligned filters.
+            className="absolute top-full right-0 min-w-full w-max max-w-[min(20rem,80vw)] mt-1 bg-white border border-slate-100 rounded-xl shadow-2xl overflow-hidden py-1 z-[100]"
           >
             <div className="max-h-48 overflow-y-auto custom-scrollbar px-1.5 space-y-0.5">
               {options.map((option) => (
@@ -63,14 +68,14 @@ export function CustomSelect({ options, value, onChange, className, placeholder 
                     setIsOpen(false);
                   }}
                   className={cn(
-                    "w-full flex items-center justify-between px-4 py-2 rounded-lg transition-all text-left font-bold text-xs",
-                    value === option.value 
-                      ? "bg-indigo-500 text-white" 
+                    "w-full flex items-center gap-3 justify-between px-4 py-2 rounded-lg transition-all text-left font-bold text-xs",
+                    value === option.value
+                      ? "bg-indigo-500 text-white"
                       : "text-slate-600 hover:bg-slate-50"
                   )}
                 >
-                  <span className="truncate">{option.label}</span>
-                  {value === option.value && <Check className="w-3.5 h-3.5" />}
+                  <span className="whitespace-nowrap">{option.label}</span>
+                  {value === option.value && <Check className="w-3.5 h-3.5 shrink-0" />}
                 </button>
               ))}
             </div>
