@@ -109,6 +109,19 @@ export default async function AdminDashboard({
   let crmCount = 0;
   // Click breakdown per review service (YANDEX / 2GIS / GOOGLE).
   const clicksByTarget: Record<string, number> = { YANDEX: 0, "2GIS": 0, GOOGLE: 0 };
+  // Per-branch analytics for the "По филиалам" block.
+  type BranchAnalytics = {
+    views: number;
+    clicks: number;
+    clicksByTarget: Record<string, number>;
+  };
+  const perBranch: Record<string, BranchAnalytics> = {};
+  const branchA = (id: string): BranchAnalytics => {
+    if (!perBranch[id]) {
+      perBranch[id] = { views: 0, clicks: 0, clicksByTarget: { YANDEX: 0, "2GIS": 0, GOOGLE: 0 } };
+    }
+    return perBranch[id];
+  };
 
   try {
     const results = await Promise.all([
@@ -157,6 +170,18 @@ export default async function AdminDashboard({
         _avg: { averageScore: true },
         _count: { _all: true },
       }),
+      // Per-branch VIEW / CLICK totals.
+      prisma.analyticsEvent.groupBy({
+        by: ["branchId", "type"],
+        where: { ...whereWithDate, branchId: { not: null } },
+        _count: { _all: true },
+      }),
+      // Per-branch CLICK totals split by map service.
+      prisma.analyticsEvent.groupBy({
+        by: ["branchId", "target"],
+        where: { ...whereWithDate, type: "CLICK", branchId: { not: null } },
+        _count: { _all: true },
+      }),
     ]);
 
     totalResponses = results[0];
@@ -173,6 +198,17 @@ export default async function AdminDashboard({
     }
     crmAvg = results[8]._avg.averageScore ?? 0;
     crmCount = results[8]._count._all;
+    for (const row of results[9]) {
+      if (!row.branchId) continue;
+      const a = branchA(row.branchId);
+      if (row.type === "VIEW") a.views = row._count._all;
+      else if (row.type === "CLICK") a.clicks = row._count._all;
+    }
+    for (const row of results[10]) {
+      if (!row.branchId || !row.target) continue;
+      const a = branchA(row.branchId);
+      if (row.target in a.clicksByTarget) a.clicksByTarget[row.target] = row._count._all;
+    }
   } catch (err) {
     console.error("Dashboard data fetch error:", err);
   }
@@ -181,7 +217,20 @@ export default async function AdminDashboard({
     const scores = branch.surveyResponses.map((r) => r.averageScore);
     const avg =
       scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-    return { id: branch.id, name: branch.name, avg, count: scores.length };
+    const a = perBranch[branch.id] ?? {
+      views: 0,
+      clicks: 0,
+      clicksByTarget: { YANDEX: 0, "2GIS": 0, GOOGLE: 0 },
+    };
+    return {
+      id: branch.id,
+      name: branch.name,
+      avg,
+      count: scores.length, // прохождения (успешные ответы)
+      views: a.views, // открытия опроса (QR/ссылка)
+      clicks: a.clicks, // переходы на карты
+      clicksByTarget: a.clicksByTarget,
+    };
   });
 
   // Network loyalty = average of ALL responses in the period (branch + CRM/QR),
@@ -374,21 +423,54 @@ export default async function AdminDashboard({
              <Users className="w-6 h-6 text-slate-300" />
           </div>
           
-          <div className="space-y-3 overflow-y-auto pr-2 flex-1 custom-scrollbar">
+          <div className="space-y-4 overflow-y-auto pr-2 flex-1 custom-scrollbar">
             {branchStats.map((branch) => (
-              <div key={branch.id} className="p-5 glass rounded-2xl hover:scale-[1.02] transition-all border-white/60 mb-1">
-                <div className="flex justify-between items-start mb-2">
-                  <p className="font-bold text-slate-800 text-sm truncate pr-2">{branch.name}</p>
+              <div key={branch.id} className="p-5 glass rounded-2xl hover:bg-white/80 transition-all border-white/60 mb-1">
+                {/* Header: name (full, wraps) + average rating */}
+                <div className="flex justify-between items-start gap-3 mb-4">
+                  <p className="font-bold text-slate-800 text-sm leading-snug break-words flex-1">{branch.name}</p>
                   <div className="flex items-center gap-1 text-slate-900 font-black text-sm shrink-0">
                     {branch.avg.toFixed(1)}
                     <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                   </div>
                 </div>
-                <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-[0.15em]">
-                  <span className="text-slate-400">{branch.count} ответов</span>
-                  <span className={branch.avg >= 4 ? "text-emerald-500" : "text-rose-500"}>
-                    {branch.avg >= 4 ? "Excellent" : "Needs Review"}
-                  </span>
+
+                {/* Funnel counts */}
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="flex flex-col items-center py-2 rounded-xl bg-indigo-50/50 border border-indigo-100/40">
+                    <Eye className="w-3.5 h-3.5 text-indigo-400 mb-1" />
+                    <span className="text-sm font-black text-slate-900 leading-none">{branch.views}</span>
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">просмотры</span>
+                  </div>
+                  <div className="flex flex-col items-center py-2 rounded-xl bg-emerald-50/50 border border-emerald-100/40">
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-500 mb-1" />
+                    <span className="text-sm font-black text-slate-900 leading-none">{branch.count}</span>
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">прохождения</span>
+                  </div>
+                  <div className="flex flex-col items-center py-2 rounded-xl bg-amber-50/50 border border-amber-100/40">
+                    <MousePointer2 className="w-3.5 h-3.5 text-amber-500 mb-1" />
+                    <span className="text-sm font-black text-slate-900 leading-none">{branch.clicks}</span>
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">переходы</span>
+                  </div>
+                </div>
+
+                {/* Click breakdown per service */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { key: "YANDEX", label: "Яндекс", icon: "yandex" },
+                    { key: "2GIS", label: "2ГИС", icon: "2gis" },
+                    { key: "GOOGLE", label: "Google", icon: "googlemaps" },
+                  ].map((s) => (
+                    <div
+                      key={s.key}
+                      className="flex items-center gap-1.5 px-2 py-1 bg-white/70 border border-slate-100 rounded-lg"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/icons/${s.icon}.png`} alt="" className="w-3 h-3 object-contain" />
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{s.label}</span>
+                      <span className="text-[11px] font-black text-amber-600">{branch.clicksByTarget[s.key] || 0}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
