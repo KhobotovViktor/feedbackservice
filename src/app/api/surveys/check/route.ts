@@ -16,39 +16,58 @@ export async function GET(req: NextRequest) {
   }
 
   const { clientId, branchId, isTest, templateId } = payload;
-  
-  // Fetch branch info if present
-  let branchInfo = null;
+
+  // We only return a narrow projection of the branch to the survey page —
+  // declare it once and keep the rest of this handler within that shape.
+  type Question = { id: string; text: string; order: number };
+  type Template = { id: string; name: string; questions: Question[] };
+  type BranchInfo = {
+    id?: string;
+    yandexUrl?: string | null;
+    dgisUrl?: string | null;
+    googleUrl?: string | null;
+    template: Template | null;
+  };
+
+  let branchInfo: BranchInfo | null = null;
   if (branchId) {
-    branchInfo = await prisma.branch.findUnique({
+    const b = await prisma.branch.findUnique({
       where: { id: branchId },
       include: {
         template: {
-          include: {
-            questions: {
-              orderBy: { order: "asc" }
-            }
-          }
-        }
-      }
+          include: { questions: { orderBy: { order: "asc" } } },
+        },
+      },
     });
+    if (b) {
+      branchInfo = {
+        id: b.id,
+        yandexUrl: b.yandexUrl,
+        dgisUrl: b.dgisUrl,
+        googleUrl: b.googleUrl,
+        template: b.template
+          ? { id: b.template.id, name: b.template.name, questions: b.template.questions }
+          : null,
+      };
+    }
   }
 
   // If no branch template, but templateId is in token (e.g. from B24 setting)
   if ((!branchInfo || !branchInfo.template) && templateId) {
     const template = await prisma.questionTemplate.findUnique({
       where: { id: templateId },
-      include: {
-        questions: {
-          orderBy: { order: "asc" }
-        }
-      }
+      include: { questions: { orderBy: { order: "asc" } } },
     });
     if (template) {
+      const tpl: Template = {
+        id: template.id,
+        name: template.name,
+        questions: template.questions,
+      };
       if (!branchInfo) {
-        branchInfo = { template } as any;
+        branchInfo = { template: tpl };
       } else {
-        branchInfo.template = template as any;
+        branchInfo.template = tpl;
       }
     }
   }

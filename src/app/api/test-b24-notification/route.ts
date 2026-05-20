@@ -1,25 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-
-function isSafeB24Url(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return false;
-    const host = parsed.hostname.toLowerCase();
-    if (
-      host === "localhost" ||
-      host.startsWith("127.") ||
-      host.startsWith("10.") ||
-      host.startsWith("192.168.") ||
-      host.startsWith("169.254.") ||
-      host === "0.0.0.0" ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-    ) return false;
-    return host.includes("bitrix24.");
-  } catch {
-    return false;
-  }
-}
+import { isSafeB24Url } from "@/lib/b24-url";
 
 export async function POST(req: NextRequest) {
   try {

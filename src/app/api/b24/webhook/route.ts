@@ -3,35 +3,10 @@ import { randomBytes } from "crypto";
 import { createSurveyToken } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 import { getAppOrigin } from "@/lib/url";
+import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 
 function isValidId(value: string): boolean {
   return value.length > 0 && value.length <= 128 && !/[{}\n\r]/.test(value);
-}
-
-/**
- * Защита от SSRF: разрешаем только HTTPS-URL на домен *.bitrix24.* / *.bitrix24.ru
- * Блокируем localhost, внутренние IP, произвольные домены.
- */
-function isSafeB24Url(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return false;
-    const host = parsed.hostname.toLowerCase();
-    // Блокируем loopback и link-local
-    if (
-      host === "localhost" ||
-      host.startsWith("127.") ||
-      host.startsWith("10.") ||
-      host.startsWith("192.168.") ||
-      host.startsWith("169.254.") ||
-      host === "0.0.0.0" ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-    ) return false;
-    // Разрешаем только Bitrix24-домены
-    return host.includes("bitrix24.");
-  } catch {
-    return false;
-  }
 }
 
 async function handleWebhook(req: NextRequest) {
@@ -160,7 +135,7 @@ async function handleWebhook(req: NextRequest) {
 
       const template = settingsMap.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}";
       const message = template.replace("{surveyUrl}", surveyUrl);
-      const baseUrl = settingsMap.b24_webhook_url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
+      const baseUrl = normalizeB24Url(settingsMap.b24_webhook_url);
 
 
       // 0. Fetch Deal data once to use for both Open Channel and Field Protection.
@@ -200,13 +175,11 @@ async function handleWebhook(req: NextRequest) {
       const perOperatorWebhooks = await prisma.b24Webhook.findMany({
         select: { userId: true, url: true },
       });
-      const normalize = (u: string) =>
-        u.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
       const sendCandidates: string[] = [];
       const seen = new Set<string>();
       const pushCandidate = (raw?: string | null) => {
         if (!raw) return;
-        const norm = normalize(raw);
+        const norm = normalizeB24Url(raw);
         if (seen.has(norm)) return;
         seen.add(norm);
         sendCandidates.push(norm);

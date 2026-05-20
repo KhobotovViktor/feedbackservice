@@ -14,7 +14,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    const branch = await (prisma as any).branch.update({
+    const branch = await prisma.branch.update({
       where: { id },
       data: {
         name,
@@ -24,7 +24,7 @@ export async function PATCH(
         googleUrl,
         externalId,
         templateId: templateId || null,
-      }
+      },
     });
 
     return NextResponse.json(branch);
@@ -40,9 +40,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await (prisma as any).branch.delete({
-      where: { id }
-    });
+    await prisma.branch.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);

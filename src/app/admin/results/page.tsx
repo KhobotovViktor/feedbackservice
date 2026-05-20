@@ -1,21 +1,28 @@
 import { prisma } from "@/lib/prisma";
-import { Building2, MessageCircle, Star, Calendar, User, TrendingUp, Filter, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
+import type { Prisma, SurveyResponse, Branch } from "@prisma/client";
+import { Building2, MessageCircle, Star, Calendar, User, TrendingUp, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BranchFilter } from "@/components/results/branch-filter";
 import { TypeFilter } from "@/components/results/type-filter";
 import { ClearResultsButton } from "@/components/results/clear-results-button";
-import Link from "next/link";
 
-export default async function ResultsPage({ 
-  searchParams 
-}: { 
-  searchParams: Promise<{ branchId?: string; type?: string; sortBy?: string; order?: string }> 
+type ResponseRow = SurveyResponse & { branch: Branch | null };
+
+export default async function ResultsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ branchId?: string; type?: string; sortBy?: string; order?: string }>;
 }) {
   const { branchId, type = "all", sortBy = "date", order = "desc" } = await searchParams;
+  const sortDir: "asc" | "desc" = order === "asc" ? "asc" : "desc";
 
   // Helper to get source text
-  const getSourceText = (res: any) => {
-    const isCRM = res.dealId && res.dealId !== "0" && res.dealId !== "TEST_DEAL" && res.dealId !== "QR_GUEST";
+  const getSourceText = (res: ResponseRow): string => {
+    const isCRM =
+      res.dealId &&
+      res.dealId !== "0" &&
+      res.dealId !== "TEST_DEAL" &&
+      res.dealId !== "QR_GUEST";
     if (res.branch?.name) {
       return `${res.branch.name} ${isCRM ? "(CRM)" : "(QR)"}`;
     }
@@ -23,11 +30,11 @@ export default async function ResultsPage({
     return "Прямая ссылка / QR";
   };
 
-  let responses: any[] = [];
-  let branches: any[] = [];
+  let responses: ResponseRow[] = [];
+  let branches: { id: string; name: string }[] = [];
 
   try {
-    const where: any = {};
+    const where: Prisma.SurveyResponseWhereInput = {};
     if (branchId === "crm") {
       where.branchId = null;
       where.dealId = { not: "QR_GUEST" };
@@ -38,22 +45,25 @@ export default async function ResultsPage({
     if (type === "positive") where.averageScore = { gte: 4.5 };
     if (type === "negative") where.averageScore = { lt: 4.5 };
 
+    const orderBy: Prisma.SurveyResponseOrderByWithRelationInput | undefined =
+      sortBy === "date"
+        ? { createdAt: sortDir }
+        : sortBy === "score"
+          ? { averageScore: sortDir }
+          : sortBy === "responsible"
+            ? { responsibleName: sortDir }
+            : undefined;
+
     const results = await Promise.all([
       prisma.surveyResponse.findMany({
         where,
-        orderBy: sortBy === "date" 
-          ? { createdAt: order as any } 
-          : sortBy === "score"
-            ? { averageScore: order as any }
-            : sortBy === "responsible"
-              ? { responsibleName: order as any }
-              : undefined,
-        include: { branch: true }
+        orderBy,
+        include: { branch: true },
       }),
-      (prisma as any).branch.findMany({
+      prisma.branch.findMany({
         orderBy: { name: "asc" },
-        select: { id: true, name: true }
-      })
+        select: { id: true, name: true },
+      }),
     ]);
     responses = results[0];
     branches = results[1];
@@ -131,7 +141,7 @@ export default async function ResultsPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white/40">
-                {responses.map((res: any) => (
+                {responses.map((res: ResponseRow) => (
                   <tr key={res.id} className="hover:bg-white transition-colors group">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-3">
@@ -178,7 +188,7 @@ export default async function ResultsPage({
 
           {/* Mobile/Tablet Card View */}
           <div className="xl:hidden grid grid-cols-1 md:grid-cols-2 gap-6">
-            {responses.map((res: any) => {
+            {responses.map((res: ResponseRow) => {
               const ratingColor = res.averageScore >= 4 ? "text-emerald-500 bg-emerald-50 border-emerald-100" : "text-rose-500 bg-rose-50 border-rose-100";
               return (
                 <div key={res.id} className="bento-card group flex flex-col bg-white/60">

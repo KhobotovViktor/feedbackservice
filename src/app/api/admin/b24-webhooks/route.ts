@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 
 /**
  * Per-operator Bitrix24 incoming webhooks.
@@ -14,39 +15,6 @@ import { prisma } from "@/lib/prisma";
  * Auth is enforced by src/proxy.ts — any path under /api/admin/* requires a
  * valid session cookie.
  */
-
-function isValidB24Url(url: string): boolean {
-  try {
-    const u = new URL(url);
-    if (u.protocol !== "https:") return false;
-    if (!u.hostname.toLowerCase().includes("bitrix24.")) return false;
-    // Block loopback / private ranges.
-    const host = u.hostname.toLowerCase();
-    if (
-      host === "localhost" ||
-      host.startsWith("127.") ||
-      host.startsWith("10.") ||
-      host.startsWith("192.168.") ||
-      host.startsWith("169.254.") ||
-      host === "0.0.0.0" ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-    ) {
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function normalizeUrl(raw: string): string {
-  // Strip trailing slash and trailing /profile.json or /profile so the value
-  // matches the shape we use for API calls (base URL without method suffix).
-  return raw
-    .trim()
-    .replace(/\/$/, "")
-    .replace(/\/(profile\.json|profile)$/, "");
-}
 
 function isValidUserId(value: string): boolean {
   return /^\d{1,12}$/.test(value);
@@ -78,8 +46,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const url = normalizeUrl(urlRaw);
-    if (!isValidB24Url(url)) {
+    const url = normalizeB24Url(urlRaw);
+    if (!isSafeB24Url(url)) {
       return NextResponse.json(
         { error: "url must be a HTTPS link to a *.bitrix24.* host" },
         { status: 400 }

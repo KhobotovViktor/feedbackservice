@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Check, Calendar as CalendarIcon, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,20 +13,21 @@ const periods = [
 export function PeriodFilter() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const currentPeriod = searchParams.get("period") || "all";
   const from = searchParams.get("from") || "";
   const to = searchParams.get("to") || "";
 
+  // The form has two roles: while the user is typing dates we hold a local
+  // draft (startDate/endDate, showCustom); once they submit, the URL becomes
+  // the source of truth and React unmounts + remounts the inputs via `key`.
+  // This replaces the previous useEffect-resets-state pattern, which React
+  // 19 flags as an anti-pattern (cascading renders) — and which also
+  // silently dropped user input whenever the URL changed mid-edit.
+  const stateKey = `${currentPeriod}|${from}|${to}`;
   const [startDate, setStartDate] = useState(from);
   const [endDate, setEndDate] = useState(to);
   const [showCustom, setShowCustom] = useState(currentPeriod === "custom");
-
-  useEffect(() => {
-    setStartDate(from);
-    setEndDate(to);
-    setShowCustom(currentPeriod === "custom");
-  }, [from, to, currentPeriod]);
 
   const handlePeriodSelect = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -48,7 +49,7 @@ export function PeriodFilter() {
   };
 
   return (
-    <div className="flex flex-col items-end gap-4">
+    <div key={stateKey} className="flex flex-col items-end gap-4">
       <div className="flex items-center gap-3">
         {/* Toggle Preset */}
         <div className="flex gap-1 p-1 bg-slate-100 rounded-2xl w-fit border border-slate-200/50 shadow-inner">

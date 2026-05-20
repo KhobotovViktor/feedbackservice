@@ -38,11 +38,16 @@ export async function GET() {
       }
     });
 
-    const branches = branchesRaw.map((branch: any) => {
-      const scores = (branch.surveyResponses as { averageScore: number }[]).map(r => r.averageScore);
-      const avg = scores.length > 0 ? (scores.reduce((a: number, b: number) => a + b, 0) / scores.length).toFixed(1) : "0.0";
-      
-      const { surveyResponses, ...rest } = branch;
+    const branches = branchesRaw.map((branch) => {
+      const scores = branch.surveyResponses.map((r) => r.averageScore);
+      const avg =
+        scores.length > 0
+          ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
+          : "0.0";
+      // Strip the per-row response list from the response; only the average
+      // is shipped to clients.
+      const { surveyResponses: _drop, ...rest } = branch;
+      void _drop;
       return { ...rest, averageScore: avg };
     });
 
