@@ -79,6 +79,10 @@ export async function proxy(req: NextRequest) {
     // Sync-requests with API key (external integrations)
     path.startsWith("/api/rating-bridge") ||
     path.startsWith("/api/sync-manual") ||
+    // Rating scrape trigger — exact match only (NOT the whole /api/admin/
+    // tree). The handler enforces its own session-OR-API-key auth, so it's
+    // safe to bypass the proxy session gate here for the VM cron job.
+    path === "/api/admin/rating-sync" ||
     // Analytics recorded from the survey page (no session)
     path === "/api/analytics";
 
