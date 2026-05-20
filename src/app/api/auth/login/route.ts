@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
 
     // Успешный вход — сбросить счётчик попыток
     resetAttempts(ip);
-    await setSession(username);
+    await setSession(username, user.role, user.id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

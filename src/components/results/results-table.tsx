@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Star, User, MessageCircle, TrendingUp, Trash2, Loader2, X } from "lucide-react";
+import { Calendar, Star, User, MessageCircle, TrendingUp, Trash2, Loader2, X, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+export type ComplaintStatus = "NEW" | "IN_PROGRESS" | "RESOLVED";
 
 export interface ResultRow {
   id: string;
@@ -14,7 +16,29 @@ export interface ResultRow {
   createdAt: string | Date;
   responsibleName: string | null;
   branch: { name: string } | null;
+  complaintStatus: ComplaintStatus | null;
 }
+
+const STATUS_META: Record<ComplaintStatus, { label: string; cls: string; next?: ComplaintStatus; nextLabel?: string }> = {
+  NEW: {
+    label: "Новая",
+    cls: "text-rose-600 bg-rose-50 border-rose-200",
+    next: "IN_PROGRESS",
+    nextLabel: "В работу",
+  },
+  IN_PROGRESS: {
+    label: "В работе",
+    cls: "text-amber-600 bg-amber-50 border-amber-200",
+    next: "RESOLVED",
+    nextLabel: "Решена",
+  },
+  RESOLVED: {
+    label: "Решена",
+    cls: "text-emerald-600 bg-emerald-50 border-emerald-200",
+    next: "IN_PROGRESS",
+    nextLabel: "Вернуть",
+  },
+};
 
 function sourceText(res: ResultRow): string {
   const isCRM =
@@ -81,6 +105,53 @@ export function ResultsTable({ responses }: { responses: ResultRow[] }) {
     }
   };
 
+  const [statusBusy, setStatusBusy] = useState<string | null>(null);
+  const setStatus = async (id: string, complaintStatus: ComplaintStatus) => {
+    setStatusBusy(id);
+    try {
+      const res = await fetch(`/api/surveys/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ complaintStatus }),
+      });
+      if (res.ok) router.refresh();
+      else {
+        const data = await res.json().catch(() => ({}));
+        alert(`Не удалось обновить статус: ${data.error || res.statusText}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Ошибка сети при смене статуса.");
+    } finally {
+      setStatusBusy(null);
+    }
+  };
+
+  // Complaint status badge + next-action button for a negative response.
+  const Complaint = ({ res }: { res: ResultRow }) => {
+    if (!res.complaintStatus) return <span className="text-slate-200">—</span>;
+    const meta = STATUS_META[res.complaintStatus];
+    const busy = statusBusy === res.id;
+    return (
+      <div className="flex flex-col items-start gap-1.5">
+        <span className={cn("text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest inline-flex items-center gap-1", meta.cls)}>
+          <AlertCircle className="w-3 h-3" />
+          {meta.label}
+        </span>
+        {meta.next && (
+          <button
+            onClick={() => setStatus(res.id, meta.next!)}
+            disabled={busy}
+            className="text-[9px] font-black px-2.5 py-1 rounded-lg bg-slate-900 text-white hover:bg-slate-700 transition-colors disabled:opacity-50 uppercase tracking-widest inline-flex items-center gap-1"
+          >
+            {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+            {meta.nextLabel}
+          </button>
+        )}
+      </div>
+    );
+  };
+
   const fmtDate = (d: string | Date) =>
     new Date(d).toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" });
   const fmtTime = (d: string | Date) =>
@@ -130,11 +201,12 @@ export function ResultsTable({ responses }: { responses: ResultRow[] }) {
                   className="w-4 h-4 rounded accent-indigo-500 cursor-pointer"
                 />
               </th>
-              <th className="w-[16%] px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Дата</th>
-              <th className="w-[17%] px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60 text-center">Источник</th>
-              <th className="w-[17%] px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Клиент / Сделка</th>
-              <th className="w-[10%] px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60 text-center">Оценка</th>
-              <th className="w-[14%] px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Ответственный</th>
+              <th className="w-[13%] px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Дата</th>
+              <th className="w-[15%] px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60 text-center">Источник</th>
+              <th className="w-[14%] px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Клиент / Сделка</th>
+              <th className="w-[8%] px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60 text-center">Оценка</th>
+              <th className="w-[12%] px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Ответственный</th>
+              <th className="w-[13%] px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Жалоба</th>
               <th className="px-6 py-6 font-black text-[10px] uppercase tracking-widest opacity-60">Комментарий</th>
             </tr>
           </thead>
@@ -189,6 +261,9 @@ export function ResultsTable({ responses }: { responses: ResultRow[] }) {
                 </td>
                 <td className="px-6 py-6">
                   <div className="text-[11px] font-black text-slate-900 uppercase tracking-tight truncate">{res.responsibleName || "—"}</div>
+                </td>
+                <td className="px-6 py-6">
+                  <Complaint res={res} />
                 </td>
                 <td className="px-6 py-6 text-sm text-slate-600 font-medium leading-relaxed italic overflow-hidden text-ellipsis">
                   {res.comment ? `“${res.comment}”` : <span className="text-slate-200">Нет комментария</span>}
@@ -257,6 +332,13 @@ export function ResultsTable({ responses }: { responses: ResultRow[] }) {
                   </div>
                 </div>
               </div>
+
+              {res.complaintStatus && (
+                <div className="flex items-center justify-between gap-3 p-4 bg-rose-50/40 border border-rose-100/40 rounded-2xl mb-6">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Жалоба</span>
+                  <Complaint res={res} />
+                </div>
+              )}
 
               {res.comment && (
                 <div className="p-6 bg-indigo-50/20 rounded-3xl border border-indigo-100/20 mt-auto relative overflow-hidden">

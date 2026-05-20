@@ -5,6 +5,7 @@ import { BranchFilter } from "@/components/results/branch-filter";
 import { TypeFilter } from "@/components/results/type-filter";
 import { ClearResultsButton } from "@/components/results/clear-results-button";
 import { ResultsTable } from "@/components/results/results-table";
+import { getAccessibleBranchIds } from "@/lib/access";
 
 type ResponseRow = SurveyResponse & { branch: Branch | null };
 
@@ -30,6 +31,9 @@ export default async function ResultsPage({
     return "Прямая ссылка / QR";
   };
 
+  // Role scope: MANAGER sees only assigned branches; ADMIN sees all.
+  const accessibleBranchIds = await getAccessibleBranchIds();
+
   let responses: ResponseRow[] = [];
   let branches: { id: string; name: string }[] = [];
 
@@ -44,6 +48,18 @@ export default async function ResultsPage({
 
     if (type === "positive") where.averageScore = { gte: 4.5 };
     if (type === "negative") where.averageScore = { lt: 4.5 };
+
+    // Enforce branch scope for managers, intersecting with any chosen filter.
+    if (accessibleBranchIds !== null) {
+      if (branchId === "crm") {
+        // CRM/no-branch responses aren't tied to a branch — managers can't see them.
+        where.branchId = { in: [] };
+      } else if (typeof where.branchId === "string") {
+        if (!accessibleBranchIds.includes(where.branchId)) where.branchId = { in: [] };
+      } else {
+        where.branchId = { in: accessibleBranchIds };
+      }
+    }
 
     const orderBy: Prisma.SurveyResponseOrderByWithRelationInput | undefined =
       sortBy === "date"
@@ -61,6 +77,7 @@ export default async function ResultsPage({
         include: { branch: true },
       }),
       prisma.branch.findMany({
+        where: accessibleBranchIds === null ? {} : { id: { in: accessibleBranchIds } },
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       }),

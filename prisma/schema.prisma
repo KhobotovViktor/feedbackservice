@@ -24,6 +24,7 @@ model Branch {
   shortLinks      ShortLink[]
   surveyResponses SurveyResponse[]
   ratingHistory   RatingHistory[]
+  managers        User[]            @relation("BranchManagers")
 }
 
 model QuestionTemplate {
@@ -62,7 +63,20 @@ model SurveyResponse {
   responsibleName String?
   branch          Branch?  @relation(fields: [branchId], references: [id])
 
+  // Close-the-loop on negatives. Only set for responses below the negative
+  // threshold (averageScore < 4.5); positive responses leave it null.
+  complaintStatus ComplaintStatus?
+  resolutionNote  String?
+  resolvedAt      DateTime?
+
   @@index([clientId])
+  @@index([complaintStatus])
+}
+
+enum ComplaintStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
 }
 
 model Settings {
@@ -86,7 +100,17 @@ model User {
   id        String   @id @default(cuid())
   username  String   @unique
   password  String
+  // ADMIN sees everything and manages users. MANAGER sees only the branches
+  // assigned via the BranchManagers relation. Existing users default to ADMIN
+  // so nothing changes for them on migration.
+  role      UserRole @default(ADMIN)
   createdAt DateTime @default(now())
+  branches  Branch[] @relation("BranchManagers")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
 }
 
 model AnalyticsEvent {
@@ -107,6 +131,11 @@ model SentSurvey {
   clientId        String?
   responsibleName String?
   createdAt       DateTime @default(now())
+  // Follow-up for "opened but not completed": store the survey link so the
+  // reminder job can re-send it, and track whether/when a reminder went out.
+  surveyUrl       String?
+  followUpSentAt  DateTime?
+  followUpCount   Int      @default(0)
 }
 
 model B24Webhook {

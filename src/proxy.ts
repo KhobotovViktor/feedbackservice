@@ -115,7 +115,31 @@ export async function proxy(req: NextRequest) {
   }
 
   try {
-    await jwtVerify(session, key, { algorithms: ["HS256"] });
+    const { payload } = await jwtVerify(session, key, { algorithms: ["HS256"] });
+
+    // Role gate: MANAGER may only reach the dashboard and results. Admin-only
+    // sections (config/management) redirect to the dashboard (pages) or 403
+    // (their APIs). ADMIN — and legacy sessions without a role — pass.
+    const role = (payload as { role?: string }).role;
+    if (role === "MANAGER") {
+      const adminOnly =
+        path.startsWith("/admin/integration") ||
+        path.startsWith("/admin/branches") ||
+        path.startsWith("/admin/templates") ||
+        path.startsWith("/admin/users") ||
+        path.startsWith("/api/admin/users") ||
+        path.startsWith("/api/admin/b24-webhooks") ||
+        path.startsWith("/api/settings") ||
+        path.startsWith("/api/branches") ||
+        path.startsWith("/api/templates");
+      if (adminOnly) {
+        if (path.startsWith("/api/")) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL("/admin", req.url));
+      }
+    }
+
     return nextWithNonce();
   } catch {
     if (path.startsWith("/api/")) {

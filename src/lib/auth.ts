@@ -41,9 +41,20 @@ export async function getSession() {
   }
 }
 
-export async function login(username: string) {
+export type SessionRole = "ADMIN" | "MANAGER";
+
+export async function login(
+  username: string,
+  role: SessionRole = "ADMIN",
+  userId?: string
+) {
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const session = await encrypt({ username, expires: expires.toISOString() });
+  const session = await encrypt({
+    username,
+    role,
+    userId,
+    expires: expires.toISOString(),
+  });
   const isProduction = process.env.NODE_ENV === "production";
 
   (await cookies()).set("session", session, {
@@ -53,6 +64,22 @@ export async function login(username: string) {
     sameSite: "lax",
     path: "/",
   });
+}
+
+/**
+ * Typed view of the current session for role-aware server code.
+ * Defaults role to ADMIN for legacy sessions issued before roles existed.
+ */
+export async function getCurrentUser(): Promise<
+  { username: string; role: SessionRole; userId?: string } | null
+> {
+  const s = await getSession();
+  if (!s || typeof s.username !== "string") return null;
+  return {
+    username: s.username,
+    role: s.role === "MANAGER" ? "MANAGER" : "ADMIN",
+    userId: typeof s.userId === "string" ? s.userId : undefined,
+  };
 }
 
 export async function logout() {

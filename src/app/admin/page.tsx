@@ -5,6 +5,7 @@ import { Star, MessageSquare, Users, TrendingUp, Eye, MousePointer2, AlertCircle
 import { cn } from "@/lib/utils";
 import { OverallMonitoring } from "@/components/dashboard/overall-monitoring";
 import { PeriodFilter } from "@/components/dashboard/period-filter";
+import { getAccessibleBranchIds } from "@/lib/access";
 
 interface BentoCardProps {
   label: string;
@@ -64,8 +65,15 @@ export default async function AdminDashboard({
     }
   }
 
-  const whereWithDate: { createdAt?: DateFilter } =
-    Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {};
+  // Role scope: MANAGER only sees their assigned branches; ADMIN sees all.
+  const accessibleBranchIds = await getAccessibleBranchIds();
+  const branchScope: { branchId?: { in: string[] } } =
+    accessibleBranchIds === null ? {} : { branchId: { in: accessibleBranchIds } };
+
+  const whereWithDate: { createdAt?: DateFilter; branchId?: { in: string[] } } = {
+    ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
+    ...branchScope,
+  };
 
   // Fetch Previous Period for Trends
   let prevDateFilter: DateFilter = {};
@@ -132,6 +140,7 @@ export default async function AdminDashboard({
         where: { ...whereWithDate, averageScore: { lt: 4.5 } },
       }),
       prisma.branch.findMany({
+        where: accessibleBranchIds === null ? {} : { id: { in: accessibleBranchIds } },
         include: {
           surveyResponses: {
             where: whereWithDate,
@@ -144,7 +153,7 @@ export default async function AdminDashboard({
         },
       }),
       Object.keys(prevDateFilter).length > 0
-        ? prisma.surveyResponse.count({ where: { createdAt: prevDateFilter } })
+        ? prisma.surveyResponse.count({ where: { createdAt: prevDateFilter, ...branchScope } })
         : Promise.resolve(0),
       // Network-wide average across every response in the period.
       prisma.surveyResponse.aggregate({
@@ -170,16 +179,25 @@ export default async function AdminDashboard({
         _avg: { averageScore: true },
         _count: { _all: true },
       }),
-      // Per-branch VIEW / CLICK totals.
+      // Per-branch VIEW / CLICK totals. branchId condition must override the
+      // scope spread (can't have both {in} and {not:null} on the same key),
+      // so set it explicitly: managers → {in scope}, admins → {not:null}.
       prisma.analyticsEvent.groupBy({
         by: ["branchId", "type"],
-        where: { ...whereWithDate, branchId: { not: null } },
+        where: {
+          ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
+          branchId: accessibleBranchIds === null ? { not: null } : { in: accessibleBranchIds },
+        },
         _count: { _all: true },
       }),
       // Per-branch CLICK totals split by map service.
       prisma.analyticsEvent.groupBy({
         by: ["branchId", "target"],
-        where: { ...whereWithDate, type: "CLICK", branchId: { not: null } },
+        where: {
+          ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
+          type: "CLICK",
+          branchId: accessibleBranchIds === null ? { not: null } : { in: accessibleBranchIds },
+        },
         _count: { _all: true },
       }),
     ]);

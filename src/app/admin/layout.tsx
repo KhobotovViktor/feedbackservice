@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, MessageSquare, Settings, LogOut, Star, Link as LinkIcon, Building2, Menu, X, Loader2 } from "lucide-react";
+import { LayoutDashboard, MessageSquare, LogOut, Link as LinkIcon, Building2, Menu, X, Loader2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -16,11 +16,20 @@ export default function AdminLayout({
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [role, setRole] = useState<"ADMIN" | "MANAGER" | null>(null);
 
   // Close sidebar on mobile when navigating
   useEffect(() => {
     setIsSidebarOpen(false);
   }, [pathname]);
+
+  // Resolve the current user's role so we only show sections they can open.
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setRole(d?.role === "MANAGER" ? "MANAGER" : "ADMIN"))
+      .catch(() => setRole("ADMIN"));
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -37,13 +46,17 @@ export default function AdminLayout({
     }
   };
 
-  const navItems = [
-    { label: "Дашборд", href: "/admin", icon: LayoutDashboard },
-    { label: "Интеграция", href: "/admin/integration", icon: LinkIcon },
-    { label: "Результаты", href: "/admin/results", icon: MessageSquare },
-    { label: "Филиалы", href: "/admin/branches", icon: Building2 },
-    { label: "Шаблоны", href: "/admin/templates", icon: LayoutDashboard },
+  const allNav = [
+    { label: "Дашборд", href: "/admin", icon: LayoutDashboard, adminOnly: false },
+    { label: "Результаты", href: "/admin/results", icon: MessageSquare, adminOnly: false },
+    { label: "Интеграция", href: "/admin/integration", icon: LinkIcon, adminOnly: true },
+    { label: "Филиалы", href: "/admin/branches", icon: Building2, adminOnly: true },
+    { label: "Шаблоны", href: "/admin/templates", icon: LayoutDashboard, adminOnly: true },
+    { label: "Пользователи", href: "/admin/users", icon: Users, adminOnly: true },
   ];
+  // Until role resolves, show only the non-admin items to avoid flashing
+  // links a manager can't use. ADMIN (and legacy) see everything.
+  const navItems = allNav.filter((i) => !i.adminOnly || role === "ADMIN");
 
   return (
     <div className="min-h-screen noise-overlay selection:bg-indigo-100 selection:text-indigo-600">

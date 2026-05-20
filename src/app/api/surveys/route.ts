@@ -67,6 +67,9 @@ export async function POST(req: NextRequest) {
     // submissions of the same survey can both pass the 6-month findFirst
     // check above, but only one INSERT survives. The other gets P2002 and
     // we treat it as "already submitted" rather than a server error.
+    // Negative responses open a complaint to work through (close-the-loop).
+    const NEGATIVE_THRESHOLD = 4.5;
+    const isNegative = averageScore < NEGATIVE_THRESHOLD;
     try {
       await prisma.surveyResponse.create({
         data: {
@@ -77,6 +80,7 @@ export async function POST(req: NextRequest) {
           comment,
           branchId: payload.branchId || null,
           responsibleName: responsibleName || null,
+          complaintStatus: isNegative ? "NEW" : null,
         },
       });
     } catch (e: unknown) {
