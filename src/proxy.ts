@@ -83,6 +83,8 @@ export async function proxy(req: NextRequest) {
     // tree). The handler enforces its own session-OR-API-key auth, so it's
     // safe to bypass the proxy session gate here for the VM cron job.
     path === "/api/admin/rating-sync" ||
+    // Follow-up reminder job — same pattern (handler enforces its own auth).
+    path === "/api/admin/followups" ||
     // Analytics recorded from the survey page (no session)
     path === "/api/analytics";
 
