@@ -24,6 +24,8 @@ export default function IntegrationPage() {
     brand_logo_url: "",
     brand_site_url: "",
     brand_accent: "",
+    telegram_bot_token: "",
+    telegram_chat_id: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,6 +79,8 @@ export default function IntegrationPage() {
           brand_logo_url: settingsData.brand_logo_url || "",
           brand_site_url: settingsData.brand_site_url || "",
           brand_accent: settingsData.brand_accent || "",
+          telegram_bot_token: settingsData.telegram_bot_token || "",
+          telegram_chat_id: settingsData.telegram_chat_id || "",
         });
 
         const bList = Array.isArray(branchesData)
@@ -233,6 +237,24 @@ export default function IntegrationPage() {
       setBrandStatus("error");
     } finally {
       setBrandSaving(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    try {
+      const res = await fetch("/api/admin/test/telegram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          botToken: settings.telegram_bot_token,
+          chatId: settings.telegram_chat_id,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) alert("✅ Тестовое сообщение отправлено в Telegram!");
+      else alert("❌ " + (data.error || "Не удалось отправить"));
+    } catch {
+      alert("❌ Ошибка при отправке теста");
     }
   };
 
@@ -590,6 +612,43 @@ export default function IntegrationPage() {
                   </div>
                   <p className="text-[10px] text-slate-400 font-medium mt-2 px-1">
                     В этот чат будут приходить мгновенные уведомления о <span className="font-bold text-rose-500">негативных</span> оценках.
+                  </p>
+                </div>
+
+                {/* Telegram — duplicate channel for negative alerts */}
+                <div className="space-y-2 mt-8 pt-6 border-t border-slate-100/50">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Telegram-бот (дубль уведомлений о негативе)
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input
+                      type="password"
+                      placeholder="Токен бота (от @BotFather)"
+                      autoComplete="off"
+                      className="px-5 py-3.5 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 focus:bg-white outline-none transition-all text-sm font-mono font-bold"
+                      value={settings.telegram_bot_token}
+                      onChange={(e) => setSettings({ ...settings, telegram_bot_token: e.target.value })}
+                    />
+                    <input
+                      type="text"
+                      placeholder="chat_id (напр. -1001234567890)"
+                      className="px-5 py-3.5 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 focus:bg-white outline-none transition-all text-sm font-mono font-bold"
+                      value={settings.telegram_chat_id}
+                      onChange={(e) => setSettings({ ...settings, telegram_chat_id: e.target.value })}
+                    />
+                  </div>
+                  <div className="pt-1">
+                    <button
+                      onClick={handleTestTelegram}
+                      className="px-5 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2"
+                    >
+                      <Bell size={14} className="text-sky-500" />
+                      Проверить Telegram
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-medium mt-1 px-1 leading-relaxed">
+                    Создайте бота через <span className="font-bold">@BotFather</span>, добавьте его в нужный чат/группу и укажите
+                    токен и chat_id. Пусто — Telegram-уведомления выключены. Не забудьте «Сохранить конфигурацию».
                   </p>
                 </div>
               </div>

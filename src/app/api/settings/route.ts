@@ -44,6 +44,9 @@ const ALLOWED_KEYS = [
   "brand_logo_url",
   "brand_site_url",
   "brand_accent",
+  // Telegram channel for negative-feedback alerts.
+  "telegram_bot_token",
+  "telegram_chat_id",
 ] as const;
 
 export async function POST(req: NextRequest) {

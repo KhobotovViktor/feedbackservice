@@ -364,7 +364,7 @@ export default function SurveyPage() {
                   Выберите ваш город
                 </h1>
                 <p className="text-slate-500 font-medium">
-                  Укажите салон «Аллеи Мебели», работу которого вы хотите оценить
+                  Укажите салон «{brand.name}», работу которого вы хотите оценить
                 </p>
                 <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px] pt-1">
                   Сервис обратной связи «{brand.name}»

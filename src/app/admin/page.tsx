@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { OverallMonitoring } from "@/components/dashboard/overall-monitoring";
 import { PeriodFilter } from "@/components/dashboard/period-filter";
 import { AiInsights } from "@/components/dashboard/ai-insights";
+import { TrendsPanel } from "@/components/dashboard/trends-panel";
 import { getAccessibleBranchIds } from "@/lib/access";
 
 interface BentoCardProps {
@@ -106,6 +107,7 @@ export default async function AdminDashboard({
   let totalClicks = 0;
   let negativeResponses = 0;
   let branchesRaw: BranchRow[] = [];
+  let trendRows: { createdAt: Date; averageScore: number; tags: string[] }[] = [];
   let prevResponsesCount = 0;
   // Network-wide average over ALL responses (including CRM/QR ones with no
   // branchId). The old code averaged only branch-attached responses, which
@@ -201,6 +203,19 @@ export default async function AdminDashboard({
         },
         _count: { _all: true },
       }),
+      // Trend data: weekly averages, NPS/CSAT and tag frequency. Bounded to the
+      // selected period, or the last 90 days when no period is set.
+      prisma.surveyResponse.findMany({
+        where: {
+          ...branchScope,
+          createdAt:
+            Object.keys(dateFilter).length > 0
+              ? dateFilter
+              : { gte: new Date(Date.now() - 90 * 24 * 3600_000) },
+        },
+        select: { createdAt: true, averageScore: true, tags: true },
+        take: 5000,
+      }),
     ]);
 
     totalResponses = results[0];
@@ -228,6 +243,7 @@ export default async function AdminDashboard({
       const a = branchA(row.branchId);
       if (row.target in a.clicksByTarget) a.clicksByTarget[row.target] = row._count._all;
     }
+    trendRows = results[11];
   } catch (err) {
     console.error("Dashboard data fetch error:", err);
   }
@@ -251,6 +267,46 @@ export default async function AdminDashboard({
       clicksByTarget: a.clicksByTarget,
     };
   });
+
+  // ── Weekly trends + NPS/CSAT + top comment tags ─────────────────────────
+  const weekMap = new Map<string, { sum: number; count: number; negative: number; ts: number }>();
+  const tagCounts = new Map<string, number>();
+  let csatPos = 0;
+  let npsProm = 0;
+  let npsDetr = 0;
+  for (const r of trendRows) {
+    const monday = new Date(r.createdAt);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // back to Monday
+    monday.setHours(0, 0, 0, 0);
+    const key = monday.toISOString().slice(0, 10);
+    const e = weekMap.get(key) || { sum: 0, count: 0, negative: 0, ts: monday.getTime() };
+    e.sum += r.averageScore;
+    e.count += 1;
+    if (r.averageScore < 4.5) e.negative += 1;
+    weekMap.set(key, e);
+    if (r.averageScore >= 4.5) {
+      csatPos += 1;
+      npsProm += 1;
+    } else if (r.averageScore < 3.5) {
+      npsDetr += 1;
+    }
+    for (const t of r.tags || []) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+  }
+  const weekly = [...weekMap.values()]
+    .sort((a, b) => a.ts - b.ts)
+    .map((e) => ({
+      label: new Date(e.ts).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", timeZone: "Europe/Moscow" }),
+      avg: Math.round((e.sum / e.count) * 10) / 10,
+      count: e.count,
+      negative: e.negative,
+    }));
+  const trendTotal = trendRows.length;
+  const csat = trendTotal > 0 ? Math.round((csatPos / trendTotal) * 100) : 0;
+  const nps = trendTotal > 0 ? Math.round(((npsProm - npsDetr) / trendTotal) * 100) : 0;
+  const topTags = [...tagCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([tag, count]) => ({ tag, count }));
 
   // Network loyalty = average of ALL responses in the period (branch + CRM/QR),
   // taken from the DB aggregate above rather than only branch-attached rows.
@@ -532,6 +588,9 @@ export default async function AdminDashboard({
           </div>
         </div>
       </div>
+
+      {/* Weekly trends, NPS/CSAT and top comment tags */}
+      <TrendsPanel weekly={weekly} csat={csat} nps={nps} total={trendTotal} topTags={topTags} />
 
       {/* AI analysis of free-text comments */}
       <AiInsights branches={branchStats.map((b) => ({ id: b.id, name: b.name }))} />

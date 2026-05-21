@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import type { Prisma, SurveyResponse, Branch } from "@prisma/client";
-import { Building2, MessageCircle, Filter, ChevronLeft, ChevronRight } from "lucide-react";
+import { Building2, MessageCircle, Filter, ChevronLeft, ChevronRight, Download, Tag } from "lucide-react";
 import { BranchFilter } from "@/components/results/branch-filter";
 import { TypeFilter } from "@/components/results/type-filter";
+import { TagFilter } from "@/components/results/tag-filter";
 import { ClearResultsButton } from "@/components/results/clear-results-button";
 import { ResultsTable } from "@/components/results/results-table";
 import { getAccessibleBranchIds } from "@/lib/access";
@@ -15,9 +16,9 @@ const PAGE_SIZE = 25;
 export default async function ResultsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string; type?: string; sortBy?: string; order?: string; page?: string }>;
+  searchParams: Promise<{ branchId?: string; type?: string; tag?: string; sortBy?: string; order?: string; page?: string }>;
 }) {
-  const { branchId, type = "all", sortBy = "date", order = "desc", page } = await searchParams;
+  const { branchId, type = "all", tag = "all", sortBy = "date", order = "desc", page } = await searchParams;
   const sortDir: "asc" | "desc" = order === "asc" ? "asc" : "desc";
   const pageNum = Math.max(1, parseInt(page || "1", 10) || 1);
 
@@ -26,12 +27,20 @@ export default async function ResultsPage({
     const params = new URLSearchParams();
     if (branchId) params.set("branchId", branchId);
     if (type && type !== "all") params.set("type", type);
+    if (tag && tag !== "all") params.set("tag", tag);
     if (sortBy && sortBy !== "date") params.set("sortBy", sortBy);
     if (order && order !== "desc") params.set("order", order);
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return qs ? `?${qs}` : "?";
   };
+
+  // CSV export keeps the active branch/type/tag filters.
+  const exportParams = new URLSearchParams();
+  if (branchId) exportParams.set("branchId", branchId);
+  if (type && type !== "all") exportParams.set("type", type);
+  if (tag && tag !== "all") exportParams.set("tag", tag);
+  const exportHref = `/api/admin/results/export${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
 
   // Role scope: MANAGER sees only assigned branches; ADMIN sees all.
   const accessibleBranchIds = await getAccessibleBranchIds();
@@ -54,6 +63,7 @@ export default async function ResultsPage({
 
     if (type === "positive") where.averageScore = { gte: 4.5 };
     if (type === "negative") where.averageScore = { lt: 4.5 };
+    if (tag && tag !== "all") where.tags = { has: tag };
 
     // Enforce branch scope for managers, intersecting with any chosen filter.
     if (accessibleBranchIds !== null) {
@@ -118,6 +128,13 @@ export default async function ResultsPage({
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
           {/* Clear Results Button */}
           <ClearResultsButton />
+          {/* CSV export (respects current filters) */}
+          <a
+            href={exportHref}
+            className="flex items-center gap-2 px-5 py-3 rounded-2xl glass border-white/50 text-slate-700 font-black text-xs uppercase tracking-widest hover:bg-white transition-all shadow-sm shrink-0"
+          >
+            <Download className="w-4 h-4 text-emerald-500" /> Экспорт
+          </a>
           {/* Branch Filter */}
           <div className="flex items-center gap-2 p-1 md:p-1.5 glass rounded-2xl md:rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
             <div className="flex-1 sm:flex-none flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-3">
@@ -137,6 +154,17 @@ export default async function ResultsPage({
             </div>
             <div className="flex-1 sm:flex-none">
               <TypeFilter defaultValue={type} />
+            </div>
+          </div>
+
+          {/* Tag Filter (AI themes) */}
+          <div className="flex items-center gap-2 p-1 md:p-1.5 glass rounded-2xl md:rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
+            <div className="flex-1 sm:flex-none flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-3">
+              <Tag className="w-4 h-4 md:w-5 md:h-5 text-indigo-400" />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xs:inline">Тема:</span>
+            </div>
+            <div className="flex-1 sm:flex-none">
+              <TagFilter defaultValue={tag} />
             </div>
           </div>
         </div>

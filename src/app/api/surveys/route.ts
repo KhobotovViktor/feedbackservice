@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 import { tagComment, aiConfigured } from "@/lib/ai";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { sendTelegramMessage } from "@/lib/telegram";
 
 export async function POST(req: NextRequest) {
   if (!rateLimit(`sv:${getClientIp(req)}`, 15, 60_000)) {
@@ -141,6 +142,39 @@ export async function POST(req: NextRequest) {
           }
         } catch (e) {
           console.error("AI tagging failed:", e);
+        }
+      })();
+    }
+
+    // Negative feedback → optional Telegram alert (duplicate of the B24 chat).
+    // Fire-and-forget; no-op when Telegram isn't configured.
+    if (isNegative) {
+      void (async () => {
+        try {
+          const esc = (s: string) =>
+            s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          let branchName = "Без филиала";
+          if (effectiveBranchId) {
+            const b = await prisma.branch.findUnique({
+              where: { id: effectiveBranchId },
+              select: { name: true },
+            });
+            if (b) branchName = b.name;
+          }
+          const when = new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow" });
+          const isCrm =
+            dealId && dealId !== "0" && dealId !== "TEST_DEAL" && !dealId.startsWith("QR");
+          const label = entityType === "lead" ? "Лид" : "Сделка";
+          let text = `⚠️ <b>Негативный отзыв</b>\n`;
+          text += `📅 ${esc(when)}\n`;
+          text += `🏢 Филиал: ${esc(branchName)}\n`;
+          text += `⭐ Оценка: ${averageScore.toFixed(1)}\n`;
+          text += `👤 Ответственный: ${esc(responsibleName || "—")}\n`;
+          if (isCrm) text += `🔗 ${label} № ${esc(dealId)}\n`;
+          if (comment) text += `\n💬 ${esc(String(comment))}`;
+          await sendTelegramMessage(text);
+        } catch (e) {
+          console.error("Telegram negative alert failed:", e);
         }
       })();
     }

@@ -88,7 +88,9 @@ export async function proxy(req: NextRequest) {
     // Scheduled summary report — same pattern.
     path === "/api/admin/report" ||
     // Analytics recorded from the survey page (no session)
-    path === "/api/analytics";
+    path === "/api/analytics" ||
+    // Public health probe for uptime monitoring.
+    path === "/api/health";
 
   if (isPublicPath) {
     return nextWithNonce();

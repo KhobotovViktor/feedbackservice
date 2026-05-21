@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySurveyToken } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
+  if (!rateLimit(`ck:${getClientIp(req)}`, 60, 60_000)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
   const { searchParams } = new URL(req.url);
   const token = searchParams.get("token");
 
