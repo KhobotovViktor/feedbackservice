@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Manrope } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+// Cyrillic + Latin so the whole (Russian) UI renders in Inter rather than
+// falling back to a system font. Manrope is the display face for big headings.
+const inter = Inter({ subsets: ["latin", "cyrillic"], variable: "--font-inter", display: "swap" });
+const manrope = Manrope({ subsets: ["latin", "cyrillic"], weight: ["600", "700", "800"], variable: "--font-manrope", display: "swap" });
 
 // Public origin, baked in at build time (.env.production). Used as the base
 // for OG/canonical URLs. metadataBase lets Next resolve relative metadata
@@ -46,12 +49,20 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _nonce = (await headers()).get("x-nonce") ?? "";
+  const nonce = (await headers()).get("x-nonce") ?? "";
 
   return (
     <html lang="ru">
-      <body className={`${inter.className} antialiased noise-overlay min-h-screen bg-slate-50 text-slate-900`}>
+      <body className={`${inter.variable} ${manrope.variable} font-sans antialiased noise-overlay min-h-screen bg-slate-50 text-slate-900`}>
+        {/* No-FOUC: apply the saved theme before hydration. Honours only an
+            explicit choice, so the public survey stays light for customers. */}
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}",
+          }}
+        />
         <div className="mesh-gradient" />
         {children}
       </body>

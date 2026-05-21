@@ -47,9 +47,21 @@ body {
 }
 
 @theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-manrope), var(--font-inter), ui-sans-serif, sans-serif;
   --color-brand-start: var(--color-brand-start);
   --color-brand-mid: var(--color-brand-mid);
   --color-brand-end: var(--color-brand-end);
+}
+
+/* Big headings use the display face; tabular figures keep metrics aligned. */
+h1,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
 @utility glass {
@@ -97,4 +109,98 @@ body {
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(99, 102, 241, 0.2);
+}
+
+/* Shimmer skeleton for loading states */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.12);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: shimmer 1.6s infinite;
+}
+
+/* ── Dark theme — toggled via `.dark` on <html> ───────────────────────────
+   Centralised overrides: these rules are unlayered, so they beat Tailwind's
+   layered utilities by cascade order. Accent colours (indigo/emerald/rose…)
+   stay as-is so they keep their meaning on dark surfaces. */
+.dark {
+  --background-rgb: 2, 6, 23;
+  --foreground-rgb: 226, 232, 240;
+  color-scheme: dark;
+}
+.dark .mesh-gradient {
+  background-color: #020617;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.22) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.20) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(217, 70, 239, 0.15) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(99, 102, 241, 0.15) 0px, transparent 50%);
+}
+.dark .glass {
+  background: rgba(30, 41, 59, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+}
+.dark .bento-card {
+  background: rgba(30, 41, 59, 0.5);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.dark .bento-card:hover {
+  background: rgba(30, 41, 59, 0.72);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+/* Surfaces */
+.dark .bg-white,
+.dark .bg-white\/40,
+.dark .bg-white\/50,
+.dark .bg-white\/60,
+.dark .bg-white\/70 {
+  background-color: rgba(30, 41, 59, 0.5);
+}
+.dark .bg-slate-50,
+.dark .bg-slate-50\/40,
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/60 {
+  background-color: rgba(15, 23, 42, 0.5);
+}
+.dark .bg-slate-100 {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+/* Text */
+.dark .text-slate-900 {
+  color: #f1f5f9;
+}
+.dark .text-slate-800 {
+  color: #e2e8f0;
+}
+.dark .text-slate-700,
+.dark .text-slate-600 {
+  color: #cbd5e1;
+}
+.dark .text-slate-500 {
+  color: #94a3b8;
+}
+.dark .text-slate-400,
+.dark .text-slate-300 {
+  color: #64748b;
+}
+/* Borders */
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-white\/40,
+.dark .border-white\/50,
+.dark .border-white\/60 {
+  border-color: rgba(255, 255, 255, 0.08);
 }

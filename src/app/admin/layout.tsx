@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, MessageSquare, LogOut, Link as LinkIcon, Building2, Menu, X, Loader2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function AdminLayout({
   children,
@@ -113,8 +114,9 @@ export default function AdminLayout({
               </Link>
             );
           })}
-          <div className="mt-8 pt-6 border-t border-white/5 flex justify-center">
-             <button 
+          <div className="mt-8 pt-6 border-t border-white/5 flex flex-col items-center gap-2">
+             <ThemeToggle />
+             <button
                 onClick={handleLogout}
                 disabled={isLoggingOut}
                 className="w-12 h-12 flex items-center justify-center text-rose-400 hover:bg-rose-500/10 rounded-2xl transition-all disabled:opacity-50 shrink-0 mx-auto"
@@ -175,14 +177,17 @@ export default function AdminLayout({
                 })}
               </nav>
               
-              <button 
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="flex items-center gap-4 px-6 py-4 rounded-2xl text-rose-400 hover:bg-rose-500/10 transition-all font-bold mt-auto border-t border-white/5 disabled:opacity-50"
-              >
-                {isLoggingOut ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogOut className="w-5 h-5" />}
-                Выйти
-              </button>
+              <div className="mt-auto border-t border-white/5 pt-2">
+                <ThemeToggle variant="full" />
+                <button
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="flex items-center gap-4 px-6 py-4 rounded-2xl text-rose-400 hover:bg-rose-500/10 transition-all font-bold disabled:opacity-50 w-full"
+                >
+                  {isLoggingOut ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogOut className="w-5 h-5" />}
+                  Выйти
+                </button>
+              </div>
             </motion.aside>
           </>
         )}

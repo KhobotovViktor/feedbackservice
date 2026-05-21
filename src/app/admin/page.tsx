@@ -7,11 +7,12 @@ import { OverallMonitoring } from "@/components/dashboard/overall-monitoring";
 import { PeriodFilter } from "@/components/dashboard/period-filter";
 import { AiInsights } from "@/components/dashboard/ai-insights";
 import { TrendsPanel } from "@/components/dashboard/trends-panel";
+import { CountUp } from "@/components/dashboard/count-up";
 import { getAccessibleBranchIds } from "@/lib/access";
 
 interface BentoCardProps {
   label: string;
-  value: string | number;
+  value: number;
   icon: LucideIcon;
   color: string;
   bg: string;
@@ -28,7 +29,7 @@ function BentoMetricCard({ label, value, icon: Icon, color, bg, desc, className 
         </div>
         <div className="text-right">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{label}</p>
-          <p className="text-4xl font-black text-slate-900 leading-tight tracking-tighter">{value}</p>
+          <p className="text-4xl font-black text-slate-900 leading-tight tracking-tighter font-display tabular-nums"><CountUp value={value} /></p>
         </div>
       </div>
       <div>

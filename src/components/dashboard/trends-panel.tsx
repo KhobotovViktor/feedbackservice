@@ -1,6 +1,6 @@
 "use client";
 
-import { TrendingUp, Smile, Award, Tag } from "lucide-react";
+import { TrendingUp, Tag } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -20,6 +20,44 @@ interface Props {
   topTags: { tag: string; count: number }[];
 }
 
+function Gauge({
+  fillPct,
+  center,
+  label,
+  sub,
+  color,
+}: {
+  fillPct: number;
+  center: string;
+  label: string;
+  sub: string;
+  color: string;
+}) {
+  const r = 38;
+  const C = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(100, fillPct));
+  const offset = C * (1 - pct / 100);
+  return (
+    <div className="flex flex-col items-center justify-center p-5 rounded-3xl bg-slate-50/50 border border-slate-100">
+      <div className="relative w-24 h-24">
+        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+          <circle cx="50" cy="50" r={r} fill="none" stroke="#e2e8f0" strokeWidth="9" />
+          <circle
+            cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="9" strokeLinecap="round"
+            strokeDasharray={C} strokeDashoffset={offset}
+            style={{ transition: "stroke-dashoffset 1.1s cubic-bezier(0.16,1,0.3,1)" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-xl font-black text-slate-900 tnum font-display">{center}</span>
+        </div>
+      </div>
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-3">{label}</p>
+      <p className="text-[9px] font-bold text-slate-400 text-center mt-0.5 leading-tight">{sub}</p>
+    </div>
+  );
+}
+
 export function TrendsPanel({ weekly, csat, nps, total, topTags }: Props) {
   return (
     <div className="bento-card bg-white/60 p-6 md:p-8 space-y-6 border-white/40">
@@ -33,28 +71,20 @@ export function TrendsPanel({ weekly, csat, nps, total, topTags }: Props) {
         </div>
       </div>
 
-      {/* Metric cards */}
+      {/* Metric gauges */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-5 rounded-3xl bg-emerald-50/50 border border-emerald-100/50">
-          <div className="flex items-center gap-2 text-emerald-600 mb-1">
-            <Smile className="w-4 h-4" />
-            <p className="text-[10px] font-black uppercase tracking-widest">CSAT</p>
-          </div>
-          <p className="text-3xl font-black text-slate-900 tracking-tighter">{csat}%</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-1">довольных (оценка ≥ 4.5)</p>
-        </div>
-        <div className="p-5 rounded-3xl bg-indigo-50/50 border border-indigo-100/50">
-          <div className="flex items-center gap-2 text-indigo-600 mb-1">
-            <Award className="w-4 h-4" />
-            <p className="text-[10px] font-black uppercase tracking-widest">NPS</p>
-          </div>
-          <p className="text-3xl font-black text-slate-900 tracking-tighter">{nps > 0 ? `+${nps}` : nps}</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-1">промоутеры (5★) − детракторы (≤3★)</p>
-        </div>
-        <div className="p-5 rounded-3xl bg-slate-50 border border-slate-100">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Всего за период</p>
-          <p className="text-3xl font-black text-slate-900 tracking-tighter">{total}</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-1">пройденных опросов</p>
+        <Gauge fillPct={csat} center={`${csat}%`} label="CSAT" sub="довольных (оценка ≥ 4.5)" color="#10b981" />
+        <Gauge
+          fillPct={(nps + 100) / 2}
+          center={nps > 0 ? `+${nps}` : `${nps}`}
+          label="NPS"
+          sub="промоутеры − детракторы"
+          color="#6366f1"
+        />
+        <div className="flex flex-col items-center justify-center p-5 rounded-3xl bg-slate-50/50 border border-slate-100">
+          <span className="text-4xl font-black text-slate-900 font-display tnum tracking-tighter">{total}</span>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-3">Всего за период</p>
+          <p className="text-[9px] font-bold text-slate-400 mt-0.5">пройденных опросов</p>
         </div>
       </div>
 

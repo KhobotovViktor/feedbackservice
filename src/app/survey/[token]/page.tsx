@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { StarRating } from "@/components/star-rating";
-import { CheckCircle, MessageSquare, ArrowRight, Star, MapPin } from "lucide-react";
+import { Confetti } from "@/components/confetti";
+import { CheckCircle, MessageSquare, ArrowRight, MapPin } from "lucide-react";
 
 interface Question {
   id: string;
@@ -289,12 +290,22 @@ export default function SurveyPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="relative">
-           <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
-           <div className="absolute inset-0 flex items-center justify-center">
-              <Star className="w-4 h-4 text-indigo-600 animate-pulse" />
-           </div>
+      <div className="min-h-screen p-4 md:p-8 flex items-center justify-center">
+        <div className="w-full max-w-xl glass p-8 md:p-12 rounded-[3.5rem] shadow-2xl border-white/50 space-y-8">
+          <div className="flex flex-col items-center gap-4">
+            <div className="skeleton w-16 h-16 rounded-2xl" />
+            <div className="skeleton h-7 w-3/4 rounded-2xl" />
+            <div className="skeleton h-4 w-1/2 rounded-xl" />
+          </div>
+          <div className="space-y-6 pt-4">
+            {[0, 1].map((i) => (
+              <div key={i} className="space-y-3">
+                <div className="skeleton h-5 w-2/3 rounded-xl" />
+                <div className="skeleton h-10 w-full rounded-2xl" />
+              </div>
+            ))}
+          </div>
+          <div className="skeleton h-14 w-full rounded-[1.5rem]" />
         </div>
       </div>
     );
@@ -484,15 +495,21 @@ export default function SurveyPage() {
           )}
 
           {step === "success" && (
-            <motion.div 
+            <motion.div
               key="success"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="text-center space-y-8"
+              className="text-center space-y-8 relative"
             >
-              <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-[2.5rem] flex items-center justify-center mx-auto border-2 border-emerald-100 shadow-xl shadow-emerald-500/10 transform -rotate-3">
+              {isPositive && <Confetti />}
+              <motion.div
+                initial={{ scale: 0, rotate: -30 }}
+                animate={{ scale: 1, rotate: -3 }}
+                transition={{ type: "spring", stiffness: 260, damping: 16, delay: 0.1 }}
+                className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-[2.5rem] flex items-center justify-center mx-auto border-2 border-emerald-100 shadow-xl shadow-emerald-500/10 relative z-10"
+              >
                 <CheckCircle className="w-12 h-12" />
-              </div>
+              </motion.div>
               <div className="space-y-3">
                 <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Огромное спасибо!</h2>
                 <div className="pb-2">

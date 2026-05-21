@@ -20,7 +20,7 @@ export function StarRating({ value, onChange, max = 5, label }: StarRatingProps)
   // input; each star becomes a "radio" with a clear aria-label.
   return (
     <div
-      className="flex gap-2"
+      className="flex gap-2 md:gap-3"
       role="radiogroup"
       aria-label={label ? `Оценка: ${label}` : "Оценка"}
     >
@@ -34,8 +34,9 @@ export function StarRating({ value, onChange, max = 5, label }: StarRatingProps)
             role="radio"
             aria-checked={selected}
             aria-label={`${starValue} из ${max}`}
-            whileHover={{ scale: 1.2 }}
-            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.25, rotate: -6 }}
+            whileTap={{ scale: 0.85 }}
+            transition={{ type: "spring", stiffness: 400, damping: 15 }}
             onClick={() => onChange(starValue)}
             onMouseEnter={() => setHover(starValue)}
             onMouseLeave={() => setHover(0)}
@@ -53,10 +54,10 @@ export function StarRating({ value, onChange, max = 5, label }: StarRatingProps)
           >
             <Star
               className={cn(
-                "w-8 h-8 transition-colors",
+                "w-10 h-10 md:w-12 md:h-12 transition-all duration-200",
                 (hover || value) >= starValue
-                  ? "fill-yellow-400 text-yellow-400"
-                  : "text-gray-300"
+                  ? "fill-amber-400 text-amber-400 drop-shadow-[0_2px_10px_rgba(251,191,36,0.45)]"
+                  : "text-slate-200"
               )}
               aria-hidden="true"
             />
