@@ -73,6 +73,10 @@ model SurveyResponse {
   responsibleName String?
   branch          Branch?  @relation(fields: [branchId], references: [id])
 
+  // CRM entity the survey was dispatched for, so we can deep-link back into
+  // Bitrix24 and label notifications. "deal" | "lead" | null (QR/direct).
+  entityType      String?
+
   // Close-the-loop on negatives. Only set for responses below the negative
   // threshold (averageScore < 4.5); positive responses leave it null.
   complaintStatus ComplaintStatus?

@@ -70,6 +70,10 @@ export async function POST(req: NextRequest) {
     // Negative responses open a complaint to work through (close-the-loop).
     const NEGATIVE_THRESHOLD = 4.5;
     const isNegative = averageScore < NEGATIVE_THRESHOLD;
+    const entityType =
+      payload.entityType === "lead" || payload.entityType === "deal"
+        ? payload.entityType
+        : null;
     try {
       await prisma.surveyResponse.create({
         data: {
@@ -80,6 +84,7 @@ export async function POST(req: NextRequest) {
           comment,
           branchId: payload.branchId || null,
           responsibleName: responsibleName || null,
+          entityType,
           complaintStatus: isNegative ? "NEW" : null,
         },
       });
@@ -188,71 +193,74 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // 5. Group chat notification for negative feedback
-        const notifyThreshold = 4;
-        if (averageScore < notifyThreshold && settingsMap.b24_group_chat_id) {
+        // 5. Group chat notification — sent for EVERY new response (not just
+        // negatives), with full context for the team.
+        if (settingsMap.b24_group_chat_id) {
           const branchId = payload.branchId;
-          let branchName = "Неизвестный филиал";
-
+          let branchName = "Без филиала";
           if (branchId) {
             const b = await prisma.branch.findUnique({ where: { id: branchId } });
             if (b) branchName = b.name;
           }
 
-          console.log(
-            `Negative feedback (Score: ${averageScore}) for ${branchName}. Notifying chat ${settingsMap.b24_group_chat_id}`
-          );
+          // Portal base, e.g. https://am35.bitrix24.ru (strip /rest/<id>/<token>).
+          const portal = cleanBaseUrl.replace(/\/rest\/.*$/, "");
+          const crmType = entityType === "lead" ? "lead" : "deal";
+          const isCrm =
+            dealId && dealId !== "0" && dealId !== "TEST_DEAL" && !dealId.startsWith("QR");
+          const entityLabel = entityType === "lead" ? "Лид" : "Сделка";
+          const when = new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow" });
 
-          let alertMessage = `⚠️ [b]ОТРИЦАТЕЛЬНЫЙ ОТЗЫВ[/b]\n\n`;
-          alertMessage += `🏢 [b]Филиал:[/b] ${branchName}\n`;
-          alertMessage += `👤 [b]Клиент:[/b] ${clientId}\n`;
-          alertMessage += `🔗 [b]Сделка:[/b] [url=${cleanBaseUrl.replace(
-            "/rest/",
-            "/crm/deal/details/"
-          )}${dealId}/]${dealId}[/url]\n`;
-          alertMessage += `⭐ [b]Средняя оценка:[/b] ${averageScore.toFixed(1)}\n\n`;
+          const head = isNegative ? "⚠️ [b]Новая оценка (негатив)[/b]" : "✅ [b]Новая оценка[/b]";
+          let msg = `${head}\n\n`;
+          msg += `📅 [b]Дата:[/b] ${when}\n`;
+          msg += `🏢 [b]Филиал:[/b] ${branchName}\n`;
+          msg += `⭐ [b]Общая оценка:[/b] ${averageScore.toFixed(1)}\n`;
 
-          // List ratings per question (use fetched questions if available)
-          let displayQuestions = questions;
+          // Per-question scores. Prefer the template questions of the branch.
+          let displayQuestions: { id: string; text: string }[] = questions;
           if (branchId) {
             try {
               const branchData = await prisma.branch.findUnique({
                 where: { id: branchId },
-                include: {
-                  template: {
-                    include: { questions: { orderBy: { order: "asc" } } },
-                  },
-                },
+                include: { template: { include: { questions: { orderBy: { order: "asc" } } } } },
               });
               const templateQs = branchData?.template?.questions;
               if (templateQs && templateQs.length > 0) {
-                displayQuestions = templateQs as any;
+                displayQuestions = templateQs.map((q) => ({ id: q.id, text: q.text }));
               }
-            } catch (_) {}
+            } catch {
+              // fall back to the questions already loaded above
+            }
           }
-
           if (displayQuestions.length > 0) {
-            alertMessage += `[b]Оценки:[/b]\n`;
+            msg += `\n[b]Ответы:[/b]\n`;
             for (const q of displayQuestions) {
               const score = answersMap[q.id];
-              if (score !== undefined) {
-                alertMessage += `- ${q.text}: ${score}\n`;
-              }
+              if (score !== undefined) msg += `• ${q.text}: ${score}\n`;
             }
           }
 
-          if (comment) {
-            alertMessage += `\n💬 [b]Комментарий:[/b] ${comment}`;
+          msg += `\n👤 [b]Ответственный:[/b] ${responsibleName || "—"}\n`;
+          if (isCrm) {
+            msg += `🔗 [b]${entityLabel}:[/b] [url=${portal}/crm/${crmType}/details/${dealId}/]№ ${dealId}[/url]`;
+          } else {
+            msg += `🔗 [b]Источник:[/b] QR / прямая ссылка`;
           }
+          if (comment) msg += `\n\n💬 [b]Комментарий:[/b] ${comment}`;
 
           const rawChatId = settingsMap.b24_group_chat_id.trim();
           const dialogId = rawChatId.startsWith("chat") ? rawChatId : `chat${rawChatId}`;
 
-          await fetch(`${cleanBaseUrl}/im.message.add.json`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ DIALOG_ID: dialogId, MESSAGE: alertMessage }),
-          });
+          try {
+            await fetch(`${cleanBaseUrl}/im.message.add.json`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ DIALOG_ID: dialogId, MESSAGE: msg }),
+            });
+          } catch (e) {
+            console.error("Group chat notification failed:", e);
+          }
         }
       }
     } catch (b24Error) {

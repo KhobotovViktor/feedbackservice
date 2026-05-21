@@ -117,7 +117,8 @@ async function handleWebhook(req: NextRequest) {
     branchId,
     isTest,
     b24TemplateId,
-    safeResponsibleName
+    safeResponsibleName,
+    entityType
   );
   
   // Resolve the public origin (env-baked NEXT_PUBLIC_APP_URL or Host header

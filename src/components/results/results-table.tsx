@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Star, User, MessageCircle, TrendingUp, Trash2, Loader2, X, AlertCircle } from "lucide-react";
+import { Calendar, Star, User, MessageCircle, TrendingUp, Trash2, Loader2, X, AlertCircle, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ComplaintStatus = "NEW" | "IN_PROGRESS" | "RESOLVED";
@@ -17,6 +17,17 @@ export interface ResultRow {
   responsibleName: string | null;
   branch: { name: string } | null;
   complaintStatus: ComplaintStatus | null;
+  entityType: string | null;
+}
+
+// Deep-link into the deal/lead in Bitrix24, when we know the portal + a real
+// CRM id (not a QR scan or test).
+function crmLink(portalUrl: string, res: ResultRow): string | null {
+  if (!portalUrl) return null;
+  const id = res.dealId;
+  if (!id || id === "0" || id === "TEST_DEAL" || id.startsWith("QR")) return null;
+  const type = res.entityType === "lead" ? "lead" : "deal";
+  return `${portalUrl}/crm/${type}/details/${id}/`;
 }
 
 const STATUS_META: Record<ComplaintStatus, { label: string; cls: string; next?: ComplaintStatus; nextLabel?: string }> = {
@@ -60,7 +71,13 @@ function isCrmSource(res: ResultRow): boolean {
   );
 }
 
-export function ResultsTable({ responses }: { responses: ResultRow[] }) {
+export function ResultsTable({
+  responses,
+  portalUrl = "",
+}: {
+  responses: ResultRow[];
+  portalUrl?: string;
+}) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
@@ -251,7 +268,19 @@ export function ResultsTable({ responses }: { responses: ResultRow[] }) {
                 </td>
                 <td className="px-6 py-6">
                   <div className="text-sm font-black text-slate-900 tracking-tight truncate">{res.clientId || "Incognito"}</div>
-                  <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-0.5 opacity-60 truncate">Deal: {res.dealId || "—"}</div>
+                  <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-0.5 opacity-60 truncate">
+                    {res.entityType === "lead" ? "Лид" : "Сделка"}: {res.dealId || "—"}
+                  </div>
+                  {crmLink(portalUrl, res) && (
+                    <a
+                      href={crmLink(portalUrl, res)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-1 text-[9px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" /> В Битрикс24
+                    </a>
+                  )}
                 </td>
                 <td className="px-6 py-6 text-center">
                   <div className="flex items-center justify-center gap-1.5">
@@ -325,11 +354,23 @@ export function ResultsTable({ responses }: { responses: ResultRow[] }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-lg font-black text-slate-900 tracking-tight truncate">{res.clientId || "Incognito"}</p>
                   <div className="flex flex-wrap gap-2 mt-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60">Deal: {res.dealId || "—"}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60">
+                      {res.entityType === "lead" ? "Лид" : "Сделка"}: {res.dealId || "—"}
+                    </p>
                     {res.responsibleName && (
                       <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50/50 px-1.5 py-0.5 rounded">Resp: {res.responsibleName}</p>
                     )}
                   </div>
+                  {crmLink(portalUrl, res) && (
+                    <a
+                      href={crmLink(portalUrl, res)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" /> Открыть в Битрикс24
+                    </a>
+                  )}
                 </div>
               </div>
 

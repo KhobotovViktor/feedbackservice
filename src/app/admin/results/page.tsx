@@ -36,6 +36,9 @@ export default async function ResultsPage({
 
   let responses: ResponseRow[] = [];
   let branches: { id: string; name: string }[] = [];
+  // Bitrix24 portal base (e.g. https://am35.bitrix24.ru) for deep-links into
+  // deals/leads from the results table.
+  let portalUrl = "";
 
   try {
     const where: Prisma.SurveyResponseWhereInput = {};
@@ -81,9 +84,12 @@ export default async function ResultsPage({
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       }),
+      prisma.settings.findUnique({ where: { key: "b24_webhook_url" } }),
     ]);
     responses = results[0];
     branches = results[1];
+    const webhookUrl = results[2]?.value || "";
+    portalUrl = webhookUrl.replace(/\/rest\/.*$/, "");
     
     // In-memory sort only for computed source field
     if (sortBy === "source") {
@@ -144,7 +150,7 @@ export default async function ResultsPage({
           </div>
         </div>
       ) : (
-        <ResultsTable responses={responses} />
+        <ResultsTable responses={responses} portalUrl={portalUrl} />
       )}
     </div>
   );

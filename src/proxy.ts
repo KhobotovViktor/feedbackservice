@@ -85,6 +85,8 @@ export async function proxy(req: NextRequest) {
     path === "/api/admin/rating-sync" ||
     // Follow-up reminder job — same pattern (handler enforces its own auth).
     path === "/api/admin/followups" ||
+    // Scheduled summary report — same pattern.
+    path === "/api/admin/report" ||
     // Analytics recorded from the survey page (no session)
     path === "/api/analytics";
 

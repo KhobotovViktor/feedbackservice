@@ -27,9 +27,10 @@ export async function createSurveyToken(
   branchId?: string | null,
   isTest: boolean = false,
   templateId?: string | null,
-  responsibleName?: string | null
+  responsibleName?: string | null,
+  entityType?: "deal" | "lead" | null
 ) {
-  return await new SignJWT({ clientId, dealId, branchId, isTest, templateId, responsibleName })
+  return await new SignJWT({ clientId, dealId, branchId, isTest, templateId, responsibleName, entityType })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(SURVEY_TOKEN_TTL)
@@ -55,6 +56,7 @@ export async function verifySurveyToken(token: string) {
       isTest?: boolean;
       templateId?: string | null;
       responsibleName?: string | null;
+      entityType?: "deal" | "lead" | null;
     };
   } catch {
     return null;
