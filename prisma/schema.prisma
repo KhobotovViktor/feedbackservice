@@ -17,6 +17,10 @@ model Branch {
   googleUrl       String?
   externalId      String?
   templateId      String?
+  // How to steer a happy customer's review. ALL = show every configured
+  // platform (default). FEWER_REVIEWS / LOWER_RATING = highlight the one
+  // platform that needs help most, based on the latest scraped RatingHistory.
+  reviewStrategy  ReviewStrategy    @default(ALL)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   analyticsEvents AnalyticsEvent[]
@@ -25,6 +29,12 @@ model Branch {
   surveyResponses SurveyResponse[]
   ratingHistory   RatingHistory[]
   managers        User[]            @relation("BranchManagers")
+}
+
+enum ReviewStrategy {
+  ALL
+  FEWER_REVIEWS
+  LOWER_RATING
 }
 
 model QuestionTemplate {

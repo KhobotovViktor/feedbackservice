@@ -28,6 +28,8 @@ export default function SurveyPage() {
   const [isPositive, setIsPositive] = useState(false);
   const [isPositiveThreshold, setIsPositiveThreshold] = useState(4);
   const [reviewLinks, setReviewLinks] = useState<{ yandex?: string; dgis?: string; google?: string }>({});
+  // Balancing: which platform to highlight first ("yandex"|"dgis"|"google"|null).
+  const [recommended, setRecommended] = useState<"yandex" | "dgis" | "google" | null>(null);
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
   const [isTest, setIsTest] = useState(false);
   const [branchId, setBranchId] = useState<string | null>(null);
@@ -88,6 +90,11 @@ export default function SurveyPage() {
           dgis: branchInfo?.dgisUrl || sData.review_2gis || "",
           google: branchInfo?.googleUrl || sData.review_google_maps || ""
         });
+
+        // Balancing: server tells us which platform to highlight (or null).
+        if (data.recommendedService === "yandex" || data.recommendedService === "dgis" || data.recommendedService === "google") {
+          setRecommended(data.recommendedService);
+        }
 
         // Use setting for positive threshold
         setIsPositiveThreshold(minScoreThreshold);
@@ -230,6 +237,30 @@ export default function SurveyPage() {
 
   const hasReviewLinks = reviewLinks.yandex || reviewLinks.dgis || reviewLinks.google;
 
+  // Ordered list of configured review platforms. When the branch uses a
+  // balancing strategy, the server-recommended platform is moved to the front
+  // and rendered as the primary call-to-action.
+  const reviewPlatforms = (
+    [
+      { key: "yandex" as const, label: "Яндекс.Карты", url: reviewLinks.yandex, target: "YANDEX" },
+      { key: "dgis" as const, label: "2ГИС", url: reviewLinks.dgis, target: "2GIS" },
+      { key: "google" as const, label: "Google Maps", url: reviewLinks.google, target: "GOOGLE" },
+    ] as const
+  ).filter((p) => p.url);
+  const orderedPlatforms = recommended
+    ? [...reviewPlatforms].sort(
+        (a, b) => (a.key === recommended ? -1 : 0) - (b.key === recommended ? -1 : 0)
+      )
+    : reviewPlatforms;
+
+  const trackClick = (target: string) =>
+    !isTest &&
+    fetch("/api/analytics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "CLICK", target, branchId }),
+    }).catch(() => {});
+
   return (
     <div className="min-h-screen p-4 md:p-8 flex items-center justify-center">
       <motion.div 
@@ -355,51 +386,30 @@ export default function SurveyPage() {
                 <div className="space-y-6 pt-8 border-t border-slate-200/50">
                   <p className="font-bold text-slate-800">Будем очень признательны за отзыв на картах:</p>
                   <div className="grid grid-cols-1 gap-3 max-w-xs mx-auto">
-                    {reviewLinks.yandex && (
-                      <a 
-                        href={reviewLinks.yandex} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        onClick={() => !isTest && fetch("/api/analytics", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ type: "CLICK", target: "YANDEX", branchId }),
-                        })}
-                        className="flex items-center justify-center p-5 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-black text-slate-700 shadow-sm"
-                      >
-                        Яндекс.Карты
-                      </a>
-                    )}
-                    {reviewLinks.dgis && (
-                      <a 
-                        href={reviewLinks.dgis} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        onClick={() => !isTest && fetch("/api/analytics", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ type: "CLICK", target: "2GIS", branchId }),
-                        })}
-                        className="flex items-center justify-center p-5 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-black text-slate-700 shadow-sm"
-                      >
-                        2ГИС
-                      </a>
-                    )}
-                    {reviewLinks.google && (
-                      <a 
-                        href={reviewLinks.google} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        onClick={() => !isTest && fetch("/api/analytics", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ type: "CLICK", target: "GOOGLE", branchId }),
-                        })}
-                        className="flex items-center justify-center p-5 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-black text-slate-700 shadow-sm"
-                      >
-                        Google Maps
-                      </a>
-                    )}
+                    {orderedPlatforms.map((p, idx) => {
+                      const isPrimary = recommended != null && idx === 0;
+                      return (
+                        <a
+                          key={p.key}
+                          href={p.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => trackClick(p.target)}
+                          className={
+                            isPrimary
+                              ? "relative flex items-center justify-center p-5 premium-gradient text-white rounded-2xl hover:scale-[1.03] transition-all font-black shadow-xl shadow-indigo-500/20"
+                              : "flex items-center justify-center p-5 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] transition-all font-black text-slate-700 shadow-sm"
+                          }
+                        >
+                          {p.label}
+                          {isPrimary && (
+                            <span className="absolute -top-2 -right-2 px-2 py-0.5 bg-amber-400 text-slate-900 text-[8px] font-black uppercase tracking-widest rounded-full shadow">
+                              Рекомендуем
+                            </span>
+                          )}
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
               )}

@@ -62,10 +62,16 @@ export async function GET() {
   }
 }
 
+const REVIEW_STRATEGIES = ["ALL", "FEWER_REVIEWS", "LOWER_RATING"] as const;
+type ReviewStrategy = (typeof REVIEW_STRATEGIES)[number];
+function normStrategy(v: unknown): ReviewStrategy {
+  return REVIEW_STRATEGIES.includes(v as ReviewStrategy) ? (v as ReviewStrategy) : "ALL";
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, city, yandexUrl, dgisUrl, googleUrl, externalId, templateId } = body;
+    const { name, city, yandexUrl, dgisUrl, googleUrl, externalId, templateId, reviewStrategy } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -85,6 +91,7 @@ export async function POST(req: NextRequest) {
         googleUrl: googleUrl || null,
         externalId: externalId || null,
         templateId: templateId || null,
+        reviewStrategy: normStrategy(reviewStrategy),
       },
     });
 

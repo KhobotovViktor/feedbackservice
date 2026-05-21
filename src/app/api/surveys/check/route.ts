@@ -30,6 +30,9 @@ export async function GET(req: NextRequest) {
   };
 
   let branchInfo: BranchInfo | null = null;
+  // Which review platform to highlight for a happy customer (balancing). Maps
+  // to the survey's reviewLinks keys: "yandex" | "dgis" | "google" | null.
+  let recommendedService: "yandex" | "dgis" | "google" | null = null;
   if (branchId) {
     const b = await prisma.branch.findUnique({
       where: { id: branchId },
@@ -49,6 +52,38 @@ export async function GET(req: NextRequest) {
           ? { id: b.template.id, name: b.template.name, questions: b.template.questions }
           : null,
       };
+
+      // Balancing: pick the platform that needs help most, among those that
+      // have a configured URL, using the latest scraped rating/review count.
+      if (b.reviewStrategy !== "ALL") {
+        const SERVICES = [
+          { svc: "yandex" as const, dbKey: "yandex", url: b.yandexUrl },
+          { svc: "dgis" as const, dbKey: "2gis", url: b.dgisUrl },
+          { svc: "google" as const, dbKey: "google", url: b.googleUrl },
+        ].filter((s) => s.url);
+
+        if (SERVICES.length > 0) {
+          const history = await prisma.ratingHistory.findMany({
+            where: { branchId: b.id },
+            orderBy: { createdAt: "desc" },
+          });
+          // Latest record per service.
+          const latest: Record<string, { rating: number; reviewCount: number }> = {};
+          for (const h of history) {
+            if (!latest[h.service]) latest[h.service] = { rating: h.rating, reviewCount: h.reviewCount };
+          }
+          const metric = (dbKey: string) => {
+            const rec = latest[dbKey];
+            // Platforms with no data yet sort first (most "needs help") so we
+            // start collecting reviews there.
+            if (!rec) return -1;
+            return b.reviewStrategy === "FEWER_REVIEWS" ? rec.reviewCount : rec.rating;
+          };
+          recommendedService = SERVICES.reduce((best, s) =>
+            metric(s.dbKey) < metric(best.dbKey) ? s : best
+          ).svc;
+        }
+      }
     }
   }
 
@@ -74,10 +109,11 @@ export async function GET(req: NextRequest) {
 
   // Skip frequency check for tests
   if (isTest) {
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       branchId: branchId || null,
       branch: branchInfo || null,
+      recommendedService,
       isTest: true
     });
   }
@@ -101,9 +137,10 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ 
+  return NextResponse.json({
     success: true,
     branchId: branchId || null,
-    branch: branchInfo || null
+    branch: branchInfo || null,
+    recommendedService,
   });
 }

@@ -31,6 +31,7 @@ interface Branch {
   googleUrl: string | null;
   externalId: string | null;
   templateId?: string | null;
+  reviewStrategy?: string;
   template?: { name: string } | null;
   averageScore?: string;
   ratingHistory?: RatingHistory[];
@@ -55,7 +56,8 @@ export default function BranchesPage() {
     dgisUrl: "",
     googleUrl: "",
     externalId: "",
-    templateId: ""
+    templateId: "",
+    reviewStrategy: "ALL",
   });
 
   const [showAutomationHub, setShowAutomationHub] = useState(false);
@@ -130,7 +132,8 @@ export default function BranchesPage() {
       dgisUrl: branch.dgisUrl || "",
       googleUrl: branch.googleUrl || "",
       externalId: branch.externalId || "",
-      templateId: branch.templateId || ""
+      templateId: branch.templateId || "",
+      reviewStrategy: branch.reviewStrategy || "ALL",
     });
     setShowAdd(true);
   };
@@ -150,7 +153,7 @@ export default function BranchesPage() {
       if (res.ok) {
         setShowAdd(false);
         setEditingBranch(null);
-        setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", externalId: "", templateId: "" });
+        setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", externalId: "", templateId: "", reviewStrategy: "ALL" });
         fetchBranches();
       } else {
         // Surface backend rejection instead of silently doing nothing — the
@@ -397,7 +400,7 @@ export default function BranchesPage() {
           <button 
             onClick={() => {
               setEditingBranch(null);
-              setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", externalId: "", templateId: "" });
+              setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", externalId: "", templateId: "", reviewStrategy: "ALL" });
               setShowAdd(true);
             }}
             className="px-4 md:px-6 py-3 premium-gradient text-white rounded-2xl font-black shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all text-xs md:text-sm flex-1 sm:flex-none"
@@ -486,7 +489,7 @@ export default function BranchesPage() {
               </div>
               <div className="space-y-2 sm:col-span-2 lg:col-span-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Шаблон вопросов</label>
-                <CustomSelect 
+                <CustomSelect
                   className="w-full"
                   options={[
                     { value: "", label: "Без шаблона (свои вопросы)" },
@@ -497,6 +500,28 @@ export default function BranchesPage() {
                   placeholder="Выберите шаблон"
                 />
               </div>
+            </div>
+
+            {/* Review platform balancing strategy */}
+            <div className="space-y-2 relative z-10">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Куда направлять довольных клиентов
+              </label>
+              <CustomSelect
+                className="w-full sm:w-96"
+                options={[
+                  { value: "ALL", label: "Показывать все площадки" },
+                  { value: "FEWER_REVIEWS", label: "Приоритет: где меньше отзывов" },
+                  { value: "LOWER_RATING", label: "Приоритет: где ниже рейтинг" },
+                ]}
+                value={newBranch.reviewStrategy || "ALL"}
+                onChange={(val) => setNewBranch({ ...newBranch, reviewStrategy: val })}
+                placeholder="Стратегия"
+              />
+              <p className="text-[10px] text-slate-400 font-medium ml-1 leading-relaxed">
+                При выборе приоритета клиенту выделяется одна площадка — та, которой нужнее
+                рост (по последним собранным данным рейтингов). Остальные остаются доступны ниже.
+              </p>
             </div>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-end pt-8 relative z-10">

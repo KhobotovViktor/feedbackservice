@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+const REVIEW_STRATEGIES = ["ALL", "FEWER_REVIEWS", "LOWER_RATING"] as const;
+type ReviewStrategy = (typeof REVIEW_STRATEGIES)[number];
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -8,7 +11,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { name, city, yandexUrl, dgisUrl, googleUrl, externalId, templateId } = body;
+    const { name, city, yandexUrl, dgisUrl, googleUrl, externalId, templateId, reviewStrategy } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -24,6 +27,9 @@ export async function PATCH(
         googleUrl,
         externalId,
         templateId: templateId || null,
+        ...(REVIEW_STRATEGIES.includes(reviewStrategy as ReviewStrategy)
+          ? { reviewStrategy: reviewStrategy as ReviewStrategy }
+          : {}),
       },
     });
 
