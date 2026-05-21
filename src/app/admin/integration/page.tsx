@@ -596,8 +596,12 @@ export default function IntegrationPage() {
             </div>
           </div>
 
-          {/* City selection for CRM survey links */}
-          <div className="bento-card bg-white/60 p-8 md:p-12 space-y-8 flex flex-col border-white/40">
+          {/* City selection for CRM survey links.
+              relative z-20: each bento-card is its own stacking context (glass
+              uses backdrop-filter), so without an explicit z-index the later
+              "Входящий Webhook" card paints over this card's open dropdown.
+              z-20 lifts the whole card (and its dropdown) above it. */}
+          <div className="bento-card bg-white/60 p-8 md:p-12 space-y-8 flex flex-col border-white/40 relative z-20">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-emerald-500/20">
