@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { StarRating } from "@/components/star-rating";
 import { CheckCircle, MessageSquare, ArrowRight, Star, MapPin } from "lucide-react";
@@ -223,7 +223,7 @@ export default function SurveyPage() {
       
       // Ensure state is updated before showing success
       setStep("success");
-    } catch (err) {
+    } catch {
       setError("Ошибка при отправке. Попробуйте позже.");
     }
   };
@@ -295,9 +295,10 @@ export default function SurveyPage() {
     ] as const
   ).filter((p) => p.url);
   const orderedPlatforms = recommended
-    ? [...reviewPlatforms].sort(
-        (a, b) => (a.key === recommended ? -1 : 0) - (b.key === recommended ? -1 : 0)
-      )
+    ? [
+        ...reviewPlatforms.filter((p) => p.key === recommended),
+        ...reviewPlatforms.filter((p) => p.key !== recommended),
+      ]
     : reviewPlatforms;
 
   const trackClick = (target: string) =>
@@ -402,7 +403,7 @@ export default function SurveyPage() {
               </div>
 
               <button
-                disabled={Object.keys(answers).length < questions.length}
+                disabled={!questions.every((q) => typeof answers[q.id] === "number")}
                 onClick={handleSubmitRating}
                 className="w-full py-5 premium-gradient text-white rounded-[1.5rem] font-black text-lg flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:grayscale transition-all shadow-2xl shadow-indigo-500/20"
               >

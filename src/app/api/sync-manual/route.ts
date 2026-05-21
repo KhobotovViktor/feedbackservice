@@ -32,6 +32,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing data" }, { status: 400 });
     }
 
+    // service must be one of the known platforms — otherwise it silently
+    // breaks the review-balancing logic that keys on yandex|2gis|google.
+    if (!["yandex", "2gis", "google"].includes(service)) {
+      return NextResponse.json({ error: "Invalid service" }, { status: 400 });
+    }
+
     const ratingVal = parseFloat(rating);
     const reviewCountVal = parseInt(reviewCount, 10);
     if (isNaN(ratingVal) || isNaN(reviewCountVal)) {

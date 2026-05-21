@@ -6,8 +6,8 @@ import {
   TrendingUp, BarChart3, Plus, Loader2, Building2, MapPin, Trash2, 
   Settings, Bot, ExternalLink, Zap
 } from "lucide-react";
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+import {
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area
 } from 'recharts';
 import { motion, AnimatePresence } from "framer-motion";

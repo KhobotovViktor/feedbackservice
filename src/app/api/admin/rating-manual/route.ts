@@ -29,12 +29,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing data" }, { status: 400 });
     }
 
+    if (!["yandex", "2gis", "google"].includes(service)) {
+      return NextResponse.json({ error: "Invalid service" }, { status: 400 });
+    }
+
+    const ratingVal = parseFloat(rating);
+    const reviewCountVal = parseInt(reviewCount, 10);
+    if (isNaN(ratingVal) || isNaN(reviewCountVal)) {
+      return NextResponse.json({ error: "Invalid rating or reviewCount" }, { status: 400 });
+    }
+
     const record = await prisma.ratingHistory.create({
       data: {
         branchId,
         service,
-        rating: parseFloat(rating),
-        reviewCount: parseInt(reviewCount, 10),
+        rating: ratingVal,
+        reviewCount: reviewCountVal,
       }
     });
 

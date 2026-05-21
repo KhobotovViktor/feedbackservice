@@ -219,7 +219,7 @@ export default function IntegrationPage() {
       } else {
         setStatus("error");
       }
-    } catch (e) {
+    } catch {
       setStatus("error");
     } finally {
       setSaving(false);
@@ -529,7 +529,6 @@ export default function IntegrationPage() {
                     />
                     <button
                       onClick={async () => {
-                        const loadingToast = setStatus;
                         try {
                           const res = await fetch("/api/test-b24-notification", {
                             method: "POST",
@@ -545,7 +544,7 @@ export default function IntegrationPage() {
                           } else {
                             alert("❌ Ошибка: " + (data.error || "Неизвестная ошибка"));
                           }
-                        } catch (err) {
+                        } catch {
                           alert("❌ Ошибка при отправке теста");
                         }
                       }}

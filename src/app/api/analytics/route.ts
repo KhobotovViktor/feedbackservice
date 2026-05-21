@@ -17,13 +17,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid target" }, { status: 400 });
     }
 
-    const event = await prisma.analyticsEvent.create({
-      data: {
-        type,
-        target: target ?? null,
-        branchId: branchId ?? null,
+    // This endpoint is public (survey page posts VIEW/CLICK), so branchId is
+    // untrusted. A stale/unknown id would trip the FK constraint (P2003) and
+    // turn into a 500; instead, retry once without the branch so we still
+    // record the event rather than dropping it.
+    let event;
+    try {
+      event = await prisma.analyticsEvent.create({
+        data: { type, target: target ?? null, branchId: branchId ?? null },
+      });
+    } catch (e) {
+      if ((e as { code?: string } | null)?.code === "P2003") {
+        event = await prisma.analyticsEvent.create({
+          data: { type, target: target ?? null, branchId: null },
+        });
+      } else {
+        throw e;
       }
-    });
+    }
 
     return NextResponse.json({ success: true, id: event.id });
   } catch (error) {

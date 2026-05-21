@@ -136,7 +136,10 @@ export async function proxy(req: NextRequest) {
         path.startsWith("/api/settings") ||
         path.startsWith("/api/branches") ||
         path.startsWith("/api/cities") ||
-        path.startsWith("/api/templates");
+        path.startsWith("/api/templates") ||
+        path.startsWith("/api/questions") ||
+        path.startsWith("/api/admin/rating-manual") ||
+        path.startsWith("/api/admin/test");
       if (adminOnly) {
         if (path.startsWith("/api/")) {
           return NextResponse.json({ error: "Forbidden" }, { status: 403 });

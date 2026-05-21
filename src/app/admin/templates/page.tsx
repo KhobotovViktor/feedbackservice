@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, LayoutDashboard, Settings, Loader2, Trash2, Edit2, X, Check, Building2, ChevronLeft, Star } from "lucide-react";
+import { Plus, LayoutDashboard, Settings, Loader2, Trash2, Edit2, Check, Building2, ChevronLeft, Star } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -70,6 +70,7 @@ export default function TemplatesPage() {
       if (res.ok) {
         setShowAdd(false);
         setNewTemplateName("");
+        setNewTemplateMinScore("4.0");
         fetchTemplates();
       }
     } catch (err) {

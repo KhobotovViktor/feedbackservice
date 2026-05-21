@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2, GripVertical, Loader2, Settings, Building2, Star, MessageSquare } from "lucide-react";
+import { Plus, Trash2, GripVertical, Loader2, Building2, Star, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";

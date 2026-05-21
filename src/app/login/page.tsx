@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Star, Lock, User, Loader2, AlertCircle } from "lucide-react";
+import { Lock, User, Loader2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function LoginPage() {
@@ -33,7 +33,7 @@ export default function LoginPage() {
       } else {
         setError(data.error || "Ошибка входа");
       }
-    } catch (err) {
+    } catch {
       setError("Произошла ошибка. Попробуйте снова.");
     } finally {
       setLoading(false);
