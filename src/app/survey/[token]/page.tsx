@@ -34,6 +34,7 @@ export default function SurveyPage() {
   const [questions, setQuestions] = useState<Question[]>(DEFAULT_QUESTIONS);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [comment, setComment] = useState("");
+  const [phone, setPhone] = useState("");
   const [step, setStep] = useState<"city" | "rating" | "feedback" | "success">("rating");
   const [isPositive, setIsPositive] = useState(false);
   const [isPositiveThreshold, setIsPositiveThreshold] = useState(4);
@@ -218,6 +219,7 @@ export default function SurveyPage() {
           comment: positive ? "" : comment,
           averageScore: avg,
           cityId: chosenCityId,
+          phone: positive ? "" : phone,
         }),
       });
 
@@ -469,8 +471,8 @@ export default function SurveyPage() {
                 <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-[2rem] flex items-center justify-center mx-auto mb-4 border border-indigo-100">
                   <MessageSquare className="w-8 h-8" />
                 </div>
-                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Что мы можем улучшить?</h2>
-                <p className="text-slate-500 font-medium">Ваш отзыв поможет нам стать лучше</p>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Расскажите, пожалуйста, что вам не понравилось.</h2>
+                <p className="text-slate-500 font-medium">Оставьте отзыв и получите 500 бонусов! Для начисления бонусов обратитесь к менеджеру.</p>
               </div>
 
               <label htmlFor="survey-comment" className="sr-only">
@@ -483,6 +485,18 @@ export default function SurveyPage() {
                 placeholder="Расскажите подробнее о вашем опыте..."
                 aria-label="Ваш комментарий"
                 className="w-full h-40 p-6 rounded-[1.5rem] bg-slate-50/50 border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all resize-none font-medium placeholder:text-slate-400"
+              />
+
+              <label htmlFor="survey-phone" className="sr-only">Номер телефона</label>
+              <input
+                id="survey-phone"
+                type="tel"
+                inputMode="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Оставьте номер телефона для связи (необязательно)"
+                aria-label="Номер телефона"
+                className="w-full px-6 py-4 rounded-[1.5rem] bg-slate-50/50 border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all font-medium placeholder:text-slate-400"
               />
 
               <button

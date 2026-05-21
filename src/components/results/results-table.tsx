@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Star, User, MessageCircle, TrendingUp, Trash2, Loader2, X, AlertCircle, ExternalLink } from "lucide-react";
+import { Calendar, Star, User, MessageCircle, TrendingUp, Trash2, Loader2, X, AlertCircle, ExternalLink, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ComplaintStatus = "NEW" | "IN_PROGRESS" | "RESOLVED";
@@ -20,6 +20,8 @@ export interface ResultRow {
   entityType: string | null;
   // AI auto-tags derived from the comment (Claude).
   tags?: string[];
+  // Optional contact phone from the negative-feedback step.
+  phone?: string | null;
 }
 
 // Deep-link into the deal/lead in Bitrix24, when we know the portal + a real
@@ -290,6 +292,11 @@ export function ResultsTable({
                   <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-0.5 opacity-60 truncate">
                     {res.entityType === "lead" ? "Лид" : "Сделка"}: {res.dealId || "—"}
                   </div>
+                  {res.phone && (
+                    <a href={`tel:${res.phone}`} className="text-[11px] font-black text-emerald-600 mt-1 flex items-center gap-1 truncate hover:text-emerald-700 transition-colors">
+                      <Phone className="w-3 h-3 shrink-0" /> {res.phone}
+                    </a>
+                  )}
                   {crmLink(portalUrl, res) && (
                     <a
                       href={crmLink(portalUrl, res)!}
@@ -383,6 +390,11 @@ export function ResultsTable({
                     </p>
                     {res.responsibleName && (
                       <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50/50 px-1.5 py-0.5 rounded">Resp: {res.responsibleName}</p>
+                    )}
+                    {res.phone && (
+                      <a href={`tel:${res.phone}`} className="text-[10px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-50/50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <Phone className="w-3 h-3" /> {res.phone}
+                      </a>
                     )}
                   </div>
                   {crmLink(portalUrl, res) && (

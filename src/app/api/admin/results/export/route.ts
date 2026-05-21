@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
 
   const header = [
     "Дата", "Время", "Источник", "Клиент", "Тип", "Номер",
-    "Оценка", "Ответственный", "Жалоба", "Теги", "Комментарий",
+    "Оценка", "Ответственный", "Телефон", "Жалоба", "Теги", "Комментарий",
   ];
   const lines = [header.join(",")];
 
@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
     lines.push(
       [
         date, time, source, r.clientId || "", entity, r.dealId || "",
-        r.averageScore.toFixed(1), r.responsibleName || "", complaint, tags, r.comment || "",
+        r.averageScore.toFixed(1), r.responsibleName || "", r.phone || "", complaint, tags, r.comment || "",
       ]
         .map(csvCell)
         .join(",")

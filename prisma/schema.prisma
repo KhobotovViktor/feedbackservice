@@ -82,6 +82,8 @@ model SurveyResponse {
   averageScore    Float
   answers         Json
   comment         String?
+  // Optional contact phone the customer leaves on the negative-feedback step.
+  phone           String?
   // AI auto-tags derived from the comment text (Claude). E.g.
   // ["доставка","цена"]. Empty when there's no comment / AI isn't configured.
   tags            String[] @default([])

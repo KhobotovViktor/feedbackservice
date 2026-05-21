@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     );
   }
   try {
-    const { token, answers, comment, cityId } = await req.json();
+    const { token, answers, comment, cityId, phone } = await req.json();
 
     const payload = await verifySurveyToken(token);
     if (!payload) {
@@ -113,6 +113,7 @@ export async function POST(req: NextRequest) {
           averageScore,
           answers,
           comment,
+          phone: typeof phone === "string" && phone.trim() ? phone.trim().slice(0, 32) : null,
           branchId: effectiveBranchId,
           responsibleName: responsibleName || null,
           entityType,
