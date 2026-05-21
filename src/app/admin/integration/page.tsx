@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Users, Plus, Trash2, Building2, Play, Power } from "lucide-react";
+import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Users, Plus, Trash2, Building2, Play, Power, Palette } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -20,6 +20,10 @@ export default function IntegrationPage() {
     review_google_maps: "",
     b24_group_chat_id: "",
     city_selection_enabled: "false",
+    brand_name: "",
+    brand_logo_url: "",
+    brand_site_url: "",
+    brand_accent: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -69,6 +73,10 @@ export default function IntegrationPage() {
           review_google_maps: settingsData.review_google_maps || "",
           b24_group_chat_id: settingsData.b24_group_chat_id || "",
           city_selection_enabled: settingsData.city_selection_enabled || "false",
+          brand_name: settingsData.brand_name || "",
+          brand_logo_url: settingsData.brand_logo_url || "",
+          brand_site_url: settingsData.brand_site_url || "",
+          brand_accent: settingsData.brand_accent || "",
         });
 
         const bList = Array.isArray(branchesData)
@@ -200,6 +208,32 @@ export default function IntegrationPage() {
 
   const handleTestCityScenario = () => {
     window.open("/api/admin/test/generate-city-survey-token", "_blank");
+  };
+
+  // ── Survey-page branding (own save, like the cities block) ───────────────
+  const [brandSaving, setBrandSaving] = useState(false);
+  const [brandStatus, setBrandStatus] = useState<null | "success" | "error">(null);
+  const handleSaveBrand = async () => {
+    setBrandSaving(true);
+    setBrandStatus(null);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brand_name: settings.brand_name,
+          brand_logo_url: settings.brand_logo_url,
+          brand_site_url: settings.brand_site_url,
+          brand_accent: settings.brand_accent,
+        }),
+      });
+      setBrandStatus(res.ok ? "success" : "error");
+      if (res.ok) setTimeout(() => setBrandStatus(null), 3000);
+    } catch {
+      setBrandStatus("error");
+    } finally {
+      setBrandSaving(false);
+    }
   };
 
 // No global questions anymore
@@ -716,6 +750,113 @@ export default function IntegrationPage() {
               </button>
               {cityError && <p className="text-xs text-rose-600 font-bold px-1">{cityError}</p>}
             </div>
+          </div>
+
+          {/* Survey-page branding */}
+          <div className="bento-card bg-white/60 p-8 md:p-12 space-y-8 flex flex-col border-white/40">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 premium-gradient rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-500/20">
+                <Palette className="w-8 h-8" />
+              </div>
+              <div className="space-y-0.5">
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Брендинг опроса</h2>
+                <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Логотип · название · цвет</p>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 font-medium leading-relaxed px-1">
+              Как страница опроса выглядит для клиента. Пустые поля используют значения по умолчанию
+              («Аллея Мебели», логотип и ссылка alleyadoma.ru).
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Название бренда</label>
+                <input
+                  type="text"
+                  placeholder="Аллея Мебели"
+                  className="w-full px-5 py-3 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-bold"
+                  value={settings.brand_name}
+                  onChange={(e) => setSettings({ ...settings, brand_name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ссылка на сайт</label>
+                <input
+                  type="text"
+                  placeholder="https://alleyadoma.ru"
+                  className="w-full px-5 py-3 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-bold"
+                  value={settings.brand_site_url}
+                  onChange={(e) => setSettings({ ...settings, brand_site_url: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">URL логотипа</label>
+                <input
+                  type="text"
+                  placeholder="/logoalleya.png или https://…"
+                  className="w-full px-5 py-3 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-mono font-bold"
+                  value={settings.brand_logo_url}
+                  onChange={(e) => setSettings({ ...settings, brand_logo_url: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Акцентный цвет</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    aria-label="Акцентный цвет"
+                    className="w-12 h-11 rounded-xl border border-slate-200 bg-white cursor-pointer shrink-0"
+                    value={settings.brand_accent || "#6366f1"}
+                    onChange={(e) => setSettings({ ...settings, brand_accent: e.target.value })}
+                  />
+                  <input
+                    type="text"
+                    placeholder="#6366f1 (пусто = градиент по умолчанию)"
+                    className="flex-1 px-5 py-3 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-mono font-bold"
+                    value={settings.brand_accent}
+                    onChange={(e) => setSettings({ ...settings, brand_accent: e.target.value })}
+                  />
+                  {settings.brand_accent && (
+                    <button
+                      type="button"
+                      onClick={() => setSettings({ ...settings, brand_accent: "" })}
+                      className="px-3 py-2 rounded-xl bg-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-colors shrink-0"
+                    >
+                      Сброс
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleSaveBrand}
+                disabled={brandSaving}
+                className="flex items-center gap-2 premium-gradient text-white px-7 py-3.5 rounded-2xl font-black shadow-xl shadow-indigo-500/20 hover:scale-[1.02] transition-all disabled:opacity-50 text-sm"
+              >
+                {brandSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save size={18} />}
+                Сохранить брендинг
+              </button>
+              <AnimatePresence>
+                {brandStatus === "success" && (
+                  <motion.span initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="text-emerald-500 flex items-center gap-2 text-sm font-black uppercase tracking-widest">
+                    <CheckCircle2 size={18} /> Сохранено
+                  </motion.span>
+                )}
+                {brandStatus === "error" && (
+                  <motion.span initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="text-rose-500 text-sm font-black uppercase tracking-widest">
+                    Не удалось сохранить
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <p className="text-[10px] text-slate-400 font-medium px-1 leading-relaxed">
+              Логотип задаётся ссылкой (путь вроде <span className="font-mono">/logoalleya.png</span> или внешний <span className="font-mono">https://…</span>).
+              Цвет применяется к кнопкам опроса; пусто — стандартный фиолетовый градиент.
+            </p>
           </div>
 
           <div className="bento-card p-10 md:p-12 space-y-6 flex flex-col bg-slate-900 text-white overflow-hidden relative shadow-2xl shadow-slate-900/40">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { StarRating } from "@/components/star-rating";
@@ -15,6 +15,15 @@ const DEFAULT_QUESTIONS: Question[] = [
   { id: "1", text: "Как вы оцениваете качество обслуживания в “Аллея Мебели”?" },
   { id: "2", text: "Оцените, пожалуйста, работу сотрудника службы поддержки." },
 ];
+
+// Survey-page branding — overridable from Settings → «Интеграция».
+// Falls back to these defaults so existing deployments look unchanged.
+const DEFAULT_BRAND = {
+  name: "Аллея Мебели",
+  logoUrl: "/logoalleya.png",
+  siteUrl: "https://alleyadoma.ru",
+  accent: "",
+};
 
 export default function SurveyPage() {
   const params = useParams();
@@ -39,6 +48,8 @@ export default function SurveyPage() {
   // Global settings cached at init so a later city pick can reuse the fallback
   // review links without re-fetching.
   const [globalSettings, setGlobalSettings] = useState<Record<string, string>>({});
+  // Survey-page branding pulled from Settings (falls back to defaults).
+  const [brand, setBrand] = useState(DEFAULT_BRAND);
 
   // Apply a /check response to the survey UI: questions, review links, the
   // positive-rating threshold, the balancing recommendation and the VIEW
@@ -126,6 +137,12 @@ export default function SurveyPage() {
           // best-effort: review links will just fall back to branch values
         }
         setGlobalSettings(sData);
+        setBrand({
+          name: sData.brand_name || DEFAULT_BRAND.name,
+          logoUrl: sData.brand_logo_url || DEFAULT_BRAND.logoUrl,
+          siteUrl: sData.brand_site_url || DEFAULT_BRAND.siteUrl,
+          accent: sData.brand_accent || "",
+        });
 
         const res = await fetch(`/api/surveys/check?token=${token}`);
         const data = await res.json();
@@ -249,7 +266,7 @@ export default function SurveyPage() {
           </div>
           <div className="pt-4">
              <div className="h-px bg-slate-200/50 w-full mb-6"></div>
-             <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.3em]">Сервис обратной связи «Аллея Мебели»</p>
+             <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.3em]">Сервис обратной связи «{brand.name}»</p>
           </div>
         </div>
       </div>
@@ -310,9 +327,21 @@ export default function SurveyPage() {
       body: JSON.stringify({ type: "CLICK", target, branchId, token }),
     }).catch(() => {});
 
+  // Domain shown as the link label (without protocol / trailing slash).
+  const brandDomain = brand.siteUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  // When an accent colour is set, override the brand-gradient vars so the
+  // premium-gradient CTAs adopt it.
+  const accentStyle: CSSProperties | undefined = brand.accent
+    ? ({
+        "--color-brand-start": brand.accent,
+        "--color-brand-mid": brand.accent,
+        "--color-brand-end": brand.accent,
+      } as CSSProperties)
+    : undefined;
+
   return (
-    <div className="min-h-screen p-4 md:p-8 flex items-center justify-center">
-      <motion.div 
+    <div className="min-h-screen p-4 md:p-8 flex items-center justify-center" style={accentStyle}>
+      <motion.div
         initial={{ opacity: 0, y: 30, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
@@ -329,7 +358,7 @@ export default function SurveyPage() {
             >
               <div className="text-center space-y-3">
                 <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-100 border border-slate-50 overflow-hidden p-2 transform rotate-3">
-                  <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
+                  <img src={brand.logoUrl} alt="Logo" className="w-full h-full object-contain" />
                 </div>
                 <h1 className="text-3xl md:text-4xl font-black text-slate-900 leading-none tracking-tighter">
                   Выберите ваш город
@@ -338,7 +367,7 @@ export default function SurveyPage() {
                   Чтобы мы направили ваш отзыв в нужный салон
                 </p>
                 <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px] pt-1">
-                  Сервис обратной связи «Аллея Мебели»
+                  Сервис обратной связи «{brand.name}»
                 </p>
               </div>
 
@@ -374,12 +403,12 @@ export default function SurveyPage() {
             >
               <div className="text-center space-y-3">
                 <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-100 border border-slate-50 overflow-hidden p-2 transform rotate-3">
-                   <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
+                   <img src={brand.logoUrl} alt="Logo" className="w-full h-full object-contain" />
                 </div>
                 <h1 className="text-3xl md:text-4xl font-black text-slate-900 leading-none tracking-tighter">Ваше мнение <br/> имеет значение</h1>
-                <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px]">Сервис обратной связи «Аллея Мебели»</p>
+                <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px]">Сервис обратной связи «{brand.name}»</p>
                 <div className="pt-2">
-                  <a href="https://alleyadoma.ru" target="_blank" className="text-[10px] text-slate-400 hover:text-indigo-500 font-bold uppercase tracking-[0.1em] transition-colors border-b border-slate-200 hover:border-indigo-200 pb-0.5">alleyadoma.ru</a>
+                  <a href={brand.siteUrl} target="_blank" className="text-[10px] text-slate-400 hover:text-indigo-500 font-bold uppercase tracking-[0.1em] transition-colors border-b border-slate-200 hover:border-indigo-200 pb-0.5">{brandDomain}</a>
                 </div>
               </div>
 
@@ -467,7 +496,7 @@ export default function SurveyPage() {
               <div className="space-y-3">
                 <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Огромное спасибо!</h2>
                 <div className="pb-2">
-                  <a href="https://alleyadoma.ru" target="_blank" className="text-xs text-indigo-500 font-bold hover:text-indigo-600 transition-colors">Вернуться на alleyadoma.ru</a>
+                  <a href={brand.siteUrl} target="_blank" className="text-xs text-indigo-500 font-bold hover:text-indigo-600 transition-colors">Вернуться на {brandDomain}</a>
                 </div>
                 <p className="text-slate-600 text-lg font-medium leading-relaxed">
                   {isPositive 
@@ -509,7 +538,7 @@ export default function SurveyPage() {
               )}
 
               <div className="pt-8 border-t border-slate-200/50">
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-2">Сервис обратной связи «Аллея Мебели»</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-2">Сервис обратной связи «{brand.name}»</p>
                 <a href="/privacy" target="_blank" className="text-[10px] text-indigo-400 hover:text-indigo-600 font-bold uppercase tracking-[0.2em] transition-colors">Политика конфиденциальности</a>
               </div>
             </motion.div>

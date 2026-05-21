@@ -39,6 +39,11 @@ const ALLOWED_KEYS = [
   "b24_link_field",
   // Enable the "pick your city" step for CRM survey links ("true"/"false").
   "city_selection_enabled",
+  // Survey-page branding (logo / name / site link / accent colour).
+  "brand_name",
+  "brand_logo_url",
+  "brand_site_url",
+  "brand_accent",
 ] as const;
 
 export async function POST(req: NextRequest) {
