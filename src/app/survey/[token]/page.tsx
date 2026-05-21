@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { StarRating } from "@/components/star-rating";
-import { CheckCircle, MessageSquare, ArrowRight, Star } from "lucide-react";
+import { CheckCircle, MessageSquare, ArrowRight, Star, MapPin } from "lucide-react";
 
 interface Question {
   id: string;
@@ -24,7 +24,7 @@ export default function SurveyPage() {
   const [questions, setQuestions] = useState<Question[]>(DEFAULT_QUESTIONS);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [comment, setComment] = useState("");
-  const [step, setStep] = useState<"rating" | "feedback" | "success">("rating");
+  const [step, setStep] = useState<"city" | "rating" | "feedback" | "success">("rating");
   const [isPositive, setIsPositive] = useState(false);
   const [isPositiveThreshold, setIsPositiveThreshold] = useState(4);
   const [reviewLinks, setReviewLinks] = useState<{ yandex?: string; dgis?: string; google?: string }>({});
@@ -33,85 +33,131 @@ export default function SurveyPage() {
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
   const [isTest, setIsTest] = useState(false);
   const [branchId, setBranchId] = useState<string | null>(null);
+  // CRM "pick your city" step: list of cities and the one the customer chose.
+  const [cities, setCities] = useState<{ id: string; name: string }[]>([]);
+  const [chosenCityId, setChosenCityId] = useState<string | null>(null);
+  // Global settings cached at init so a later city pick can reuse the fallback
+  // review links without re-fetching.
+  const [globalSettings, setGlobalSettings] = useState<Record<string, string>>({});
+
+  // Apply a /check response to the survey UI: questions, review links, the
+  // positive-rating threshold, the balancing recommendation and the VIEW
+  // event. Setters are stable, so this is safe with an empty dep list.
+  const applyConfig = useCallback(
+    (data: any, sData: Record<string, string>) => {
+      setIsTest(data.isTest || false);
+      const bId = data.branchId;
+      setBranchId(bId);
+      const branchInfo = data.branch;
+
+      // Use template-specific min score or fallback to 4.0
+      const minScoreThreshold = branchInfo?.template?.minScore || 4.0;
+
+      // If branch has a template, use template questions
+      if (branchInfo?.template?.questions) {
+        setQuestions(branchInfo.template.questions);
+      }
+
+      // Set review links with fallback to global settings
+      setReviewLinks({
+        yandex: branchInfo?.yandexUrl || sData.review_yandex || "",
+        dgis: branchInfo?.dgisUrl || sData.review_2gis || "",
+        google: branchInfo?.googleUrl || sData.review_google_maps || "",
+      });
+
+      // Balancing: server tells us which platform to highlight (or null).
+      if (
+        data.recommendedService === "yandex" ||
+        data.recommendedService === "dgis" ||
+        data.recommendedService === "google"
+      ) {
+        setRecommended(data.recommendedService);
+      }
+
+      setIsPositiveThreshold(minScoreThreshold);
+
+      // Log view event (fire and forget — analytics is not critical).
+      fetch("/api/analytics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "VIEW", branchId: bId }),
+      }).catch(() => {});
+    },
+    []
+  );
+
+  // CRM "pick your city" step: the customer chose a city, so re-check with
+  // that cityId to load the attached branch's survey, then start rating.
+  const chooseCity = useCallback(
+    async (cityId: string) => {
+      setChosenCityId(cityId);
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/surveys/check?token=${token}&cityId=${cityId}`);
+        const data = await res.json();
+        if (!res.ok) {
+          if (res.status === 429) setAlreadyCompleted(true);
+          else setError(data.error || "Ошибка загрузки");
+          return;
+        }
+        applyConfig(data, globalSettings);
+        setStep("rating");
+      } catch (err) {
+        console.error("City selection failed:", err);
+        setError("Не удалось загрузить опрос. Проверьте соединение и обновите страницу.");
+      } finally {
+        setTimeout(() => setLoading(false), 400);
+      }
+    },
+    [token, globalSettings, applyConfig]
+  );
 
   useEffect(() => {
     async function init() {
       try {
-        const res = await fetch(`/api/surveys/check?token=${token}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          // 429 means survey already completed — show "already done" screen, not error
-          if (res.status === 429) {
-            setAlreadyCompleted(true);
-          } else {
-            setError(data.error || "Ошибка загрузки");
-          }
-          return;
-        }
-
-        // Per-survey device lock (SKIP IF TEST). Previously stored a single
-        // flag "survey_completed", which locked the entire device after any
-        // user finished — fatal for shared / kiosk devices. We now key the
-        // flag by the actual token so multiple clients on the same device
-        // can each take their own survey independently. The DB-side
-        // duplicate-submit check on the backend is the real source of truth.
-        if (!data.isTest && localStorage.getItem(`survey_completed:${token}`)) {
-          setAlreadyCompleted(true);
-          return;
-        }
-
-        setIsTest(data.isTest || false);
-        const bId = data.branchId;
-        setBranchId(bId);
-        const branchInfo = data.branch;
-
-        // Fetch global settings for fallback review links — don't let a
+        // Fetch global settings for fallback review links once — don't let a
         // settings fetch failure abort the whole init.
         let sData: Record<string, string> = {};
         try {
           const sRes = await fetch("/api/settings");
           if (sRes.ok) sData = await sRes.json();
         } catch {
-          // best-effort: review links will just fall back to branch-level values
+          // best-effort: review links will just fall back to branch values
+        }
+        setGlobalSettings(sData);
+
+        const res = await fetch(`/api/surveys/check?token=${token}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          // 429 means survey already completed — show "already done" screen.
+          if (res.status === 429) setAlreadyCompleted(true);
+          else setError(data.error || "Ошибка загрузки");
+          return;
         }
 
-        // Use template-specific min score or fallback to 4.0
-        const minScoreThreshold = branchInfo?.template?.minScore || 4.0;
-
-        // If branch has a template, use template questions
-        if (branchInfo?.template?.questions) {
-          setQuestions(branchInfo.template.questions);
+        // Per-survey device lock (SKIP IF TEST). Keyed by token so multiple
+        // clients on a shared/kiosk device can each take their own survey;
+        // the DB-side duplicate check is the real source of truth.
+        if (!data.isTest && localStorage.getItem(`survey_completed:${token}`)) {
+          setAlreadyCompleted(true);
+          return;
         }
 
-        // Set review links with fallback to global settings
-        setReviewLinks({
-          yandex: branchInfo?.yandexUrl || sData.review_yandex || "",
-          dgis: branchInfo?.dgisUrl || sData.review_2gis || "",
-          google: branchInfo?.googleUrl || sData.review_google_maps || ""
-        });
+        setIsTest(data.isTest || false);
 
-        // Balancing: server tells us which platform to highlight (or null).
-        if (data.recommendedService === "yandex" || data.recommendedService === "dgis" || data.recommendedService === "google") {
-          setRecommended(data.recommendedService);
+        // CRM "pick your city" step: show city buttons first; the branch is
+        // resolved when the customer chooses (chooseCity → applyConfig).
+        if (data.needCity) {
+          setCities(data.cities || []);
+          setStep("city");
+          return;
         }
 
-        // Use setting for positive threshold
-        setIsPositiveThreshold(minScoreThreshold);
-
-        // Log view event (fire and forget — analytics is not critical).
-        fetch("/api/analytics", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "VIEW",
-            branchId: bId,
-          }),
-        }).catch(() => {});
+        applyConfig(data, sData);
       } catch (err) {
-        // Network failure or unparseable JSON. Show an actual error to the
-        // user instead of silently proceeding with hard-coded fallback
-        // questions and posting bogus submissions to the backend.
+        // Network failure or unparseable JSON. Show an actual error instead
+        // of silently posting bogus submissions with fallback questions.
         console.error("Survey init failed:", err);
         setError("Не удалось загрузить опрос. Проверьте соединение и обновите страницу.");
       } finally {
@@ -119,7 +165,7 @@ export default function SurveyPage() {
       }
     }
     init();
-  }, [token]);
+  }, [token, applyConfig]);
 
   const handleSubmitRating = async () => {
     const scores = Object.values(answers).filter((v) => typeof v === "number");
@@ -151,7 +197,8 @@ export default function SurveyPage() {
           token,
           answers,
           comment: positive ? "" : comment,
-          averageScore: avg
+          averageScore: avg,
+          cityId: chosenCityId,
         }),
       });
 
@@ -270,6 +317,51 @@ export default function SurveyPage() {
         className="w-full max-w-xl glass p-8 md:p-12 rounded-[3.5rem] shadow-2xl border-white/50 relative overflow-hidden"
       >
         <AnimatePresence mode="wait">
+          {step === "city" && (
+            <motion.div
+              key="city"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="space-y-10"
+            >
+              <div className="text-center space-y-3">
+                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-100 border border-slate-50 overflow-hidden p-2 transform rotate-3">
+                  <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
+                </div>
+                <h1 className="text-3xl md:text-4xl font-black text-slate-900 leading-none tracking-tighter">
+                  Выберите ваш город
+                </h1>
+                <p className="text-slate-500 font-medium">
+                  Чтобы мы направили ваш отзыв в нужный салон
+                </p>
+                <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px] pt-1">
+                  Сервис обратной связи «Аллея Мебели»
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                {cities.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => chooseCity(c.id)}
+                    className="w-full py-5 px-6 bg-white/50 border border-slate-200 rounded-2xl hover:bg-white hover:border-indigo-300 hover:scale-[1.02] active:scale-[0.98] transition-all font-black text-slate-700 shadow-sm flex items-center justify-between gap-3"
+                  >
+                    <span className="flex items-center gap-3">
+                      <MapPin className="w-5 h-5 text-indigo-400" />
+                      {c.name}
+                    </span>
+                    <ArrowRight className="w-5 h-5 text-slate-300" />
+                  </button>
+                ))}
+              </div>
+
+              <div className="pt-4 text-center border-t border-slate-100">
+                <a href="/privacy" target="_blank" className="text-[9px] text-slate-400 hover:text-indigo-500 font-bold uppercase tracking-[0.2em] transition-colors">Политика конфиденциальности</a>
+              </div>
+            </motion.div>
+          )}
+
           {step === "rating" && (
             <motion.div 
               key="rating"

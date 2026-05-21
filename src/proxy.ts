@@ -135,6 +135,7 @@ export async function proxy(req: NextRequest) {
         path.startsWith("/api/admin/b24-webhooks") ||
         path.startsWith("/api/settings") ||
         path.startsWith("/api/branches") ||
+        path.startsWith("/api/cities") ||
         path.startsWith("/api/templates");
       if (adminOnly) {
         if (path.startsWith("/api/")) {

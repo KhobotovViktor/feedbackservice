@@ -6,7 +6,7 @@ import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 
 export async function POST(req: NextRequest) {
   try {
-    const { token, answers, comment } = await req.json();
+    const { token, answers, comment, cityId } = await req.json();
 
     const payload = await verifySurveyToken(token);
     if (!payload) {
@@ -63,6 +63,28 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // City-selection scenario: when the client picked a city, that city's
+    // branch overrides the token's branch — so the saved response, the group
+    // chat notification and the B24 field-mapping all use the chosen branch
+    // (and its question template). Falls back to the token values otherwise.
+    let effectiveBranchId: string | null = payload.branchId || null;
+    let effectiveTemplateId: string | null =
+      (payload as { templateId?: string | null }).templateId || null;
+    if (cityId) {
+      try {
+        const city = await prisma.city.findUnique({
+          where: { id: cityId },
+          include: { branch: { select: { id: true, templateId: true } } },
+        });
+        if (city?.branchId) {
+          effectiveBranchId = city.branchId;
+          if (city.branch?.templateId) effectiveTemplateId = city.branch.templateId;
+        }
+      } catch {
+        // best-effort — keep the token's branch/template on lookup failure
+      }
+    }
+
     // Save response. SurveyResponse.dealId is @unique — two concurrent
     // submissions of the same survey can both pass the 6-month findFirst
     // check above, but only one INSERT survives. The other gets P2002 and
@@ -82,7 +104,7 @@ export async function POST(req: NextRequest) {
           averageScore,
           answers,
           comment,
-          branchId: payload.branchId || null,
+          branchId: effectiveBranchId,
           responsibleName: responsibleName || null,
           entityType,
           complaintStatus: isNegative ? "NEW" : null,
@@ -126,10 +148,8 @@ export async function POST(req: NextRequest) {
         type Q = { id: string; text: string };
         let questions: Q[] = [];
         try {
-          const tokenTemplateId =
-            (payload as { templateId?: string | null }).templateId || null;
           const dbQuestions = await prisma.question.findMany({
-            where: tokenTemplateId ? { templateId: tokenTemplateId } : {},
+            where: effectiveTemplateId ? { templateId: effectiveTemplateId } : {},
             orderBy: { order: "asc" },
             select: { id: true, text: true },
           });
@@ -196,7 +216,7 @@ export async function POST(req: NextRequest) {
         // 5. Group chat notification — sent for EVERY new response (not just
         // negatives), with full context for the team.
         if (settingsMap.b24_group_chat_id) {
-          const branchId = payload.branchId;
+          const branchId = effectiveBranchId;
           let branchName = "Без филиала";
           if (branchId) {
             const b = await prisma.branch.findUnique({ where: { id: branchId } });

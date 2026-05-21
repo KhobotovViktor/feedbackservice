@@ -29,6 +29,20 @@ model Branch {
   surveyResponses SurveyResponse[]
   ratingHistory   RatingHistory[]
   managers        User[]            @relation("BranchManagers")
+  cities          City[]
+}
+
+// A customer-facing city choice for CRM survey links. When the
+// "city selection" scenario is enabled, a link sent via CRM first asks the
+// client to pick their city; the attached branch then drives the survey
+// (questions + review-map links). Independent of the per-branch QR codes.
+model City {
+  id        String   @id @default(cuid())
+  name      String
+  branchId  String?
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum ReviewStrategy {

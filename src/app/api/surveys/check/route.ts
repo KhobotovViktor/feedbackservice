@@ -15,7 +15,47 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Недействительная ссылка" }, { status: 401 });
   }
 
-  const { clientId, branchId, isTest, templateId } = payload;
+  const { clientId, branchId, isTest, templateId, entityType } = payload;
+
+  // ── "Pick your city" step (CRM links only) ──────────────────────────────
+  // For CRM-originated links (deal/lead) we may ask the client to choose a
+  // city first; the attached branch then drives the whole survey. Active when
+  // the scenario is enabled (or always, in test mode) AND at least one city is
+  // configured. If the client hasn't chosen yet we return the city list; once
+  // chosen (?cityId=…) the city's branch overrides the token's branch. QR and
+  // direct links are unaffected (entityType is null for them).
+  const cityId = searchParams.get("cityId");
+  const isCrmLink = entityType === "deal" || entityType === "lead";
+  let effectiveBranchId: string | null = branchId || null;
+
+  if (isCrmLink) {
+    const enabled =
+      (await prisma.settings.findUnique({ where: { key: "city_selection_enabled" } }))
+        ?.value === "true";
+    if (enabled || isTest) {
+      const cities = await prisma.city.findMany({
+        where: { branchId: { not: null } },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      });
+      if (cities.length > 0) {
+        if (!cityId) {
+          // Client must pick a city before we know which branch to use.
+          return NextResponse.json({
+            success: true,
+            needCity: true,
+            cities,
+            isTest: Boolean(isTest),
+          });
+        }
+        const city = await prisma.city.findUnique({ where: { id: cityId } });
+        if (!city || !city.branchId) {
+          return NextResponse.json({ error: "Город не найден" }, { status: 400 });
+        }
+        effectiveBranchId = city.branchId;
+      }
+    }
+  }
 
   // We only return a narrow projection of the branch to the survey page —
   // declare it once and keep the rest of this handler within that shape.
@@ -33,9 +73,9 @@ export async function GET(req: NextRequest) {
   // Which review platform to highlight for a happy customer (balancing). Maps
   // to the survey's reviewLinks keys: "yandex" | "dgis" | "google" | null.
   let recommendedService: "yandex" | "dgis" | "google" | null = null;
-  if (branchId) {
+  if (effectiveBranchId) {
     const b = await prisma.branch.findUnique({
-      where: { id: branchId },
+      where: { id: effectiveBranchId },
       include: {
         template: {
           include: { questions: { orderBy: { order: "asc" } } },
@@ -111,7 +151,7 @@ export async function GET(req: NextRequest) {
   if (isTest) {
     return NextResponse.json({
       success: true,
-      branchId: branchId || null,
+      branchId: effectiveBranchId,
       branch: branchInfo || null,
       recommendedService,
       isTest: true
@@ -139,7 +179,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    branchId: branchId || null,
+    branchId: effectiveBranchId,
     branch: branchInfo || null,
     recommendedService,
   });

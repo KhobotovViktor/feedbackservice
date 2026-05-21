@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Users, Plus, Trash2 } from "lucide-react";
+import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Users, Plus, Trash2, Building2, Play, Power } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -19,6 +19,7 @@ export default function IntegrationPage() {
     review_2gis: "",
     review_google_maps: "",
     b24_group_chat_id: "",
+    city_selection_enabled: "false",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,6 +32,12 @@ export default function IntegrationPage() {
   const [newOp, setNewOp] = useState({ userId: "", displayName: "", url: "" });
   const [opSaving, setOpSaving] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
+  // Cities for the "pick your city" CRM scenario.
+  type City = { id: string; name: string; branchId: string | null; branch: { id: string; name: string } | null };
+  const [cities, setCities] = useState<City[]>([]);
+  const [newCity, setNewCity] = useState({ name: "", branchId: "" });
+  const [citySaving, setCitySaving] = useState(false);
+  const [cityError, setCityError] = useState<string | null>(null);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   // Two robot URLs — Bitrix24's {{ID}} macro resolves to the current
@@ -44,8 +51,9 @@ export default function IntegrationPage() {
       fetch(`/api/branches?t=${Date.now()}`).then((res) => res.json()),
       fetch("/api/templates").then((res) => res.json()),
       fetch("/api/admin/b24-webhooks").then((res) => (res.ok ? res.json() : [])),
+      fetch("/api/cities").then((res) => (res.ok ? res.json() : [])),
     ])
-      .then(([settingsData, branchesData, templatesData, webhooksData]) => {
+      .then(([settingsData, branchesData, templatesData, webhooksData, citiesData]) => {
         setSettings({
           b24_webhook_url: settingsData.b24_webhook_url || "",
           b24_message_template:
@@ -60,6 +68,7 @@ export default function IntegrationPage() {
           review_2gis: settingsData.review_2gis || "",
           review_google_maps: settingsData.review_google_maps || "",
           b24_group_chat_id: settingsData.b24_group_chat_id || "",
+          city_selection_enabled: settingsData.city_selection_enabled || "false",
         });
 
         const bList = Array.isArray(branchesData)
@@ -68,6 +77,7 @@ export default function IntegrationPage() {
         if (Array.isArray(bList)) setBranches(bList);
         if (Array.isArray(templatesData)) setTemplates(templatesData);
         if (Array.isArray(webhooksData)) setOpWebhooks(webhooksData);
+        if (Array.isArray(citiesData)) setCities(citiesData);
       })
       .catch((err) => {
         // Without this catch, a network blip during initial load would leave
@@ -140,6 +150,56 @@ export default function IntegrationPage() {
     if (res.ok) {
       setOpWebhooks((prev) => prev.filter((w) => w.id !== id));
     }
+  };
+
+  // ── "Pick your city" scenario ───────────────────────────────────────────
+  // Cities save immediately (own API), so the whole block is self-contained.
+  const handleAddCity = async () => {
+    setCityError(null);
+    const name = newCity.name.trim();
+    if (!name) { setCityError("Введите название города."); return; }
+    if (!newCity.branchId) { setCityError("Выберите филиал для привязки."); return; }
+    setCitySaving(true);
+    try {
+      const res = await fetch("/api/cities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, branchId: newCity.branchId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setCityError(data.error || "Не удалось добавить город"); return; }
+      setCities((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, "ru")));
+      setNewCity({ name: "", branchId: "" });
+    } catch {
+      setCityError("Ошибка соединения");
+    } finally {
+      setCitySaving(false);
+    }
+  };
+
+  const handleDeleteCity = async (id: string) => {
+    if (!confirm("Удалить этот город?")) return;
+    const res = await fetch(`/api/cities/${id}`, { method: "DELETE" });
+    if (res.ok) setCities((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const toggleCitySelection = async () => {
+    const next = settings.city_selection_enabled === "true" ? "false" : "true";
+    setSettings((s) => ({ ...s, city_selection_enabled: next }));
+    try {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ city_selection_enabled: next }),
+      });
+    } catch {
+      // Revert the optimistic toggle if the save failed.
+      setSettings((s) => ({ ...s, city_selection_enabled: next === "true" ? "false" : "true" }));
+    }
+  };
+
+  const handleTestCityScenario = () => {
+    window.open("/api/admin/test/generate-city-survey-token", "_blank");
   };
 
 // No global questions anymore
@@ -533,6 +593,125 @@ export default function IntegrationPage() {
                   )}
                 </AnimatePresence>
               </div>
+            </div>
+          </div>
+
+          {/* City selection for CRM survey links */}
+          <div className="bento-card bg-white/60 p-8 md:p-12 space-y-8 flex flex-col border-white/40">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-emerald-500/20">
+                  <MapPin className="w-8 h-8" />
+                </div>
+                <div className="space-y-0.5">
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Выбор города</h2>
+                  <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Для опросов из CRM</p>
+                </div>
+              </div>
+              <button
+                onClick={handleTestCityScenario}
+                className="px-5 py-3 bg-emerald-50 text-emerald-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition-all flex items-center gap-2 shrink-0"
+                title="Пройти тестовый сценарий выбора города"
+              >
+                <Play className="w-4 h-4" />
+                Тест
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-500 font-medium leading-relaxed px-1">
+              Когда сценарий включён, клиент, перешедший по ссылке из CRM, сначала выбирает свой
+              город. К каждому городу привязан филиал — его вопросы и ссылки на карты (Яндекс, 2ГИС,
+              Google) используются в опросе. На QR-коды филиалов это не влияет.
+            </p>
+
+            {/* Enable toggle */}
+            <div className="flex items-center justify-between gap-4 p-5 rounded-2xl border border-slate-100 bg-slate-50/40">
+              <div className="flex items-center gap-3">
+                <Power className={cn("w-5 h-5", settings.city_selection_enabled === "true" ? "text-emerald-500" : "text-slate-300")} />
+                <div>
+                  <p className="text-sm font-black text-slate-800">Включить выбор города</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                    {settings.city_selection_enabled === "true" ? "Активно для CRM-ссылок" : "Отключено"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.city_selection_enabled === "true"}
+                onClick={toggleCitySelection}
+                className={cn(
+                  "relative w-14 h-8 rounded-full transition-colors shrink-0",
+                  settings.city_selection_enabled === "true" ? "bg-emerald-500" : "bg-slate-200"
+                )}
+              >
+                <span
+                  className={cn(
+                    "absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow transition-transform",
+                    settings.city_selection_enabled === "true" ? "translate-x-6" : ""
+                  )}
+                />
+              </button>
+            </div>
+
+            {/* Existing cities */}
+            {cities.length > 0 && (
+              <div className="space-y-2">
+                {cities.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-slate-100 bg-slate-50/40 hover:bg-slate-50 transition-colors group"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                      <MapPin className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-slate-800 truncate">{c.name}</div>
+                      <div className="text-[11px] font-bold text-slate-400 truncate flex items-center gap-1">
+                        <Building2 className="w-3 h-3 shrink-0" />
+                        {c.branch?.name || <span className="text-rose-400">Филиал не привязан</span>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteCity(c.id)}
+                      className="opacity-40 group-hover:opacity-100 text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-all"
+                      title="Удалить город"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add a city */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  placeholder="Название города, напр. Владимир"
+                  className="px-4 py-3 rounded-xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:bg-white outline-none transition-all text-sm font-bold"
+                  value={newCity.name}
+                  onChange={(e) => setNewCity({ ...newCity, name: e.target.value })}
+                />
+                <div className="relative z-30">
+                  <CustomSelect
+                    options={branches.map((b) => ({ value: b.id, label: b.name }))}
+                    value={newCity.branchId}
+                    onChange={(val) => setNewCity({ ...newCity, branchId: val })}
+                    placeholder="Привязать филиал"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleAddCity}
+                disabled={citySaving || !newCity.name.trim() || !newCity.branchId}
+                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {citySaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Добавить город
+              </button>
+              {cityError && <p className="text-xs text-rose-600 font-bold px-1">{cityError}</p>}
             </div>
           </div>
 

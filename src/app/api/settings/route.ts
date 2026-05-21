@@ -38,6 +38,8 @@ const ALLOWED_KEYS = [
   "review_min_score",
   "survey_questions",
   "b24_link_field",
+  // Enable the "pick your city" step for CRM survey links ("true"/"false").
+  "city_selection_enabled",
 ] as const;
 
 export async function POST(req: NextRequest) {
