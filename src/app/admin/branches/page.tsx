@@ -107,10 +107,14 @@ export default function BranchesPage() {
     try {
       const res = await fetch(`/api/branches?t=${Date.now()}`);
       const data = await res.json();
-      if (data.branches && Array.isArray(data.branches)) {
-        setBranches(data.branches);
-      } else if (Array.isArray(data)) {
-        setBranches(data);
+      const list = Array.isArray(data?.branches)
+        ? data.branches
+        : Array.isArray(data)
+          ? data
+          : null;
+      if (list) {
+        // Default ordering on this page: alphabetical by name (ru locale).
+        setBranches([...list].sort((a: Branch, b: Branch) => a.name.localeCompare(b.name, "ru")));
       } else {
         console.error("Branches API error:", data);
         setBranches([]);
