@@ -930,7 +930,7 @@ export default function BranchesPage() {
                        </label>
                        <input
                          type="password"
-                         placeholder="\u043a\u043b\u044e\u0447 \u0438\u0437 .env \u0441\u0435\u0440\u0432\u0435\u0440\u0430"
+                         placeholder={"\u043a\u043b\u044e\u0447 \u0438\u0437 .env \u0441\u0435\u0440\u0432\u0435\u0440\u0430"}
                          className="w-full px-5 py-4 rounded-2xl border-2 border-slate-200 bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-mono font-bold shadow-sm"
                          value={syncApiKey}
                          onChange={e => setSyncApiKey(e.target.value)}
@@ -940,11 +940,11 @@ export default function BranchesPage() {
                      <div className="p-5 glass border-white/40 rounded-3xl space-y-3">
                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                          <Star className="w-3.5 h-3.5" />
-                         Serper.dev API Key (\u043e\u043f\u0446.)
+                         Serper.dev API Key {"(\u043e\u043f\u0446.)"}
                        </label>
                        <input
                          type="password"
-                         placeholder="\u0434\u043b\u044f \u0440\u0435\u0439\u0442\u0438\u043d\u0433\u0430 Google (\u043d\u0435\u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u043e)"
+                         placeholder={"\u0434\u043b\u044f \u0440\u0435\u0439\u0442\u0438\u043d\u0433\u0430 Google (\u043d\u0435\u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u043e)"}
                          className="w-full px-5 py-4 rounded-2xl border-2 border-slate-200 bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-mono font-bold shadow-sm"
                          value={serperKey}
                          onChange={e => setSerperKey(e.target.value)}
@@ -968,7 +968,7 @@ export default function BranchesPage() {
                          className="px-3 py-1.5 bg-white/5 text-indigo-300 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-1.5"
                        >
                          <Copy className="w-3 h-3" />
-                         \u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c
+                         {"\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c"}
                        </button>
                      </div>
                      <div className="relative">
