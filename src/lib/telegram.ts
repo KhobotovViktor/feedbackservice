@@ -9,6 +9,10 @@ async function postTelegram(
   chatId: string,
   text: string
 ): Promise<{ ok: boolean; error?: string }> {
+  // Hard timeout so a blocked/unreachable api.telegram.org (common on RU VPS)
+  // can't hang the request until nginx returns a 502.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
   try {
     const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
@@ -19,11 +23,20 @@ async function postTelegram(
         parse_mode: "HTML",
         disable_web_page_preview: true,
       }),
+      signal: ctrl.signal,
     });
     const j = await r.json().catch(() => ({}));
     return { ok: Boolean(j?.ok), error: j?.description };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    const msg =
+      e instanceof Error && e.name === "AbortError"
+        ? "Telegram API не ответил за 10 с — возможно, он недоступен с сервера."
+        : e instanceof Error
+          ? e.message
+          : String(e);
+    return { ok: false, error: msg };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

@@ -15,9 +15,11 @@ export async function POST(req: NextRequest) {
     }
     const res = await sendTelegramTest(String(botToken).trim(), String(chatId).trim());
     if (!res.ok) {
+      // 400, not 502 — the failure is in the upstream Telegram call / config,
+      // and the client shows res.error in an alert.
       return NextResponse.json(
         { error: res.error || "Telegram отклонил запрос" },
-        { status: 502 }
+        { status: 400 }
       );
     }
     return NextResponse.json({ success: true });
