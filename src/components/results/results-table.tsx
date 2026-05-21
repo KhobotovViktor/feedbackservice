@@ -18,6 +18,8 @@ export interface ResultRow {
   branch: { name: string } | null;
   complaintStatus: ComplaintStatus | null;
   entityType: string | null;
+  // AI auto-tags derived from the comment (Claude).
+  tags?: string[];
 }
 
 // Deep-link into the deal/lead in Bitrix24, when we know the portal + a real
@@ -68,6 +70,23 @@ function isCrmSource(res: ResultRow): boolean {
       res.dealId !== "0" &&
       res.dealId !== "TEST_DEAL" &&
       res.dealId !== "QR_GUEST"
+  );
+}
+
+// AI auto-tags as small chips (e.g. #доставка #цена).
+function TagChips({ tags }: { tags?: string[] }) {
+  if (!tags || tags.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-2">
+      {tags.map((t) => (
+        <span
+          key={t}
+          className="text-[9px] font-black px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-500 border border-indigo-100/50 tracking-wider"
+        >
+          #{t}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -294,8 +313,13 @@ export function ResultsTable({
                 <td className="px-6 py-6">
                   <Complaint res={res} />
                 </td>
-                <td className="px-6 py-6 text-sm text-slate-600 font-medium leading-relaxed italic overflow-hidden text-ellipsis">
-                  {res.comment ? `“${res.comment}”` : <span className="text-slate-200">Нет комментария</span>}
+                <td className="px-6 py-6 text-sm text-slate-600 font-medium leading-relaxed">
+                  {res.comment ? (
+                    <span className="italic">{`“${res.comment}”`}</span>
+                  ) : (
+                    <span className="text-slate-200 italic">Нет комментария</span>
+                  )}
+                  <TagChips tags={res.tags} />
                 </td>
               </tr>
             ))}
@@ -386,7 +410,10 @@ export function ResultsTable({
                   <MessageCircle className="absolute -right-4 -bottom-4 w-24 h-24 text-indigo-500/5 rotate-12" />
                   <div className="relative z-10 flex gap-4 items-start">
                     <TrendingUp className="w-6 h-6 text-indigo-400 shrink-0 mt-1 opacity-40" />
-                    <p className="text-base text-slate-700 font-bold leading-relaxed italic opacity-80">“{res.comment}”</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base text-slate-700 font-bold leading-relaxed italic opacity-80">“{res.comment}”</p>
+                      <TagChips tags={res.tags} />
+                    </div>
                   </div>
                 </div>
               )}

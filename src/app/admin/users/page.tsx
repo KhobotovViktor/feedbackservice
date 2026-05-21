@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Plus, Trash2, Loader2, Shield, UserCog, Building2, Check } from "lucide-react";
+import { Users, Plus, Trash2, Loader2, Shield, UserCog, Building2, Check, Lock, KeyRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface BranchLite {
@@ -13,6 +13,8 @@ interface AppUser {
   username: string;
   role: "ADMIN" | "MANAGER";
   branches: BranchLite[];
+  // Owner ("Хоботов Виктор"): role locked to ADMIN, password not changeable here.
+  protected?: boolean;
 }
 
 export default function UsersPage() {
@@ -27,6 +29,11 @@ export default function UsersPage() {
     role: "ADMIN" | "MANAGER";
     branchIds: string[];
   }>({ username: "", password: "", role: "MANAGER", branchIds: [] });
+  // Inline password change for an existing (non-owner) account.
+  const [pwFor, setPwFor] = useState<string | null>(null);
+  const [pwVal, setPwVal] = useState("");
+  const [pwErr, setPwErr] = useState<string | null>(null);
+  const [pwSaving, setPwSaving] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -85,6 +92,34 @@ export default function UsersPage() {
     else {
       const d = await res.json().catch(() => ({}));
       alert(d.error || "Не удалось обновить");
+    }
+  };
+
+  const changePassword = async (id: string) => {
+    if (pwVal.length < 6) {
+      setPwErr("Минимум 6 символов");
+      return;
+    }
+    setPwErr(null);
+    setPwSaving(true);
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwVal }),
+      });
+      if (res.ok) {
+        setPwFor(null);
+        setPwVal("");
+        alert("Пароль обновлён");
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setPwErr(d.error || "Не удалось обновить пароль");
+      }
+    } catch {
+      setPwErr("Ошибка сети");
+    } finally {
+      setPwSaving(false);
     }
   };
 
@@ -221,21 +256,29 @@ export default function UsersPage() {
                   </button>
                 </div>
 
-                {/* Role toggle */}
-                <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
-                  {(["MANAGER", "ADMIN"] as const).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => u.role !== r && updateUser(u.id, { role: r })}
-                      className={cn(
-                        "flex-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                        u.role === r ? "bg-white shadow-sm text-indigo-600" : "text-slate-400 hover:text-slate-600"
-                      )}
-                    >
-                      {r === "ADMIN" ? "Админ" : "Менеджер"}
-                    </button>
-                  ))}
-                </div>
+                {/* Role: locked to ADMIN for the owner, toggle for everyone else */}
+                {u.protected ? (
+                  <div className="flex items-center justify-center gap-2 p-2.5 bg-slate-900 text-white rounded-xl">
+                    <Shield className="w-3.5 h-3.5" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Админ · владелец</span>
+                    <Lock className="w-3 h-3 opacity-60" />
+                  </div>
+                ) : (
+                  <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                    {(["MANAGER", "ADMIN"] as const).map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => u.role !== r && updateUser(u.id, { role: r })}
+                        className={cn(
+                          "flex-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                          u.role === r ? "bg-white shadow-sm text-indigo-600" : "text-slate-400 hover:text-slate-600"
+                        )}
+                      >
+                        {r === "ADMIN" ? "Админ" : "Менеджер"}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {/* Branch assignment for managers */}
                 {u.role === "MANAGER" && (
@@ -266,6 +309,50 @@ export default function UsersPage() {
                       })}
                     </div>
                   </div>
+                )}
+
+                {/* Password change — available for every account except the owner */}
+                {u.protected ? (
+                  <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1.5 pt-1">
+                    <Lock className="w-3 h-3 shrink-0" />
+                    Владелец: роль и пароль защищены
+                  </p>
+                ) : pwFor === u.id ? (
+                  <div className="space-y-2 pt-1">
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="Новый пароль (мин. 6 символов)"
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
+                      value={pwVal}
+                      onChange={(e) => setPwVal(e.target.value)}
+                    />
+                    {pwErr && <p className="text-[11px] text-rose-600 font-bold">{pwErr}</p>}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => changePassword(u.id)}
+                        disabled={pwSaving}
+                        className="flex-1 px-3 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {pwSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        Сохранить
+                      </button>
+                      <button
+                        onClick={() => { setPwFor(null); setPwVal(""); setPwErr(null); }}
+                        className="px-3 py-2 rounded-xl bg-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-colors"
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setPwFor(u.id); setPwVal(""); setPwErr(null); }}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest hover:border-indigo-300 hover:text-indigo-600 transition-all flex items-center justify-center gap-2"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                    Сменить пароль
+                  </button>
                 )}
               </div>
             ))}

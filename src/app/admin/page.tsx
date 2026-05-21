@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma, Branch, RatingHistory, SurveyResponse } from "@prisma/client";
 import type { LucideIcon } from "lucide-react";
-import { Star, MessageSquare, Users, TrendingUp, Eye, MousePointer2, AlertCircle } from "lucide-react";
+import { Star, MessageSquare, Users, TrendingUp, Eye, MousePointer2, AlertCircle, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OverallMonitoring } from "@/components/dashboard/overall-monitoring";
 import { PeriodFilter } from "@/components/dashboard/period-filter";
+import { AiInsights } from "@/components/dashboard/ai-insights";
 import { getAccessibleBranchIds } from "@/lib/access";
 
 interface BentoCardProps {
@@ -352,6 +353,24 @@ export default async function AdminDashboard({
                 <div className="h-4 bg-slate-100/50 rounded-full border border-white/40 overflow-hidden">
                   <div className="h-full premium-gradient w-full rounded-full"></div>
                 </div>
+                {/* Breakdown: views per branch (same style as the maps breakdown) */}
+                {branchStats.some((b) => b.views > 0) && (
+                  <div className="flex flex-wrap gap-2 px-4 pt-1">
+                    {[...branchStats]
+                      .filter((b) => b.views > 0)
+                      .sort((a, b) => b.views - a.views)
+                      .map((b) => (
+                        <div
+                          key={b.id}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-white/70 border border-indigo-100 rounded-xl shadow-sm"
+                        >
+                          <Building2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span className="text-[10px] font-bold text-slate-500 max-w-[140px] truncate">{b.name}</span>
+                          <span className="text-xs font-black text-indigo-600">{b.views}</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
               </div>
 
               {/* Step 2 */}
@@ -363,6 +382,24 @@ export default async function AdminDashboard({
                 <div className="h-4 bg-slate-100/50 rounded-full border border-white/40 overflow-hidden">
                   <div className="h-full bg-emerald-500 w-full rounded-full shadow-lg shadow-emerald-500/20" style={{ width: `${openRate}%` }}></div>
                 </div>
+                {/* Breakdown: completions per branch (same style as the maps breakdown) */}
+                {branchStats.some((b) => b.count > 0) && (
+                  <div className="flex flex-wrap gap-2 px-4 pt-1">
+                    {[...branchStats]
+                      .filter((b) => b.count > 0)
+                      .sort((a, b) => b.count - a.count)
+                      .map((b) => (
+                        <div
+                          key={b.id}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-white/70 border border-emerald-100 rounded-xl shadow-sm"
+                        >
+                          <Building2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span className="text-[10px] font-bold text-slate-500 max-w-[140px] truncate">{b.name}</span>
+                          <span className="text-xs font-black text-emerald-600">{b.count}</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
               </div>
 
               {/* Step 3 */}
@@ -495,6 +532,9 @@ export default async function AdminDashboard({
           </div>
         </div>
       </div>
+
+      {/* AI analysis of free-text comments */}
+      <AiInsights branches={branchStats.map((b) => ({ id: b.id, name: b.name }))} />
     </div>
   );
 }

@@ -82,6 +82,9 @@ model SurveyResponse {
   averageScore    Float
   answers         Json
   comment         String?
+  // AI auto-tags derived from the comment text (Claude). E.g.
+  // ["доставка","цена"]. Empty when there's no comment / AI isn't configured.
+  tags            String[] @default([])
   createdAt       DateTime @default(now())
   branchId        String?
   responsibleName String?

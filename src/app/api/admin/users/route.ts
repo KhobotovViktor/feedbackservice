@@ -9,6 +9,17 @@ async function requireAdmin() {
   return me?.role === "ADMIN" ? me : null;
 }
 
+// The owner account ("Хоботов Виктор") is locked: always ADMIN, and its
+// password can't be changed from this panel. We identify it as the very first
+// account created (the seeded admin) OR by a name match, so it stays correct
+// even if the login differs.
+function isProtectedOwner(
+  user: { id: string; username: string },
+  firstUserId: string | undefined
+): boolean {
+  return user.id === firstUserId || /хоботов|hobotov/i.test(user.username);
+}
+
 export async function GET() {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -23,7 +34,12 @@ export async function GET() {
       branches: { select: { id: true, name: true } },
     },
   });
-  return NextResponse.json(users);
+  const firstUserId = users[0]?.id;
+  const withFlags = users.map((u) => ({
+    ...u,
+    protected: isProtectedOwner(u, firstUserId),
+  }));
+  return NextResponse.json(withFlags);
 }
 
 export async function POST(req: NextRequest) {

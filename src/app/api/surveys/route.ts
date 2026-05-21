@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { verifySurveyToken } from "@/lib/auth-utils";
 import { getSession } from "@/lib/auth";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
+import { tagComment, aiConfigured } from "@/lib/ai";
 
 export async function POST(req: NextRequest) {
   try {
@@ -119,6 +120,22 @@ export async function POST(req: NextRequest) {
         );
       }
       throw e;
+    }
+
+    // AI auto-tagging of the comment — fire-and-forget so it never blocks the
+    // response or fails the submission on an API hiccup. Updates the freshly
+    // created row (unique dealId) once Claude returns. Tests return earlier.
+    if (comment && String(comment).trim() && aiConfigured()) {
+      void (async () => {
+        try {
+          const tags = await tagComment(String(comment));
+          if (tags.length > 0) {
+            await prisma.surveyResponse.update({ where: { dealId }, data: { tags } });
+          }
+        } catch (e) {
+          console.error("AI tagging failed:", e);
+        }
+      })();
     }
 
     // Handle B24 Field Mapping + Group Chat Notification
