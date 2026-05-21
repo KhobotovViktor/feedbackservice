@@ -19,6 +19,7 @@ export function BranchFilter({ branches, defaultValue }: { branches: Branch[], d
     } else {
       params.set("branchId", value);
     }
+    params.delete("page"); // back to first page on filter change
     router.push(`?${params.toString()}`);
   };
 

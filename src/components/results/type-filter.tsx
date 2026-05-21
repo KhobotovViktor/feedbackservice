@@ -14,6 +14,7 @@ export function TypeFilter({ defaultValue }: { defaultValue: string }) {
     } else {
       params.set("type", value);
     }
+    params.delete("page"); // back to first page on filter change
     router.push(`?${params.toString()}`);
   };
 

@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import type { Prisma, SurveyResponse, Branch } from "@prisma/client";
-import { Building2, MessageCircle, Filter } from "lucide-react";
+import { Building2, MessageCircle, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import { BranchFilter } from "@/components/results/branch-filter";
 import { TypeFilter } from "@/components/results/type-filter";
 import { ClearResultsButton } from "@/components/results/clear-results-button";
@@ -9,26 +10,27 @@ import { getAccessibleBranchIds } from "@/lib/access";
 
 type ResponseRow = SurveyResponse & { branch: Branch | null };
 
+const PAGE_SIZE = 25;
+
 export default async function ResultsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string; type?: string; sortBy?: string; order?: string }>;
+  searchParams: Promise<{ branchId?: string; type?: string; sortBy?: string; order?: string; page?: string }>;
 }) {
-  const { branchId, type = "all", sortBy = "date", order = "desc" } = await searchParams;
+  const { branchId, type = "all", sortBy = "date", order = "desc", page } = await searchParams;
   const sortDir: "asc" | "desc" = order === "asc" ? "asc" : "desc";
+  const pageNum = Math.max(1, parseInt(page || "1", 10) || 1);
 
-  // Helper to get source text
-  const getSourceText = (res: ResponseRow): string => {
-    const isCRM =
-      res.dealId &&
-      res.dealId !== "0" &&
-      res.dealId !== "TEST_DEAL" &&
-      res.dealId !== "QR_GUEST";
-    if (res.branch?.name) {
-      return `${res.branch.name} ${isCRM ? "(CRM)" : "(QR)"}`;
-    }
-    if (isCRM) return "Bitrix24 (CRM)";
-    return "Прямая ссылка / QR";
+  // Preserve the active filters/sort when building pagination links.
+  const buildPageHref = (p: number): string => {
+    const params = new URLSearchParams();
+    if (branchId) params.set("branchId", branchId);
+    if (type && type !== "all") params.set("type", type);
+    if (sortBy && sortBy !== "date") params.set("sortBy", sortBy);
+    if (order && order !== "desc") params.set("order", order);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return qs ? `?${qs}` : "?";
   };
 
   // Role scope: MANAGER sees only assigned branches; ADMIN sees all.
@@ -36,6 +38,7 @@ export default async function ResultsPage({
 
   let responses: ResponseRow[] = [];
   let branches: { id: string; name: string }[] = [];
+  let total = 0;
   // Bitrix24 portal base (e.g. https://am35.bitrix24.ru) for deep-links into
   // deals/leads from the results table.
   let portalUrl = "";
@@ -64,20 +67,24 @@ export default async function ResultsPage({
       }
     }
 
-    const orderBy: Prisma.SurveyResponseOrderByWithRelationInput | undefined =
-      sortBy === "date"
-        ? { createdAt: sortDir }
-        : sortBy === "score"
-          ? { averageScore: sortDir }
-          : sortBy === "responsible"
-            ? { responsibleName: sortDir }
-            : undefined;
+    // "source" sorts by the related branch name at the DB level so pagination
+    // stays correct (the old in-memory sort only ordered the current page).
+    const orderBy: Prisma.SurveyResponseOrderByWithRelationInput =
+      sortBy === "score"
+        ? { averageScore: sortDir }
+        : sortBy === "responsible"
+          ? { responsibleName: sortDir }
+          : sortBy === "source"
+            ? { branch: { name: sortDir } }
+            : { createdAt: sortDir };
 
     const results = await Promise.all([
       prisma.surveyResponse.findMany({
         where,
         orderBy,
         include: { branch: true },
+        skip: (pageNum - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
       }),
       prisma.branch.findMany({
         where: accessibleBranchIds === null ? {} : { id: { in: accessibleBranchIds } },
@@ -85,23 +92,20 @@ export default async function ResultsPage({
         select: { id: true, name: true },
       }),
       prisma.settings.findUnique({ where: { key: "b24_webhook_url" } }),
+      prisma.surveyResponse.count({ where }),
     ]);
     responses = results[0];
     branches = results[1];
     const webhookUrl = results[2]?.value || "";
     portalUrl = webhookUrl.replace(/\/rest\/.*$/, "");
-    
-    // In-memory sort only for computed source field
-    if (sortBy === "source") {
-      responses.sort((a, b) => {
-        const textA = getSourceText(a);
-        const textB = getSourceText(b);
-        return order === "asc" ? textA.localeCompare(textB) : textB.localeCompare(textA);
-      });
-    }
+    total = results[3];
   } catch (err) {
     console.error("Results page data fetch error:", err);
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const from = total === 0 ? 0 : (pageNum - 1) * PAGE_SIZE + 1;
+  const to = Math.min(pageNum * PAGE_SIZE, total);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700 pb-12">
@@ -138,7 +142,7 @@ export default async function ResultsPage({
         </div>
       </div>
 
-      {responses.length === 0 ? (
+      {total === 0 ? (
         <div className="bento-card flex flex-col items-center justify-center py-40 border-dashed space-y-8">
           <div className="w-24 h-24 glass border-white/60 rounded-[2.5rem] flex items-center justify-center text-slate-300 relative">
             <MessageCircle className="w-10 h-10" />
@@ -150,7 +154,47 @@ export default async function ResultsPage({
           </div>
         </div>
       ) : (
-        <ResultsTable responses={responses} portalUrl={portalUrl} />
+        <>
+          <ResultsTable responses={responses} portalUrl={portalUrl} />
+
+          {/* Server-side pagination — preserves active filters/sort */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
+            <p className="text-xs font-bold text-slate-400">
+              Показаны {from}–{to} из {total}
+            </p>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                {pageNum > 1 ? (
+                  <Link
+                    href={buildPageHref(pageNum - 1)}
+                    className="inline-flex items-center gap-1 px-4 py-2.5 rounded-2xl glass border-white/50 text-slate-700 font-black text-xs hover:bg-white transition-all shadow-sm"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Назад
+                  </Link>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-4 py-2.5 rounded-2xl glass border-white/50 text-slate-300 font-black text-xs opacity-50 cursor-not-allowed">
+                    <ChevronLeft className="w-4 h-4" /> Назад
+                  </span>
+                )}
+                <span className="text-xs font-black text-slate-600 px-3 whitespace-nowrap">
+                  {pageNum} / {totalPages}
+                </span>
+                {pageNum < totalPages ? (
+                  <Link
+                    href={buildPageHref(pageNum + 1)}
+                    className="inline-flex items-center gap-1 px-4 py-2.5 rounded-2xl glass border-white/50 text-slate-700 font-black text-xs hover:bg-white transition-all shadow-sm"
+                  >
+                    Вперёд <ChevronRight className="w-4 h-4" />
+                  </Link>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-4 py-2.5 rounded-2xl glass border-white/50 text-slate-300 font-black text-xs opacity-50 cursor-not-allowed">
+                    Вперёд <ChevronRight className="w-4 h-4" />
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
