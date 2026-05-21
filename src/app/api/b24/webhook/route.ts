@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getAppOrigin } from "@/lib/url";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 import { dispatchSurveyToOpenChannel } from "@/lib/b24-send";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
 
 function isValidId(value: string): boolean {
   return value.length > 0 && value.length <= 128 && !/[{}\n\r]/.test(value);
@@ -12,6 +13,18 @@ function isValidId(value: string): boolean {
 
 async function handleWebhook(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+
+  // Anti-abuse: soft per-IP rate limit + optional shared secret. The secret is
+  // OFF by default (backwards-compatible) — set B24_WEBHOOK_SECRET in the
+  // server env and append &secret=... to the robot URL in Bitrix24 to enable.
+  if (!rateLimit(`wh:${getClientIp(req)}`, 60, 60_000)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+  const webhookSecret = process.env.B24_WEBHOOK_SECRET;
+  if (webhookSecret && searchParams.get("secret") !== webhookSecret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const clientId = searchParams.get("clientId");
   const dealId = searchParams.get("dealId");
   const leadId = searchParams.get("leadId");

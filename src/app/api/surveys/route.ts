@@ -4,8 +4,15 @@ import { verifySurveyToken } from "@/lib/auth-utils";
 import { getSession } from "@/lib/auth";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 import { tagComment, aiConfigured } from "@/lib/ai";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
+  if (!rateLimit(`sv:${getClientIp(req)}`, 15, 60_000)) {
+    return NextResponse.json(
+      { error: "Слишком много запросов. Попробуйте позже." },
+      { status: 429 }
+    );
+  }
   try {
     const { token, answers, comment, cityId } = await req.json();
 

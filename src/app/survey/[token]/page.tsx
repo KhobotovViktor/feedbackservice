@@ -77,13 +77,14 @@ export default function SurveyPage() {
       setIsPositiveThreshold(minScoreThreshold);
 
       // Log view event (fire and forget — analytics is not critical).
+      // token lets the server dedupe reloads into a single unique view.
       fetch("/api/analytics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "VIEW", branchId: bId }),
+        body: JSON.stringify({ type: "VIEW", branchId: bId, token }),
       }).catch(() => {});
     },
-    []
+    [token]
   );
 
   // CRM "pick your city" step: the customer chose a city, so re-check with
@@ -306,7 +307,7 @@ export default function SurveyPage() {
     fetch("/api/analytics", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "CLICK", target, branchId }),
+      body: JSON.stringify({ type: "CLICK", target, branchId, token }),
     }).catch(() => {});
 
   return (

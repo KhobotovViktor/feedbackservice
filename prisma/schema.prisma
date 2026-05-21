@@ -149,6 +149,9 @@ model AnalyticsEvent {
   type      AnalyticsType
   target    String?
   branchId  String?
+  // De-dup key for "unique" counting: one VIEW per survey token, one CLICK
+  // per token+target. Null for legacy/untokened events (always inserted).
+  dedupeKey String?       @unique
   createdAt DateTime      @default(now())
   branch    Branch?       @relation(fields: [branchId], references: [id])
 
