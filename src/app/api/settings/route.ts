@@ -35,7 +35,6 @@ const ALLOWED_KEYS = [
   "review_google_maps",
   "b24_group_chat_id",
   "b24_template_id",
-  "review_min_score",
   "survey_questions",
   "b24_link_field",
   // Enable the "pick your city" step for CRM survey links ("true"/"false").
@@ -54,15 +53,6 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-    }
-    if (
-      body.review_min_score !== undefined &&
-      Number.isNaN(Number(body.review_min_score))
-    ) {
-      return NextResponse.json(
-        { error: "review_min_score must be a number" },
-        { status: 400 }
-      );
     }
     if (
       typeof body.b24_message_template === "string" &&
