@@ -35,7 +35,11 @@ export function CustomSelect({ options, value, onChange, className, placeholder 
   }, []);
 
   return (
-    <div className={cn("relative z-20", className)} ref={containerRef}>
+    // While open, jump to z-50 so the dropdown's stacking context sits above
+    // sibling elements that come later in the DOM (e.g. the modal's
+    // Отмена/Сохранить buttons) — otherwise the bottom option overlaps a
+    // button and the click is swallowed, so it can't be selected.
+    <div className={cn("relative z-20", className, isOpen && "z-50")} ref={containerRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}

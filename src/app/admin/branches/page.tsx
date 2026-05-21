@@ -502,8 +502,10 @@ export default function BranchesPage() {
               </div>
             </div>
 
-            {/* Review platform balancing strategy */}
-            <div className="space-y-2 relative z-10">
+            {/* Review platform balancing strategy. z-20 keeps this select's
+                dropdown above the modal's action buttons (z-10) so the last
+                option is clickable; stays below the field grid (z-30). */}
+            <div className="space-y-2 relative z-20">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                 Куда направлять довольных клиентов
               </label>
