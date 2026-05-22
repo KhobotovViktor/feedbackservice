@@ -347,7 +347,7 @@ export default async function AdminDashboard({
       {/* Overall Network Monitoring */}
       <div className="grid grid-cols-1 gap-6">
         <div className="bento-card min-h-[300px] md:min-h-[450px]">
-          <OverallMonitoring data={allHistory} />
+          <OverallMonitoring data={allHistory} branches={branchStats.map((b) => ({ id: b.id, name: b.name }))} />
         </div>
       </div>
 
