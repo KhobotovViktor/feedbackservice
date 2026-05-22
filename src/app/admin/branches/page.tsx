@@ -695,17 +695,23 @@ export default function BranchesPage() {
                         data={(() => {
                           const selection = selectedMetrics[branch.id] || 'yandex-rating';
                           const [service, metric] = selection.split('-');
-                          const filtered = (branch.ratingHistory || [])
+                          const sorted = (branch.ratingHistory || [])
                             .filter(h => h.service === service)
-                            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-                            .map(h => ({
-                              date: new Date(h.createdAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Moscow' }),
+                            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                          // Sync can run several times a day, so collapse same-day
+                          // snapshots to the latest one (sorted asc → last write wins).
+                          // Key by full date so different years never merge.
+                          const byDay = new Map<string, { date: string; value: number; label: string }>();
+                          for (const h of sorted) {
+                            const d = new Date(h.createdAt);
+                            const dayKey = d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Moscow' });
+                            byDay.set(dayKey, {
+                              date: d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Moscow' }),
                               value: metric === 'rating' ? h.rating : h.reviewCount,
                               label: metric === 'rating' ? 'Оценка' : 'Отзывы'
-                            }));
-                          
-                          if (filtered.length === 0) return [];
-                          return filtered;
+                            });
+                          }
+                          return [...byDay.values()];
                         })()}
                       >
                         <defs>
