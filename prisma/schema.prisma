@@ -55,6 +55,18 @@ model QuestionTemplate {
   id        String     @id @default(cuid())
   name      String
   minScore  Float      @default(4.0)
+  // Customisable survey-slide texts. Null → the app's built-in default.
+  startTitle         String?
+  startSubtitle      String?
+  lowTitle           String?
+  lowSubtitle        String?
+  commentPlaceholder String?
+  successTitle       String?
+  successPositive    String?
+  successNegative    String?
+  reviewPrompt       String?
+  // How often a client may retake the survey, in hours. 0 = unlimited.
+  surveyFrequencyHours Int    @default(0)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   branches  Branch[]

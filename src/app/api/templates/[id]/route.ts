@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { extractTemplateExtras } from "@/lib/template-fields";
 
 export async function GET(
   req: NextRequest,
@@ -33,9 +34,10 @@ export async function PATCH(
 
     const template = await prisma.questionTemplate.update({
       where: { id },
-      data: { 
+      data: {
         name,
-        minScore: minScore ? parseFloat(minScore) : undefined
+        minScore: minScore ? parseFloat(minScore) : undefined,
+        ...extractTemplateExtras(body),
       }
     });
 

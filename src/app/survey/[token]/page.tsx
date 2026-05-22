@@ -26,6 +26,19 @@ const DEFAULT_BRAND = {
   accent: "",
 };
 
+// Slide texts — overridable per question template (null → these defaults).
+const DEFAULT_TEXTS = {
+  startTitle: "Ваше мнение имеет значение",
+  startSubtitle: "",
+  lowTitle: "Расскажите, пожалуйста, что вам не понравилось.",
+  lowSubtitle: "Оставьте отзыв и получите 500 бонусов! Для начисления бонусов обратитесь к менеджеру.",
+  commentPlaceholder: "Расскажите подробнее о вашем опыте...",
+  successTitle: "Огромное спасибо!",
+  successPositive: "Мы счастливы, что вам понравилось! Ваша оценка вдохновляет нашу команду.",
+  successNegative: "Мы получили ваш отзыв и уже работаем над тем, чтобы исправить ситуацию.",
+  reviewPrompt: "Будем очень признательны за отзыв на картах:",
+};
+
 export default function SurveyPage() {
   const params = useParams();
   const token = params.token as string;
@@ -52,6 +65,8 @@ export default function SurveyPage() {
   const [globalSettings, setGlobalSettings] = useState<Record<string, string>>({});
   // Survey-page branding pulled from Settings (falls back to defaults).
   const [brand, setBrand] = useState(DEFAULT_BRAND);
+  // Slide texts from the active template (falls back to defaults).
+  const [texts, setTexts] = useState(DEFAULT_TEXTS);
 
   // Apply a /check response to the survey UI: questions, review links, the
   // positive-rating threshold, the balancing recommendation and the VIEW
@@ -70,6 +85,20 @@ export default function SurveyPage() {
       if (branchInfo?.template?.questions) {
         setQuestions(branchInfo.template.questions);
       }
+
+      // Slide texts from the template (each field falls back to its default).
+      const tpl = branchInfo?.template;
+      setTexts({
+        startTitle: tpl?.startTitle || DEFAULT_TEXTS.startTitle,
+        startSubtitle: tpl?.startSubtitle || DEFAULT_TEXTS.startSubtitle,
+        lowTitle: tpl?.lowTitle || DEFAULT_TEXTS.lowTitle,
+        lowSubtitle: tpl?.lowSubtitle || DEFAULT_TEXTS.lowSubtitle,
+        commentPlaceholder: tpl?.commentPlaceholder || DEFAULT_TEXTS.commentPlaceholder,
+        successTitle: tpl?.successTitle || DEFAULT_TEXTS.successTitle,
+        successPositive: tpl?.successPositive || DEFAULT_TEXTS.successPositive,
+        successNegative: tpl?.successNegative || DEFAULT_TEXTS.successNegative,
+        reviewPrompt: tpl?.reviewPrompt || DEFAULT_TEXTS.reviewPrompt,
+      });
 
       // Set review links with fallback to global settings
       setReviewLinks({
@@ -418,7 +447,8 @@ export default function SurveyPage() {
                 <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-100 border border-slate-50 overflow-hidden p-2 transform rotate-3">
                    <img src={brand.logoUrl} alt="Logo" className="w-full h-full object-contain" />
                 </div>
-                <h1 className="text-3xl md:text-4xl font-black text-slate-900 leading-none tracking-tighter">Ваше мнение <br/> имеет значение</h1>
+                <h1 className="text-3xl md:text-4xl font-black text-slate-900 leading-tight tracking-tighter">{texts.startTitle}</h1>
+                {texts.startSubtitle && <p className="text-slate-500 font-medium">{texts.startSubtitle}</p>}
                 <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px]">Сервис обратной связи «{brand.name}»</p>
                 <div className="pt-2">
                   <a href={brand.siteUrl} target="_blank" className="text-[10px] text-slate-400 hover:text-indigo-500 font-bold uppercase tracking-[0.1em] transition-colors border-b border-slate-200 hover:border-indigo-200 pb-0.5">{brandDomain}</a>
@@ -471,8 +501,8 @@ export default function SurveyPage() {
                 <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-[2rem] flex items-center justify-center mx-auto mb-4 border border-indigo-100">
                   <MessageSquare className="w-8 h-8" />
                 </div>
-                <h2 className="text-2xl md:text-3xl font-black tracking-tight">Расскажите, пожалуйста, что вам не понравилось.</h2>
-                <p className="text-slate-500 font-medium">Оставьте отзыв и получите 500 бонусов! Для начисления бонусов обратитесь к менеджеру.</p>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight">{texts.lowTitle}</h2>
+                <p className="text-slate-500 font-medium">{texts.lowSubtitle}</p>
               </div>
 
               <label htmlFor="survey-comment" className="sr-only">
@@ -482,7 +512,7 @@ export default function SurveyPage() {
                 id="survey-comment"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="Расскажите подробнее о вашем опыте..."
+                placeholder={texts.commentPlaceholder}
                 aria-label="Ваш комментарий"
                 className="w-full h-40 p-6 rounded-[1.5rem] bg-slate-50/50 border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all resize-none font-medium placeholder:text-slate-400"
               />
@@ -525,20 +555,18 @@ export default function SurveyPage() {
                 <CheckCircle className="w-12 h-12" />
               </motion.div>
               <div className="space-y-3">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Огромное спасибо!</h2>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tighter">{texts.successTitle}</h2>
                 <div className="pb-2">
                   <a href={brand.siteUrl} target="_blank" className="text-xs text-indigo-500 font-bold hover:text-indigo-600 transition-colors">Вернуться на {brandDomain}</a>
                 </div>
                 <p className="text-slate-600 text-lg font-medium leading-relaxed">
-                  {isPositive 
-                    ? "Мы счастливы, что вам понравилось! Ваша оценка вдохновляет нашу команду." 
-                    : "Мы получили ваш отзыв и уже работаем над тем, чтобы исправить ситуацию."}
+                  {isPositive ? texts.successPositive : texts.successNegative}
                 </p>
               </div>
 
               {isPositive && hasReviewLinks && (
                 <div className="space-y-6 pt-8 border-t border-slate-200/50">
-                  <p className="font-bold text-slate-800">Будем очень признательны за отзыв на картах:</p>
+                  <p className="font-bold text-slate-800">{texts.reviewPrompt}</p>
                   <div className="grid grid-cols-1 gap-3 max-w-xs mx-auto">
                     {orderedPlatforms.map((p, idx) => {
                       const isPrimary = recommended != null && idx === 0;

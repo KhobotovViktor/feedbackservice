@@ -9,6 +9,16 @@ interface Template {
   id: string;
   name: string;
   minScore: number;
+  startTitle?: string | null;
+  startSubtitle?: string | null;
+  lowTitle?: string | null;
+  lowSubtitle?: string | null;
+  commentPlaceholder?: string | null;
+  successTitle?: string | null;
+  successPositive?: string | null;
+  successNegative?: string | null;
+  reviewPrompt?: string | null;
+  surveyFrequencyHours?: number;
   _count?: { questions: number; branches: number };
 }
 
@@ -35,6 +45,10 @@ export default function TemplatesPage() {
   const [editingMetadata, setEditingMetadata] = useState(false);
   const [editName, setEditName] = useState("");
   const [editMinScore, setEditMinScore] = useState("4.0");
+  // Slide texts + retake frequency for the selected template.
+  const [slide, setSlide] = useState<Record<string, string>>({});
+  const [freq, setFreq] = useState(0);
+  const [savingSlide, setSavingSlide] = useState(false);
 
   useEffect(() => {
     fetchTemplates();
@@ -134,8 +148,45 @@ export default function TemplatesPage() {
     setEditName(template.name);
     setEditMinScore(template.minScore.toString());
     setEditingMetadata(false);
+    setSlide({
+      startTitle: template.startTitle || "",
+      startSubtitle: template.startSubtitle || "",
+      lowTitle: template.lowTitle || "",
+      lowSubtitle: template.lowSubtitle || "",
+      commentPlaceholder: template.commentPlaceholder || "",
+      successTitle: template.successTitle || "",
+      successPositive: template.successPositive || "",
+      successNegative: template.successNegative || "",
+      reviewPrompt: template.reviewPrompt || "",
+    });
+    setFreq(template.surveyFrequencyHours || 0);
     fetchQuestions(template.id);
     setView("detail");
+  };
+
+  const handleSaveSlide = async () => {
+    if (!selectedTemplate) return;
+    setSavingSlide(true);
+    try {
+      const res = await fetch(`/api/templates/${selectedTemplate.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...slide, surveyFrequencyHours: freq }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSelectedTemplate(updated);
+        fetchTemplates();
+        alert("Оформление сохранено");
+      } else {
+        alert("Не удалось сохранить оформление");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Ошибка сети");
+    } finally {
+      setSavingSlide(false);
+    }
   };
 
   const handleSaveMetadata = async () => {
@@ -429,6 +480,81 @@ export default function TemplatesPage() {
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Slide texts + retake frequency */}
+              <div className="space-y-5 pt-8 border-t border-slate-100">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight">Тексты слайдов и частота</h3>
+                  <button
+                    onClick={handleSaveSlide}
+                    disabled={savingSlide}
+                    className="px-6 py-2.5 premium-gradient text-white rounded-xl font-black shadow-lg shadow-indigo-500/10 disabled:opacity-50 flex items-center gap-2 text-xs"
+                  >
+                    {savingSlide ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Сохранить оформление
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 font-medium">
+                  Пустые поля используют тексты по умолчанию (показаны серым в каждом поле).
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { key: "startTitle", label: "Заголовок стартового слайда", ph: "Ваше мнение имеет значение" },
+                    { key: "startSubtitle", label: "Подзаголовок стартового слайда", ph: "(необязательно)" },
+                    { key: "lowTitle", label: "Заголовок слайда негатива", ph: "Расскажите, что вам не понравилось." },
+                    { key: "commentPlaceholder", label: "Плейсхолдер поля комментария", ph: "Расскажите подробнее о вашем опыте..." },
+                    { key: "successTitle", label: "Заголовок финального слайда", ph: "Огромное спасибо!" },
+                    { key: "reviewPrompt", label: "Призыв оставить отзыв на картах", ph: "Будем очень признательны за отзыв на картах:" },
+                  ].map((f) => (
+                    <div key={f.key} className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{f.label}</label>
+                      <input
+                        type="text"
+                        placeholder={f.ph}
+                        className="w-full px-4 py-3 bg-slate-50/50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
+                        value={slide[f.key] || ""}
+                        onChange={(e) => setSlide((s) => ({ ...s, [f.key]: e.target.value }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {[
+                  { key: "lowSubtitle", label: "Подзаголовок слайда негатива", ph: "Оставьте отзыв и получите 500 бонусов! Для начисления бонусов обратитесь к менеджеру." },
+                  { key: "successPositive", label: "Благодарность при позитиве", ph: "Мы счастливы, что вам понравилось! Ваша оценка вдохновляет нашу команду." },
+                  { key: "successNegative", label: "Благодарность при негативе", ph: "Мы получили ваш отзыв и уже работаем над тем, чтобы исправить ситуацию." },
+                ].map((f) => (
+                  <div key={f.key} className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{f.label}</label>
+                    <textarea
+                      rows={2}
+                      placeholder={f.ph}
+                      className="w-full px-4 py-3 bg-slate-50/50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold resize-none"
+                      value={slide[f.key] || ""}
+                      onChange={(e) => setSlide((s) => ({ ...s, [f.key]: e.target.value }))}
+                    />
+                  </div>
+                ))}
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Как часто клиент может проходить опрос</label>
+                  <select
+                    value={freq}
+                    onChange={(e) => setFreq(parseInt(e.target.value, 10))}
+                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
+                  >
+                    <option value={0}>Без ограничений</option>
+                    <option value={24}>Раз в 24 часа</option>
+                    <option value={48}>Раз в 48 часов</option>
+                    <option value={72}>Раз в 72 часа</option>
+                    <option value={168}>Раз в неделю</option>
+                    <option value={720}>Раз в месяц</option>
+                    <option value={4320}>Раз в полгода</option>
+                    <option value={8760}>Раз в год</option>
+                  </select>
                 </div>
               </div>
             </div>

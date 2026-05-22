@@ -43,24 +43,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, isTest: true });
     }
 
-    // Check 6-month constraint
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-    const recentSurvey = await prisma.surveyResponse.findFirst({
-      where: {
-        clientId,
-        createdAt: { gte: sixMonthsAgo },
-      },
-    });
-
-    if (recentSurvey) {
-      return NextResponse.json(
-        { error: "Вы уже проходили опрос недавно. Спасибо!" },
-        { status: 429 }
-      );
-    }
-
     // payload is typed by verifySurveyToken — responsibleName lives there.
     let responsibleName: string | null = payload.responsibleName || null;
     if (!responsibleName && dealId) {
@@ -91,6 +73,41 @@ export async function POST(req: NextRequest) {
         }
       } catch {
         // best-effort — keep the token's branch/template on lookup failure
+      }
+    }
+
+    // Retake frequency from the effective template (0/none = unlimited). No
+    // template → unlimited (unique dealId + per-token device lock still apply).
+    let freqHours = 0;
+    try {
+      let tId = effectiveTemplateId;
+      if (!tId && effectiveBranchId) {
+        const b = await prisma.branch.findUnique({
+          where: { id: effectiveBranchId },
+          select: { templateId: true },
+        });
+        tId = b?.templateId || null;
+      }
+      if (tId) {
+        const tpl = await prisma.questionTemplate.findUnique({
+          where: { id: tId },
+          select: { surveyFrequencyHours: true },
+        });
+        freqHours = tpl?.surveyFrequencyHours ?? 0;
+      }
+    } catch {
+      // best-effort — no frequency limit on lookup failure
+    }
+    if (freqHours > 0) {
+      const cutoff = new Date(Date.now() - freqHours * 3600_000);
+      const recent = await prisma.surveyResponse.findFirst({
+        where: { clientId, createdAt: { gte: cutoff } },
+      });
+      if (recent) {
+        return NextResponse.json(
+          { error: "Вы недавно уже проходили опрос. Спасибо!" },
+          { status: 429 }
+        );
       }
     }
 
