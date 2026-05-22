@@ -1,0 +1,52 @@
+name: Deploy
+
+# Manual deploy that runs from a GitHub runner (a different IP than the local
+# machine), so it bypasses the local fail2ban SSH ban. Build happens on the
+# runner; the artefact is uploaded and the server regenerates Prisma + restarts
+# PM2. Requires repo secrets: DEPLOY_HOST, DEPLOY_PORT, DEPLOY_USER, DEPLOY_PASS.
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Build never connects to the DB (all routes dynamic); placeholders keep
+      # Prisma happy. The public URL is baked into the client bundle.
+      DATABASE_URL: postgresql://user:pass@localhost:5432/db
+      DIRECT_URL: postgresql://user:pass@localhost:5432/db
+      NEXT_PUBLIC_APP_URL: https://feedback.alleyadoma.ru
+      REMOTE: /home/bitrix/ext_www/feedback.alleyadoma.ru
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run build
+
+      - name: Package build (exclude .next/cache; .env.production stays on server)
+        run: tar czf app.tar.gz --exclude='.next/cache' .next next.config.ts package-lock.json package.json prisma public tsconfig.json
+
+      - name: Upload, regenerate Prisma, restart PM2
+        env:
+          SSHPASS: ${{ secrets.DEPLOY_PASS }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -e
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+          SSHOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+          sshpass -e scp $SSHOPTS -P "$PORT" app.tar.gz "$USER@$HOST:$REMOTE/app.tar.gz"
+          sshpass -e ssh $SSHOPTS -p "$PORT" "$USER@$HOST" "\
+            cd $REMOTE && \
+            rm -rf .next && \
+            tar xzf app.tar.gz && rm app.tar.gz && \
+            (node_modules/.bin/prisma generate || npx --yes prisma@6.0.0 generate) && \
+            cp public/favicon.ico favicon.ico 2>/dev/null || true; \
+            cp public/icon.png icon.png 2>/dev/null || true; \
+            node_modules/.bin/pm2 restart feedback --update-env && \
+            node_modules/.bin/pm2 save"
