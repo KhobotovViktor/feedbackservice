@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, LayoutDashboard, Settings, Loader2, Trash2, Edit2, Check, Building2, ChevronLeft, Star } from "lucide-react";
+import { Plus, LayoutDashboard, Settings, Loader2, Trash2, Edit2, Check, Building2, ChevronLeft, Star, Flag, Smile, Frown, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 interface Template {
   id: string;
@@ -27,6 +28,73 @@ interface Question {
   text: string;
   order: number;
 }
+
+interface SlideField {
+  key: string;
+  label: string;
+  ph: string;
+  multiline?: boolean;
+}
+
+// Slide-text fields grouped by survey stage so admins set them in the order a
+// client experiences them: Старт → Позитив (финал) → Негатив. Each group is
+// rendered as its own visually separated card.
+const SLIDE_GROUPS: {
+  key: string;
+  title: string;
+  desc: string;
+  icon: typeof Flag;
+  accent: { badge: string; ring: string };
+  fields: SlideField[];
+}[] = [
+  {
+    key: "start",
+    title: "Старт",
+    desc: "Первый экран, который видит клиент",
+    icon: Flag,
+    accent: { badge: "bg-indigo-50 text-indigo-600 border-indigo-100", ring: "ring-indigo-100/70" },
+    fields: [
+      { key: "startTitle", label: "Заголовок", ph: "Ваше мнение имеет значение" },
+      { key: "startSubtitle", label: "Подзаголовок", ph: "(необязательно)" },
+    ],
+  },
+  {
+    key: "positive",
+    title: "Позитив",
+    desc: "Финальный экран при высокой оценке",
+    icon: Smile,
+    accent: { badge: "bg-emerald-50 text-emerald-600 border-emerald-100", ring: "ring-emerald-100/70" },
+    fields: [
+      { key: "successTitle", label: "Заголовок финального слайда", ph: "Огромное спасибо!" },
+      { key: "successPositive", label: "Текст благодарности", ph: "Мы счастливы, что вам понравилось! Ваша оценка вдохновляет нашу команду.", multiline: true },
+      { key: "reviewPrompt", label: "Призыв оставить отзыв на картах", ph: "Будем очень признательны за отзыв на картах:" },
+    ],
+  },
+  {
+    key: "negative",
+    title: "Негатив",
+    desc: "Экраны при низкой оценке",
+    icon: Frown,
+    accent: { badge: "bg-rose-50 text-rose-600 border-rose-100", ring: "ring-rose-100/70" },
+    fields: [
+      { key: "lowTitle", label: "Заголовок слайда", ph: "Расскажите, что вам не понравилось." },
+      { key: "lowSubtitle", label: "Подзаголовок слайда", ph: "Оставьте отзыв и получите 500 бонусов! Для начисления бонусов обратитесь к менеджеру.", multiline: true },
+      { key: "commentPlaceholder", label: "Плейсхолдер поля комментария", ph: "Расскажите подробнее о вашем опыте..." },
+      { key: "successNegative", label: "Текст благодарности", ph: "Мы получили ваш отзыв и уже работаем над тем, чтобы исправить ситуацию.", multiline: true },
+    ],
+  },
+];
+
+const FREQUENCY_OPTIONS = [
+  { value: "0", label: "Без ограничений" },
+  { value: "24", label: "Раз в 24 часа" },
+  { value: "48", label: "Раз в 48 часов" },
+  { value: "72", label: "Раз в 72 часа" },
+  { value: "168", label: "Раз в неделю" },
+  { value: "720", label: "Раз в месяц" },
+  { value: "4320", label: "Раз в полгода" },
+  { value: "8760", label: "Раз в год" },
+];
 
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -500,61 +568,71 @@ export default function TemplatesPage() {
                   Пустые поля используют тексты по умолчанию (показаны серым в каждом поле).
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                    { key: "startTitle", label: "Заголовок стартового слайда", ph: "Ваше мнение имеет значение" },
-                    { key: "startSubtitle", label: "Подзаголовок стартового слайда", ph: "(необязательно)" },
-                    { key: "lowTitle", label: "Заголовок слайда негатива", ph: "Расскажите, что вам не понравилось." },
-                    { key: "commentPlaceholder", label: "Плейсхолдер поля комментария", ph: "Расскажите подробнее о вашем опыте..." },
-                    { key: "successTitle", label: "Заголовок финального слайда", ph: "Огромное спасибо!" },
-                    { key: "reviewPrompt", label: "Призыв оставить отзыв на картах", ph: "Будем очень признательны за отзыв на картах:" },
-                  ].map((f) => (
-                    <div key={f.key} className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{f.label}</label>
-                      <input
-                        type="text"
-                        placeholder={f.ph}
-                        className="w-full px-4 py-3 bg-slate-50/50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
-                        value={slide[f.key] || ""}
-                        onChange={(e) => setSlide((s) => ({ ...s, [f.key]: e.target.value }))}
-                      />
-                    </div>
-                  ))}
-                </div>
+                <div className="space-y-4">
+                  {SLIDE_GROUPS.map((group) => {
+                    const Icon = group.icon;
+                    return (
+                      <div
+                        key={group.key}
+                        className={cn(
+                          "rounded-2xl bg-white/50 p-5 space-y-4 ring-1 ring-inset",
+                          group.accent.ring
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center border shrink-0", group.accent.badge)}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-sm font-black text-slate-900 tracking-tight">{group.title}</h4>
+                            <p className="text-[11px] text-slate-400 font-medium leading-tight">{group.desc}</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {group.fields.map((f) => (
+                            <div key={f.key} className={cn("space-y-1", f.multiline && "md:col-span-2")}>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{f.label}</label>
+                              {f.multiline ? (
+                                <textarea
+                                  rows={2}
+                                  placeholder={f.ph}
+                                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold resize-none"
+                                  value={slide[f.key] || ""}
+                                  onChange={(e) => setSlide((s) => ({ ...s, [f.key]: e.target.value }))}
+                                />
+                              ) : (
+                                <input
+                                  type="text"
+                                  placeholder={f.ph}
+                                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
+                                  value={slide[f.key] || ""}
+                                  onChange={(e) => setSlide((s) => ({ ...s, [f.key]: e.target.value }))}
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
 
-                {[
-                  { key: "lowSubtitle", label: "Подзаголовок слайда негатива", ph: "Оставьте отзыв и получите 500 бонусов! Для начисления бонусов обратитесь к менеджеру." },
-                  { key: "successPositive", label: "Благодарность при позитиве", ph: "Мы счастливы, что вам понравилось! Ваша оценка вдохновляет нашу команду." },
-                  { key: "successNegative", label: "Благодарность при негативе", ph: "Мы получили ваш отзыв и уже работаем над тем, чтобы исправить ситуацию." },
-                ].map((f) => (
-                  <div key={f.key} className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{f.label}</label>
-                    <textarea
-                      rows={2}
-                      placeholder={f.ph}
-                      className="w-full px-4 py-3 bg-slate-50/50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold resize-none"
-                      value={slide[f.key] || ""}
-                      onChange={(e) => setSlide((s) => ({ ...s, [f.key]: e.target.value }))}
+                  <div className="rounded-2xl bg-white/50 p-5 space-y-4 ring-1 ring-inset ring-violet-100/70">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center border bg-violet-50 text-violet-600 border-violet-100 shrink-0">
+                        <Clock className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-black text-slate-900 tracking-tight">Частота прохождения</h4>
+                        <p className="text-[11px] text-slate-400 font-medium leading-tight">Как часто клиент может проходить опрос</p>
+                      </div>
+                    </div>
+                    <CustomSelect
+                      className="max-w-xs"
+                      value={String(freq)}
+                      onChange={(v) => setFreq(parseInt(v, 10))}
+                      options={FREQUENCY_OPTIONS}
                     />
                   </div>
-                ))}
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Как часто клиент может проходить опрос</label>
-                  <select
-                    value={freq}
-                    onChange={(e) => setFreq(parseInt(e.target.value, 10))}
-                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
-                  >
-                    <option value={0}>Без ограничений</option>
-                    <option value={24}>Раз в 24 часа</option>
-                    <option value={48}>Раз в 48 часов</option>
-                    <option value={72}>Раз в 72 часа</option>
-                    <option value={168}>Раз в неделю</option>
-                    <option value={720}>Раз в месяц</option>
-                    <option value={4320}>Раз в полгода</option>
-                    <option value={8760}>Раз в год</option>
-                  </select>
                 </div>
               </div>
             </div>
