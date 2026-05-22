@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import type { Prisma, SurveyResponse, Branch } from "@prisma/client";
-import { Building2, MessageCircle, Filter, ChevronLeft, ChevronRight, Download, Tag } from "lucide-react";
+import { Building2, MessageCircle, Filter, ChevronLeft, ChevronRight, Download, Tag, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
 import { BranchFilter } from "@/components/results/branch-filter";
 import { TypeFilter } from "@/components/results/type-filter";
 import { TagFilter } from "@/components/results/tag-filter";
+import { ComplaintFilter } from "@/components/results/complaint-filter";
 import { ClearResultsButton } from "@/components/results/clear-results-button";
 import { ResultsTable } from "@/components/results/results-table";
 import { getAccessibleBranchIds } from "@/lib/access";
@@ -16,9 +17,9 @@ const PAGE_SIZE = 25;
 export default async function ResultsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string; type?: string; tag?: string; sortBy?: string; order?: string; page?: string }>;
+  searchParams: Promise<{ branchId?: string; type?: string; tag?: string; complaint?: string; sortBy?: string; order?: string; page?: string }>;
 }) {
-  const { branchId, type = "all", tag = "all", sortBy = "date", order = "desc", page } = await searchParams;
+  const { branchId, type = "all", tag = "all", complaint = "all", sortBy = "date", order = "desc", page } = await searchParams;
   const sortDir: "asc" | "desc" = order === "asc" ? "asc" : "desc";
   const pageNum = Math.max(1, parseInt(page || "1", 10) || 1);
 
@@ -28,6 +29,7 @@ export default async function ResultsPage({
     if (branchId) params.set("branchId", branchId);
     if (type && type !== "all") params.set("type", type);
     if (tag && tag !== "all") params.set("tag", tag);
+    if (complaint && complaint !== "all") params.set("complaint", complaint);
     if (sortBy && sortBy !== "date") params.set("sortBy", sortBy);
     if (order && order !== "desc") params.set("order", order);
     if (p > 1) params.set("page", String(p));
@@ -51,31 +53,40 @@ export default async function ResultsPage({
   // Bitrix24 portal base (e.g. https://am35.bitrix24.ru) for deep-links into
   // deals/leads from the results table.
   let portalUrl = "";
+  // Complaint KPI counts across the current branch scope (independent of the
+  // type/tag/complaint filters, so the summary shows the full picture).
+  const complaintCounts = { NEW: 0, IN_PROGRESS: 0, RESOLVED: 0 };
 
   try {
-    const where: Prisma.SurveyResponseWhereInput = {};
+    // Branch scope (role + chosen branch filter), kept separate so the KPI
+    // counts can reuse it without the type/tag/complaint filters.
+    const scopeWhere: Prisma.SurveyResponseWhereInput = {};
     if (branchId === "crm") {
-      where.branchId = null;
-      where.dealId = { not: "QR_GUEST" };
+      scopeWhere.branchId = null;
+      scopeWhere.dealId = { not: "QR_GUEST" };
     } else if (branchId && branchId !== "all") {
-      where.branchId = branchId;
+      scopeWhere.branchId = branchId;
     }
-
-    if (type === "positive") where.averageScore = { gte: 4.5 };
-    if (type === "negative") where.averageScore = { lt: 4.5 };
-    if (tag && tag !== "all") where.tags = { has: tag };
-
     // Enforce branch scope for managers, intersecting with any chosen filter.
     if (accessibleBranchIds !== null) {
       if (branchId === "crm") {
         // CRM/no-branch responses aren't tied to a branch — managers can't see them.
-        where.branchId = { in: [] };
-      } else if (typeof where.branchId === "string") {
-        if (!accessibleBranchIds.includes(where.branchId)) where.branchId = { in: [] };
+        scopeWhere.branchId = { in: [] };
+      } else if (typeof scopeWhere.branchId === "string") {
+        if (!accessibleBranchIds.includes(scopeWhere.branchId)) scopeWhere.branchId = { in: [] };
       } else {
-        where.branchId = { in: accessibleBranchIds };
+        scopeWhere.branchId = { in: accessibleBranchIds };
       }
     }
+
+    const where: Prisma.SurveyResponseWhereInput = { ...scopeWhere };
+    if (type === "positive") where.averageScore = { gte: 4.5 };
+    if (type === "negative") where.averageScore = { lt: 4.5 };
+    if (tag && tag !== "all") where.tags = { has: tag };
+    if (complaint === "open") where.complaintStatus = { in: ["NEW", "IN_PROGRESS"] };
+    else if (complaint === "new") where.complaintStatus = "NEW";
+    else if (complaint === "in_progress") where.complaintStatus = "IN_PROGRESS";
+    else if (complaint === "resolved") where.complaintStatus = "RESOLVED";
 
     // "source" sorts by the related branch name at the DB level so pagination
     // stays correct (the old in-memory sort only ordered the current page).
@@ -103,12 +114,23 @@ export default async function ResultsPage({
       }),
       prisma.settings.findUnique({ where: { key: "b24_webhook_url" } }),
       prisma.surveyResponse.count({ where }),
+      prisma.surveyResponse.groupBy({
+        by: ["complaintStatus"],
+        where: { ...scopeWhere, complaintStatus: { not: null } },
+        _count: { _all: true },
+      }),
     ]);
     responses = results[0];
     branches = results[1];
     const webhookUrl = results[2]?.value || "";
     portalUrl = webhookUrl.replace(/\/rest\/.*$/, "");
     total = results[3];
+    for (const row of results[4]) {
+      const s = row.complaintStatus;
+      if (s === "NEW" || s === "IN_PROGRESS" || s === "RESOLVED") {
+        complaintCounts[s] = row._count._all;
+      }
+    }
   } catch (err) {
     console.error("Results page data fetch error:", err);
   }
@@ -167,8 +189,46 @@ export default async function ResultsPage({
               <TagFilter defaultValue={tag} />
             </div>
           </div>
+
+          {/* Complaint Status Filter */}
+          <div className="flex items-center gap-2 p-1 md:p-1.5 glass rounded-2xl md:rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
+            <div className="flex-1 sm:flex-none flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-3">
+              <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-indigo-400" />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xs:inline">Жалоба:</span>
+            </div>
+            <div className="flex-1 sm:flex-none">
+              <ComplaintFilter defaultValue={complaint} />
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Complaint KPI summary (full picture for the current branch scope) */}
+      {(complaintCounts.NEW + complaintCounts.IN_PROGRESS + complaintCounts.RESOLVED) > 0 && (
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          <div className="glass border-white/50 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0"><AlertCircle className="w-5 h-5" /></div>
+            <div className="min-w-0">
+              <p className="text-2xl font-black text-slate-900 tabular-nums leading-none">{complaintCounts.NEW}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Новые жалобы</p>
+            </div>
+          </div>
+          <div className="glass border-white/50 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><Clock className="w-5 h-5" /></div>
+            <div className="min-w-0">
+              <p className="text-2xl font-black text-slate-900 tabular-nums leading-none">{complaintCounts.IN_PROGRESS}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">В работе</p>
+            </div>
+          </div>
+          <div className="glass border-white/50 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><CheckCircle2 className="w-5 h-5" /></div>
+            <div className="min-w-0">
+              <p className="text-2xl font-black text-slate-900 tabular-nums leading-none">{complaintCounts.RESOLVED}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Решено</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {total === 0 ? (
         <div className="bento-card flex flex-col items-center justify-center py-40 border-dashed space-y-8">

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Star, User, MessageCircle, TrendingUp, Trash2, Loader2, X, AlertCircle, ExternalLink, Phone } from "lucide-react";
+import { Calendar, Star, User, MessageCircle, TrendingUp, Trash2, Loader2, X, AlertCircle, ExternalLink, Phone, Clock, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ComplaintStatus = "NEW" | "IN_PROGRESS" | "RESOLVED";
@@ -22,7 +22,14 @@ export interface ResultRow {
   tags?: string[];
   // Optional contact phone from the negative-feedback step.
   phone?: string | null;
+  // Close-the-loop fields.
+  resolutionNote?: string | null;
+  resolvedAt?: string | Date | null;
 }
+
+// SLA thresholds (hours) past which an open complaint is flagged overdue.
+const OVERDUE_NEW_H = 24;
+const OVERDUE_INPROGRESS_H = 72;
 
 // Deep-link into the deal/lead in Bitrix24, when we know the portal + a real
 // CRM id (not a QR scan or test).
@@ -54,6 +61,19 @@ const STATUS_META: Record<ComplaintStatus, { label: string; cls: string; next?: 
     nextLabel: "Вернуть",
   },
 };
+
+// Compact RU "how long ago" / "how long it took" helpers for the SLA badge.
+function ageText(from: string | Date): string {
+  const h = Math.floor((Date.now() - new Date(from).getTime()) / 3600_000);
+  if (h < 1) return "только что";
+  if (h < 24) return `${h} ч`;
+  return `${Math.floor(h / 24)} дн`;
+}
+function durationText(from: string | Date, to: string | Date): string {
+  const h = Math.round((new Date(to).getTime() - new Date(from).getTime()) / 3600_000);
+  if (h < 24) return `${Math.max(1, h)} ч`;
+  return `${Math.round(h / 24)} дн`;
+}
 
 function sourceText(res: ResultRow): string {
   const isCRM =
@@ -144,16 +164,25 @@ export function ResultsTable({
   };
 
   const [statusBusy, setStatusBusy] = useState<string | null>(null);
-  const setStatus = async (id: string, complaintStatus: ComplaintStatus) => {
+  // Resolve modal: capturing an optional resolution note when closing a complaint.
+  const [resolveTarget, setResolveTarget] = useState<ResultRow | null>(null);
+  const [resolveNote, setResolveNote] = useState("");
+
+  const setStatus = async (id: string, complaintStatus: ComplaintStatus, resolutionNote?: string) => {
     setStatusBusy(id);
     try {
       const res = await fetch(`/api/surveys/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ complaintStatus }),
+        body: JSON.stringify({
+          complaintStatus,
+          ...(resolutionNote !== undefined ? { resolutionNote } : {}),
+        }),
       });
-      if (res.ok) router.refresh();
-      else {
+      if (res.ok) {
+        setResolveTarget(null);
+        router.refresh();
+      } else {
         const data = await res.json().catch(() => ({}));
         alert(`Не удалось обновить статус: ${data.error || res.statusText}`);
       }
@@ -165,26 +194,56 @@ export function ResultsTable({
     }
   };
 
-  // Complaint status badge + next-action button for a negative response.
+  const openResolve = (res: ResultRow) => {
+    setResolveNote(res.resolutionNote || "");
+    setResolveTarget(res);
+  };
+
+  // Complaint status badge + SLA timer + next-action button for a negative response.
   const Complaint = ({ res }: { res: ResultRow }) => {
     if (!res.complaintStatus) return <span className="text-slate-200">—</span>;
     const meta = STATUS_META[res.complaintStatus];
     const busy = statusBusy === res.id;
+    const open = res.complaintStatus !== "RESOLVED";
+    const ageH = (Date.now() - new Date(res.createdAt).getTime()) / 3600_000;
+    const overdue =
+      open &&
+      ((res.complaintStatus === "NEW" && ageH > OVERDUE_NEW_H) ||
+        (res.complaintStatus === "IN_PROGRESS" && ageH > OVERDUE_INPROGRESS_H));
     return (
       <div className="flex flex-col items-start gap-1.5">
         <span className={cn("text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest inline-flex items-center gap-1", meta.cls)}>
           <AlertCircle className="w-3 h-3" />
           {meta.label}
         </span>
+
+        {/* SLA timer: how long it's been open, or how long it took to resolve. */}
+        {open ? (
+          <span className={cn("text-[9px] font-bold inline-flex items-center gap-1", overdue ? "text-rose-500" : "text-slate-400")}>
+            <Clock className="w-3 h-3" />
+            {overdue ? "просрочено · " : ""}{ageText(res.createdAt)}
+          </span>
+        ) : res.resolvedAt ? (
+          <span className="text-[9px] font-bold text-emerald-500 inline-flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" />
+            закрыта за {durationText(res.createdAt, res.resolvedAt)}
+          </span>
+        ) : null}
+
         {meta.next && (
           <button
-            onClick={() => setStatus(res.id, meta.next!)}
+            onClick={() => (meta.next === "RESOLVED" ? openResolve(res) : setStatus(res.id, meta.next!))}
             disabled={busy}
             className="text-[9px] font-black px-2.5 py-1 rounded-lg bg-slate-900 text-white hover:bg-slate-700 transition-colors disabled:opacity-50 uppercase tracking-widest inline-flex items-center gap-1"
           >
             {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
             {meta.nextLabel}
           </button>
+        )}
+
+        {/* Stored resolution note. */}
+        {res.complaintStatus === "RESOLVED" && res.resolutionNote && (
+          <p className="text-[10px] text-slate-500 italic leading-snug max-w-[200px] break-words">«{res.resolutionNote}»</p>
         )}
       </div>
     );
@@ -433,6 +492,66 @@ export function ResultsTable({
           );
         })}
       </div>
+
+      {/* Resolve modal: optional note when closing a complaint */}
+      {resolveTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in"
+          onClick={() => !statusBusy && setResolveTarget(null)}
+        >
+          <div
+            className="glass border-white/60 rounded-[2rem] shadow-2xl p-8 max-w-md w-full space-y-5 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">Решение жалобы</h3>
+                <p className="text-[11px] font-bold text-slate-400">
+                  {resolveTarget.clientId || "Incognito"} · оценка {resolveTarget.averageScore.toFixed(1)}
+                </p>
+              </div>
+            </div>
+
+            {resolveTarget.comment && (
+              <p className="text-xs text-slate-500 italic bg-slate-50/60 rounded-xl p-3 border border-slate-100 leading-relaxed">
+                «{resolveTarget.comment}»
+              </p>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Что сделано для решения (необязательно)</label>
+              <textarea
+                rows={3}
+                value={resolveNote}
+                onChange={(e) => setResolveNote(e.target.value)}
+                placeholder="Связались с клиентом, заменили товар, принесли извинения…"
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all text-sm font-medium resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setResolveTarget(null)}
+                disabled={!!statusBusy}
+                className="px-5 py-2.5 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-all text-xs disabled:opacity-50"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => setStatus(resolveTarget.id, "RESOLVED", resolveNote.trim())}
+                disabled={!!statusBusy}
+                className="px-6 py-2.5 bg-emerald-500 text-white rounded-xl font-black shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2 text-xs"
+              >
+                {statusBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                Отметить решённой
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
