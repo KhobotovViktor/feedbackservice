@@ -529,13 +529,17 @@ export default async function AdminDashboard({
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/5 blur-[120px] -mr-64 -mt-64 rounded-full"></div>
         </div>
 
-        <div className="lg:row-span-2 bento-card flex flex-col bg-white/40 min-h-[400px] max-h-[640px] lg:max-h-none overflow-hidden">
-          <div className="flex items-center justify-between mb-8 shrink-0">
-             <h3 className="text-xl font-black text-slate-900">По филиалам</h3>
-             <Users className="w-6 h-6 text-slate-300" />
-          </div>
-          
-          <div className="space-y-4 overflow-y-auto pr-2 flex-1 min-h-0 custom-scrollbar">
+        <div className="lg:row-span-2 glass rounded-[2.5rem] border border-white/40 bg-white/40 min-h-[400px] max-h-[640px] lg:max-h-none overflow-hidden lg:relative transition-all duration-300">
+          {/* On lg the inner panel is absolutely positioned so the long branch
+              list never inflates the grid row height — the funnel card dictates
+              it, and this panel matches that height and scrolls internally. */}
+          <div className="flex flex-col h-full p-6 md:p-8 lg:absolute lg:inset-0">
+            <div className="flex items-center justify-between mb-8 shrink-0">
+               <h3 className="text-xl font-black text-slate-900">По филиалам</h3>
+               <Users className="w-6 h-6 text-slate-300" />
+            </div>
+
+            <div className="space-y-4 overflow-y-auto pr-2 flex-1 min-h-0 custom-scrollbar">
             {branchStats.map((branch) => (
               <div key={branch.id} className="p-5 glass rounded-2xl hover:bg-white/80 transition-all border-white/60 mb-1">
                 {/* Header: name (full, wraps) + average rating */}
@@ -586,6 +590,7 @@ export default async function AdminDashboard({
                 </div>
               </div>
             ))}
+            </div>
           </div>
         </div>
       </div>
