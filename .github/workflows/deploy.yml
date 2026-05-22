@@ -3,7 +3,7 @@ name: Deploy
 # Manual deploy that runs from a GitHub runner (a different IP than the local
 # machine), so it bypasses the local fail2ban SSH ban. Build happens on the
 # runner; the artefact is uploaded and the server regenerates Prisma + restarts
-# PM2. Requires repo secrets: DEPLOY_HOST, DEPLOY_PORT, DEPLOY_USER, DEPLOY_PASS.
+# PM2. Requires repo secrets: DEPLOY_HOST, DEPLOY_PORT, DEPLOY_USER, DEPLOY_SSH_KEY.
 on:
   workflow_dispatch:
 
