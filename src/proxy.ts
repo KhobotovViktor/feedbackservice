@@ -76,6 +76,10 @@ export async function proxy(req: NextRequest) {
     path.startsWith("/api/auth") ||
     path.startsWith("/api/surveys") ||
     path.startsWith("/api/b24/webhook") ||
+    // Open Line "dialog closed" event handler — enforces its own rate limit
+    // and optional shared secret, so it bypasses the session gate like the robot
+    // webhook above.
+    path.startsWith("/api/b24/session-finish") ||
     // Sync-requests with API key (external integrations)
     path.startsWith("/api/rating-bridge") ||
     path.startsWith("/api/sync-manual") ||
@@ -135,6 +139,7 @@ export async function proxy(req: NextRequest) {
         path.startsWith("/admin/users") ||
         path.startsWith("/api/admin/users") ||
         path.startsWith("/api/admin/b24-webhooks") ||
+        path.startsWith("/api/admin/b24-bind-event") ||
         path.startsWith("/api/settings") ||
         path.startsWith("/api/branches") ||
         path.startsWith("/api/cities") ||

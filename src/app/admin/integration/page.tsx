@@ -38,6 +38,11 @@ export default function IntegrationPage() {
   const [newOp, setNewOp] = useState({ userId: "", displayName: "", url: "" });
   const [opSaving, setOpSaving] = useState(false);
   const [opError, setOpError] = useState<string | null>(null);
+
+  // ONSESSIONFINISH event binding — survey link on Open Line dialog close.
+  const [eventBound, setEventBound] = useState<boolean | null>(null);
+  const [eventBusy, setEventBusy] = useState(false);
+  const [eventMsg, setEventMsg] = useState<string | null>(null);
   // Cities for the "pick your city" CRM scenario.
   type City = { id: string; name: string; branchId: string | null; branch: { id: string; name: string } | null };
   const [cities, setCities] = useState<City[]>([]);
@@ -99,6 +104,41 @@ export default function IntegrationPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // Check whether the dialog-close event is currently bound (best-effort).
+  useEffect(() => {
+    fetch("/api/admin/b24-bind-event")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && typeof d.bound === "boolean") setEventBound(d.bound);
+      })
+      .catch(() => {});
+  }, []);
+
+  const toggleSessionEvent = async () => {
+    setEventBusy(true);
+    setEventMsg(null);
+    try {
+      const res = await fetch("/api/admin/b24-bind-event", {
+        method: eventBound ? "DELETE" : "POST",
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setEventBound(Boolean(d.bound));
+        setEventMsg(
+          d.bound
+            ? "Готово: ссылка будет отправляться клиенту при завершении диалога."
+            : "Отправка по завершению диалога отключена."
+        );
+      } else {
+        setEventMsg(d.error || "Не удалось изменить привязку события.");
+      }
+    } catch {
+      setEventMsg("Ошибка сети.");
+    } finally {
+      setEventBusy(false);
+    }
+  };
 
   const handleAddWebhook = async () => {
     setOpError(null);
@@ -354,6 +394,49 @@ export default function IntegrationPage() {
                    <div className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-mono text-indigo-500">{"{surveyUrl}"}</div>
                    <p className="text-[10px] text-slate-400 font-medium italic">ссылка на персональный опрос</p>
                 </div>
+              </div>
+
+              {/* Survey on dialog close (ONSESSIONFINISH) */}
+              <div className="pt-8 border-t border-slate-100/50">
+                <div className="flex items-center gap-3 text-indigo-600 mb-2">
+                  <Power className="w-6 h-6" />
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight">Опрос по завершению диалога</h3>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium leading-relaxed px-1 mb-4">
+                  Ссылка отправляется клиенту в чат Открытой линии, когда оператор{" "}
+                  <span className="font-bold text-slate-600">закрывает диалог</span> (без робота на стадии).
+                  Филиал — по линии (если задан маппинг), ответственный — по оператору. Поля сделки при этом
+                  не заполняются.
+                </p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    onClick={toggleSessionEvent}
+                    disabled={eventBusy || !settings.b24_webhook_url}
+                    className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-sm transition-all disabled:opacity-50 ${
+                      eventBound
+                        ? "bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100"
+                        : "premium-gradient text-white shadow-lg shadow-indigo-500/20 hover:scale-[1.02]"
+                    }`}
+                  >
+                    {eventBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+                    {eventBound ? "Отключить" : "Включить отправку по завершению"}
+                  </button>
+                  {eventBound !== null && (
+                    <span
+                      className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${
+                        eventBound ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                      }`}
+                    >
+                      {eventBound ? "Активно" : "Выключено"}
+                    </span>
+                  )}
+                </div>
+                {eventMsg && <p className="text-[11px] text-slate-500 font-medium mt-2 px-1">{eventMsg}</p>}
+                {!settings.b24_webhook_url && (
+                  <p className="text-[11px] text-amber-600 font-medium mt-2 px-1">
+                    Сначала укажите входящий вебхук Битрикс24 выше и сохраните настройки.
+                  </p>
+                )}
               </div>
 
               {/* Per-operator webhooks */}
