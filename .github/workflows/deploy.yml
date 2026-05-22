@@ -32,16 +32,18 @@ jobs:
 
       - name: Upload, regenerate Prisma, restart PM2
         env:
-          SSHPASS: ${{ secrets.DEPLOY_PASS }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           HOST: ${{ secrets.DEPLOY_HOST }}
           PORT: ${{ secrets.DEPLOY_PORT }}
           USER: ${{ secrets.DEPLOY_USER }}
         run: |
           set -e
-          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-          SSHOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-          sshpass -e scp $SSHOPTS -P "$PORT" app.tar.gz "$USER@$HOST:$REMOTE/app.tar.gz"
-          sshpass -e ssh $SSHOPTS -p "$PORT" "$USER@$HOST" "\
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          SSHOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $HOME/.ssh/id_deploy"
+          scp $SSHOPTS -P "$PORT" app.tar.gz "$USER@$HOST:$REMOTE/app.tar.gz"
+          ssh $SSHOPTS -p "$PORT" "$USER@$HOST" "\
             cd $REMOTE && \
             rm -rf .next && \
             tar xzf app.tar.gz && rm app.tar.gz && \
