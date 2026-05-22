@@ -27,7 +27,32 @@ interface Question {
   id: string;
   text: string;
   order: number;
+  type?: string;
+  options?: string[];
+  showIf?: string | null;
 }
+
+const QUESTION_TYPES = [
+  { value: "RATING", label: "Звёзды 1–5" },
+  { value: "NPS", label: "NPS 0–10" },
+  { value: "CHOICE", label: "Выбор варианта" },
+  { value: "YESNO", label: "Да / Нет" },
+  { value: "TEXT", label: "Свободный текст" },
+];
+
+const SHOWIF_OPTIONS = [
+  { value: "always", label: "Показывать всегда" },
+  { value: "negative", label: "Только при низкой оценке" },
+  { value: "positive", label: "Только при высокой оценке" },
+];
+
+const QUESTION_TYPE_LABEL: Record<string, string> = {
+  RATING: "Звёзды",
+  NPS: "NPS",
+  CHOICE: "Выбор",
+  YESNO: "Да/Нет",
+  TEXT: "Текст",
+};
 
 interface SlideField {
   key: string;
@@ -108,6 +133,9 @@ export default function TemplatesPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [newQuestionText, setNewQuestionText] = useState("");
+  const [newQuestionType, setNewQuestionType] = useState("RATING");
+  const [newQuestionOptions, setNewQuestionOptions] = useState("");
+  const [newQuestionShowIf, setNewQuestionShowIf] = useState("always");
 
   const [view, setView] = useState<"list" | "detail">("list");
   const [editingMetadata, setEditingMetadata] = useState(false);
@@ -192,17 +220,27 @@ export default function TemplatesPage() {
   const handleAddQuestion = async () => {
     if (!newQuestionText || !selectedTemplate) return;
     try {
+      const options =
+        newQuestionType === "CHOICE"
+          ? newQuestionOptions.split("\n").map((s) => s.trim()).filter(Boolean)
+          : [];
       const res = await fetch("/api/templates/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          text: newQuestionText, 
+        body: JSON.stringify({
+          text: newQuestionText,
           templateId: selectedTemplate.id,
-          order: questions.length 
+          order: questions.length,
+          type: newQuestionType,
+          options,
+          showIf: newQuestionShowIf === "always" ? null : newQuestionShowIf,
         }),
       });
       if (res.ok) {
         setNewQuestionText("");
+        setNewQuestionType("RATING");
+        setNewQuestionOptions("");
+        setNewQuestionShowIf("always");
         fetchQuestions(selectedTemplate.id);
         fetchTemplates(); // To update question count
       }
@@ -496,19 +534,41 @@ export default function TemplatesPage() {
               </div>
 
               <div className="space-y-6 flex-1 flex flex-col">
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <input 
-                    type="text" 
-                    placeholder="Добавить новый вопрос..."
-                    className="flex-1 px-6 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.5rem] focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
+                <div className="space-y-3 p-5 rounded-2xl bg-white/50 ring-1 ring-inset ring-slate-100">
+                  <input
+                    type="text"
+                    placeholder="Текст нового вопроса..."
+                    className="w-full px-6 py-4 bg-white border border-slate-200 rounded-[1.5rem] focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
                     value={newQuestionText}
                     onChange={e => setNewQuestionText(e.target.value)}
-                    onKeyPress={e => e.key === "Enter" && handleAddQuestion()}
+                    onKeyPress={e => e.key === "Enter" && newQuestionType !== "CHOICE" && handleAddQuestion()}
                   />
-                  <button 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Тип ответа</label>
+                      <CustomSelect value={newQuestionType} onChange={setNewQuestionType} options={QUESTION_TYPES} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Когда показывать</label>
+                      <CustomSelect value={newQuestionShowIf} onChange={setNewQuestionShowIf} options={SHOWIF_OPTIONS} />
+                    </div>
+                  </div>
+                  {newQuestionType === "CHOICE" && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Варианты (по одному на строку)</label>
+                      <textarea
+                        rows={3}
+                        placeholder={"Качество товара\nРабота менеджера\nДоставка"}
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-medium resize-none"
+                        value={newQuestionOptions}
+                        onChange={e => setNewQuestionOptions(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  <button
                     onClick={handleAddQuestion}
-                    disabled={!newQuestionText}
-                    className="px-8 py-4 premium-gradient text-white rounded-[1.5rem] font-black shadow-xl shadow-indigo-500/20 disabled:opacity-50 text-sm whitespace-nowrap"
+                    disabled={!newQuestionText || (newQuestionType === "CHOICE" && newQuestionOptions.split("\n").map(s => s.trim()).filter(Boolean).length < 2)}
+                    className="w-full px-8 py-4 premium-gradient text-white rounded-[1.5rem] font-black shadow-xl shadow-indigo-500/20 disabled:opacity-50 text-sm"
                   >
                     Добавить в список
                   </button>
@@ -532,7 +592,19 @@ export default function TemplatesPage() {
                             <span className="shrink-0 w-8 h-8 md:w-10 md:h-10 flex items-center justify-center bg-white border border-slate-100 rounded-xl text-[10px] md:text-xs font-black text-slate-900 shadow-sm">
                               {idx + 1}
                             </span>
-                            <p className="text-slate-800 font-bold text-sm md:text-lg leading-snug break-words overflow-hidden">{q.text}</p>
+                            <div className="min-w-0">
+                              <p className="text-slate-800 font-bold text-sm md:text-lg leading-snug break-words overflow-hidden">{q.text}</p>
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-500 border border-indigo-100/50 uppercase tracking-wider">
+                                  {QUESTION_TYPE_LABEL[q.type ?? "RATING"] ?? "Звёзды"}
+                                </span>
+                                {q.showIf && (
+                                  <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 border border-amber-100/50 uppercase tracking-wider">
+                                    {q.showIf === "negative" ? "при низкой оценке" : "при высокой оценке"}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                           <button 
                             onClick={async () => {

@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
 
   // We only return a narrow projection of the branch to the survey page —
   // declare it once and keep the rest of this handler within that shape.
-  type Question = { id: string; text: string; order: number };
+  type Question = { id: string; text: string; order: number; type: string; options: string[]; showIf: string | null };
   type Template = {
     id: string;
     name: string;

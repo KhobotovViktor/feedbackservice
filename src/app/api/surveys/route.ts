@@ -24,20 +24,15 @@ export async function POST(req: NextRequest) {
 
     const { clientId, dealId, isTest } = payload;
 
-    // Validate answers
-    const answersMap = (answers ?? {}) as Record<string, number>;
-    const scores = Object.values(answersMap).filter(
-      (v) => typeof v === "number" && !isNaN(v)
-    );
-    if (scores.length === 0) {
+    // Validate answers. Values are mixed now: numbers for RATING/NPS, strings
+    // for CHOICE/YESNO/TEXT, so we only require that *something* was answered.
+    const answersMap = (answers ?? {}) as Record<string, unknown>;
+    if (Object.keys(answersMap).length === 0) {
       return NextResponse.json({ error: "No valid answers provided" }, { status: 400 });
     }
+    const isNum = (v: unknown): v is number => typeof v === "number" && !isNaN(v);
 
-    // Recalculate averageScore server-side — never trust client value
-    const averageScore =
-      Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
-
-    // Sandbox mode for testing
+    // Sandbox mode for testing — no persistence, no score needed.
     if (isTest) {
       console.log("Test survey detected. Skipping persistence and B24 updates.");
       return NextResponse.json({ success: true, isTest: true });
@@ -110,6 +105,40 @@ export async function POST(req: NextRequest) {
         );
       }
     }
+
+    // Score only the RATING questions of the effective template — NPS/choice/
+    // yes-no/text answers are stored but never skew the 1-5 average / negative
+    // threshold. Fall back to averaging every numeric answer when the template
+    // questions can't be resolved (legacy links / built-in default questions).
+    let ratingIds: Set<string> | null = null;
+    try {
+      if (effectiveTemplateId) {
+        const qs = await prisma.question.findMany({
+          where: { templateId: effectiveTemplateId },
+          select: { id: true, type: true },
+        });
+        if (qs.length > 0) {
+          ratingIds = new Set(qs.filter((q) => (q.type ?? "RATING") === "RATING").map((q) => q.id));
+        }
+      }
+    } catch {
+      // best-effort — fall through to all-numeric averaging
+    }
+    let scoreVals: number[] =
+      ratingIds && ratingIds.size > 0
+        ? Object.entries(answersMap)
+            .filter(([k, v]) => ratingIds!.has(k) && isNum(v))
+            .map(([, v]) => v as number)
+        : (Object.values(answersMap).filter(isNum) as number[]);
+    if (scoreVals.length === 0) {
+      scoreVals = Object.values(answersMap).filter(isNum) as number[];
+    }
+    if (scoreVals.length === 0) {
+      return NextResponse.json({ error: "No valid answers provided" }, { status: 400 });
+    }
+    // Recalculate averageScore server-side — never trust the client value.
+    const averageScore =
+      Math.round((scoreVals.reduce((a, b) => a + b, 0) / scoreVals.length) * 10) / 10;
 
     // Save response. SurveyResponse.dealId is @unique — two concurrent
     // submissions of the same survey can both pass the 6-month findFirst
@@ -245,10 +274,12 @@ export async function POST(req: NextRequest) {
                 q.text.toLowerCase().includes("качество обслуживания") ||
                 q.text.toLowerCase().includes("аллея мебели")
             );
-            if (q && answersMap[q.id]) {
-              updateData[settingsMap.b24_field_quality] = answersMap[q.id];
-            } else if (questions[0] && answersMap[questions[0].id]) {
-              updateData[settingsMap.b24_field_quality] = answersMap[questions[0].id];
+            const qv = q ? answersMap[q.id] : undefined;
+            const q0v = questions[0] ? answersMap[questions[0].id] : undefined;
+            if (isNum(qv)) {
+              updateData[settingsMap.b24_field_quality] = qv;
+            } else if (isNum(q0v)) {
+              updateData[settingsMap.b24_field_quality] = q0v;
             }
           }
 
@@ -259,10 +290,12 @@ export async function POST(req: NextRequest) {
                 q.text.toLowerCase().includes("работу сотрудника") ||
                 q.text.toLowerCase().includes("службы поддержки")
             );
-            if (q && answersMap[q.id]) {
-              updateData[settingsMap.b24_field_support] = answersMap[q.id];
-            } else if (questions[1] && answersMap[questions[1].id]) {
-              updateData[settingsMap.b24_field_support] = answersMap[questions[1].id];
+            const qv = q ? answersMap[q.id] : undefined;
+            const q1v = questions[1] ? answersMap[questions[1].id] : undefined;
+            if (isNum(qv)) {
+              updateData[settingsMap.b24_field_support] = qv;
+            } else if (isNum(q1v)) {
+              updateData[settingsMap.b24_field_support] = q1v;
             }
           }
 
@@ -333,7 +366,10 @@ export async function POST(req: NextRequest) {
             msg += `\n[b]Ответы:[/b]\n`;
             for (const q of displayQuestions) {
               const score = answersMap[q.id];
-              if (score !== undefined) msg += `• ${q.text}: ${score}\n`;
+              if (score !== undefined && score !== null && score !== "") {
+                const shown = Array.isArray(score) ? score.join(", ") : String(score);
+                msg += `• ${q.text}: ${shown}\n`;
+              }
             }
           }
 

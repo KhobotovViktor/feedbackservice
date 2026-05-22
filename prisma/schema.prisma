@@ -77,6 +77,16 @@ model Question {
   id         String            @id @default(cuid())
   text       String
   order      Int               @default(0)
+  // Question type: RATING (1-5 stars, default) | NPS (0-10) | CHOICE (pick one
+  // of `options`) | YESNO | TEXT (free text). Only RATING answers feed the
+  // averageScore / negative threshold; the rest are stored as extra answers.
+  type       String            @default("RATING")
+  // Choices for a CHOICE question (ignored for other types).
+  options    String[]          @default([])
+  // Conditional display by the running rating score: null = always shown,
+  // "negative" = only when the score is below the template threshold,
+  // "positive" = only at/above it.
+  showIf     String?
   createdAt  DateTime          @default(now())
   updatedAt  DateTime          @updatedAt
   templateId String?

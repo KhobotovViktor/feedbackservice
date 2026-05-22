@@ -24,17 +24,30 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { text, order, templateId } = body;
+    const { text, order, templateId, type, options, showIf } = body;
 
     if (!text || !templateId) {
       return NextResponse.json({ error: "Text and templateId are required" }, { status: 400 });
     }
 
+    // Normalise the new question-type fields. Unknown type → RATING; options
+    // only kept for CHOICE; showIf limited to the two conditional values.
+    const VALID_TYPES = ["RATING", "NPS", "CHOICE", "YESNO", "TEXT"];
+    const qType = VALID_TYPES.includes(type) ? type : "RATING";
+    const qOptions =
+      qType === "CHOICE" && Array.isArray(options)
+        ? options.map((o: unknown) => String(o).trim()).filter(Boolean).slice(0, 12)
+        : [];
+    const qShowIf = showIf === "negative" || showIf === "positive" ? showIf : null;
+
     const question = await prisma.question.create({
       data: {
         text,
         order: order || 0,
-        templateId
+        templateId,
+        type: qType,
+        options: qOptions,
+        showIf: qShowIf,
       }
     });
 

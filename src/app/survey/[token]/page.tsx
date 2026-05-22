@@ -3,14 +3,20 @@
 import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { StarRating } from "@/components/star-rating";
 import { Confetti } from "@/components/confetti";
+import { QuestionInput } from "@/components/survey/question-input";
 import { CheckCircle, MessageSquare, ArrowRight, MapPin } from "lucide-react";
 
 interface Question {
   id: string;
   text: string;
+  type?: string;
+  options?: string[];
+  showIf?: string | null;
 }
+
+// True only for finite numeric answers (RATING/NPS); other types are strings.
+const isNumVal = (v: unknown): v is number => typeof v === "number" && !isNaN(v);
 
 const DEFAULT_QUESTIONS: Question[] = [
   { id: "1", text: "Как вы оцениваете качество обслуживания в “Аллея Мебели”?" },
@@ -45,7 +51,7 @@ export default function SurveyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>(DEFAULT_QUESTIONS);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [answers, setAnswers] = useState<Record<string, number | string>>({});
   const [comment, setComment] = useState("");
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState<"city" | "rating" | "feedback" | "success">("rating");
@@ -216,15 +222,25 @@ export default function SurveyPage() {
     init();
   }, [token, applyConfig]);
 
+  // Average only the RATING answers — NPS / choice / yes-no / text never feed
+  // the score. Falls back to any numeric answer when the template has no stars.
+  const computeAvg = () => {
+    const ratingScores = questions
+      .filter((q) => (q.type ?? "RATING") === "RATING")
+      .map((q) => answers[q.id])
+      .filter(isNumVal);
+    const pool = ratingScores.length
+      ? ratingScores
+      : (Object.values(answers).filter(isNumVal) as number[]);
+    return pool.length ? pool.reduce((a, b) => a + b, 0) / pool.length : 0;
+  };
+
   const handleSubmitRating = async () => {
-    const scores = Object.values(answers).filter((v) => typeof v === "number");
-    if (scores.length === 0) return;
-    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-    
+    const avg = computeAvg();
     // Positive if average is >= threshold
     const positive = avg >= isPositiveThreshold;
     setIsPositive(positive);
-    
+
     if (positive) {
       // For positive reviews, we submit and go straight to success
       await submitFeedback(avg, true);
@@ -279,10 +295,7 @@ export default function SurveyPage() {
   };
 
   const handleSubmitFeedback = async () => {
-    const scores = Object.values(answers).filter((v) => typeof v === "number");
-    if (scores.length === 0) return;
-    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-    await submitFeedback(avg, false);
+    await submitFeedback(computeAvg(), false);
   };
 
   if (alreadyCompleted) {
@@ -381,6 +394,35 @@ export default function SurveyPage() {
       } as CSSProperties)
     : undefined;
 
+  // Conditional display: a showIf question appears only once the base rating
+  // questions are answered and the running average matches the condition.
+  const threshold = isPositiveThreshold;
+  const ratingBase = questions.filter((q) => (q.type ?? "RATING") === "RATING" && !q.showIf);
+  const allBaseRatingAnswered =
+    ratingBase.length > 0 &&
+    ratingBase.every((q) => isNumVal(answers[q.id]) && (answers[q.id] as number) > 0);
+  const baseScores = ratingBase.map((q) => answers[q.id]).filter(isNumVal) as number[];
+  const runningAvg = baseScores.length ? baseScores.reduce((a, b) => a + b, 0) / baseScores.length : null;
+  const condVisible = (q: Question) => {
+    if (!q.showIf) return true;
+    if (runningAvg === null || !allBaseRatingAnswered) return false;
+    if (q.showIf === "negative") return runningAvg < threshold;
+    if (q.showIf === "positive") return runningAvg >= threshold;
+    return true;
+  };
+  const visibleQuestions = questions.filter(condVisible);
+  const setAnswer = (id: string, val: number | string) =>
+    setAnswers((prev) => ({ ...prev, [id]: val }));
+  const isAnswered = (q: Question) => {
+    const v = answers[q.id];
+    const t = q.type ?? "RATING";
+    if (t === "TEXT") return true; // optional
+    if (t === "RATING") return isNumVal(v) && v > 0;
+    if (t === "NPS") return isNumVal(v);
+    return typeof v === "string" && v !== ""; // CHOICE / YESNO
+  };
+  const allAnswered = visibleQuestions.length > 0 && visibleQuestions.every(isAnswered);
+
   return (
     <div className="min-h-screen p-4 md:p-8 flex items-center justify-center" style={accentStyle}>
       <motion.div
@@ -456,7 +498,7 @@ export default function SurveyPage() {
               </div>
 
               <div className="space-y-10">
-                {questions.map((q) => (
+                {visibleQuestions.map((q) => (
                   <div key={q.id} className="space-y-4">
                     <p
                       id={`question-${q.id}`}
@@ -464,19 +506,18 @@ export default function SurveyPage() {
                     >
                       {q.text}
                     </p>
-                    <StarRating
-                      label={q.text}
-                      value={answers[q.id] || 0}
-                      onChange={(val) =>
-                        setAnswers((prev) => ({ ...prev, [q.id]: val }))
-                      }
+                    <QuestionInput
+                      question={q}
+                      value={answers[q.id]}
+                      onChange={(val) => setAnswer(q.id, val)}
+                      commentPlaceholder={texts.commentPlaceholder}
                     />
                   </div>
                 ))}
               </div>
 
               <button
-                disabled={!questions.every((q) => typeof answers[q.id] === "number")}
+                disabled={!allAnswered}
                 onClick={handleSubmitRating}
                 className="w-full py-5 premium-gradient text-white rounded-[1.5rem] font-black text-lg flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:grayscale transition-all shadow-2xl shadow-indigo-500/20"
               >
