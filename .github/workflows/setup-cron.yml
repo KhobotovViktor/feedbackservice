@@ -36,6 +36,7 @@ jobs:
               echo '15 */6 * * * /home/bitrix/feedback-cron.sh followup >> /home/bitrix/feedback-cron.log 2>&1' \
             ) | crontab - && \
             echo '=== crontab (feedback) ===' && crontab -l | grep feedback-cron.sh && \
+            echo '=== diag ===' && /home/bitrix/feedback-cron.sh diag || true; \
             echo '=== smoke: rating ===' && /home/bitrix/feedback-cron.sh rating || true; \
             echo '=== smoke: followup ===' && /home/bitrix/feedback-cron.sh followup || true; \
             echo done"
