@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Users, Plus, Trash2, Building2, Play, Power, Palette } from "lucide-react";
+import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Users, Plus, Trash2, Building2, Play, Power, Palette, Upload, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -933,14 +933,77 @@ export default function IntegrationPage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">URL логотипа</label>
-                <input
-                  type="text"
-                  placeholder="/logoalleya.png или https://…"
-                  className="w-full px-5 py-3 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-mono font-bold"
-                  value={settings.brand_logo_url}
-                  onChange={(e) => setSettings({ ...settings, brand_logo_url: e.target.value })}
-                />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{"Логотип"}</label>
+                <div className="flex items-start gap-3">
+                  {/* Preview — same chip we draw on the survey/print page so
+                      admins see exactly what the QR overlay will look like. */}
+                  <div className="w-16 h-16 shrink-0 rounded-2xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden p-1.5 shadow-sm">
+                    {settings.brand_logo_url ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={settings.brand_logo_url} alt="logo" className="max-w-full max-h-full object-contain" />
+                    ) : (
+                      <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest text-center leading-tight">{"Нет лого"}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <div className="flex flex-wrap gap-2">
+                      <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-black hover:bg-indigo-100 transition-colors">
+                        <Upload className="w-4 h-4" />
+                        {"Загрузить файл"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = ""; // allow re-picking the same file
+                            if (!file) return;
+                            // Soft cap: 300 KB. Bigger files inflate the
+                            // Settings row in DB and slow every page that
+                            // reads brand_logo_url. The default Alleya logo
+                            // is ~30 KB for comparison.
+                            const MAX = 300 * 1024;
+                            if (file.size > MAX) {
+                              alert(`Файл слишком большой (${Math.round(file.size / 1024)} КБ). Максимум: 300 КБ. Сожмите изображение в любом онлайн-конвертере.`);
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              const result = typeof reader.result === "string" ? reader.result : "";
+                              if (!result.startsWith("data:image/")) {
+                                alert("Не удалось прочитать файл как изображение.");
+                                return;
+                              }
+                              setSettings({ ...settings, brand_logo_url: result });
+                            };
+                            reader.onerror = () => alert("Ошибка чтения файла.");
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                      </label>
+                      {settings.brand_logo_url && (
+                        <button
+                          type="button"
+                          onClick={() => setSettings({ ...settings, brand_logo_url: "" })}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 hover:text-rose-500 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          {"Очистить"}
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="/logoalleya.png или https://…"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-xs font-mono font-bold"
+                      value={settings.brand_logo_url.startsWith("data:") ? "" : settings.brand_logo_url}
+                      onChange={(e) => setSettings({ ...settings, brand_logo_url: e.target.value })}
+                    />
+                    <p className="text-[10px] text-slate-400 leading-snug ml-1">
+                      {"Загрузите PNG/JPG/SVG (до 300 КБ) или вставьте прямую ссылку. Этот логотип отображается в центре QR-кода и на странице опроса."}
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Акцентный цвет</label>
