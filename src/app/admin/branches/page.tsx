@@ -29,6 +29,10 @@ interface Branch {
   yandexUrl: string | null;
   dgisUrl: string | null;
   googleUrl: string | null;
+  // Distinct from googleUrl: this is the search input the Apps Script syncer
+  // hands to Serper to identify *this exact* Google card. Prefer a CID URL
+  // like https://www.google.com/maps?cid=<…>.
+  googleSearchQuery?: string | null;
   externalId: string | null;
   templateId?: string | null;
   reviewStrategy?: string;
@@ -55,6 +59,7 @@ export default function BranchesPage() {
     yandexUrl: "",
     dgisUrl: "",
     googleUrl: "",
+    googleSearchQuery: "",
     externalId: "",
     templateId: "",
     reviewStrategy: "ALL",
@@ -135,6 +140,7 @@ export default function BranchesPage() {
       yandexUrl: branch.yandexUrl || "",
       dgisUrl: branch.dgisUrl || "",
       googleUrl: branch.googleUrl || "",
+      googleSearchQuery: branch.googleSearchQuery || "",
       externalId: branch.externalId || "",
       templateId: branch.templateId || "",
       reviewStrategy: branch.reviewStrategy || "ALL",
@@ -157,7 +163,7 @@ export default function BranchesPage() {
       if (res.ok) {
         setShowAdd(false);
         setEditingBranch(null);
-        setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", externalId: "", templateId: "", reviewStrategy: "ALL" });
+        setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", googleSearchQuery: "", externalId: "", templateId: "", reviewStrategy: "ALL" });
         fetchBranches();
       } else {
         // Surface backend rejection instead of silently doing nothing — the
@@ -203,7 +209,10 @@ export default function BranchesPage() {
       id: b.id,
       name: b.name,
       yandex: b.yandexUrl || '',
-      googleSearch: b.name,
+      // Prefer the explicit Google Maps CID URL when admins have filled it
+      // (auto-populated for the existing 15 branches via DB migration). The
+      // bare branch name is the fallback for new/un-set rows.
+      googleSearch: b.googleSearchQuery || b.name,
       dgis: b.dgisUrl || ''
     })));
 
@@ -408,7 +417,7 @@ export default function BranchesPage() {
           <button 
             onClick={() => {
               setEditingBranch(null);
-              setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", externalId: "", templateId: "", reviewStrategy: "ALL" });
+              setNewBranch({ name: "", city: "", yandexUrl: "", dgisUrl: "", googleUrl: "", googleSearchQuery: "", externalId: "", templateId: "", reviewStrategy: "ALL" });
               setShowAdd(true);
             }}
             className="px-4 md:px-6 py-3 premium-gradient text-white rounded-2xl font-black shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all text-xs md:text-sm flex-1 sm:flex-none"
@@ -487,13 +496,26 @@ export default function BranchesPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest ml-1">Google Maps</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="https://goo.gl/maps/..."
                   className="w-full px-5 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all text-sm font-bold"
                   value={newBranch.googleUrl}
                   onChange={e => setNewBranch({...newBranch, googleUrl: e.target.value})}
                 />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <label className="text-[10px] font-black text-blue-500 uppercase tracking-widest ml-1">{"Google: запрос для синка (CID)"}</label>
+                <input
+                  type="text"
+                  placeholder="https://www.google.com/maps?cid=1065849725105352623"
+                  className="w-full px-5 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all text-sm font-bold"
+                  value={newBranch.googleSearchQuery}
+                  onChange={e => setNewBranch({...newBranch, googleSearchQuery: e.target.value})}
+                />
+                <p className="text-[10px] text-slate-400 leading-snug ml-1">
+                  {"Точный идентификатор карточки для Apps Script — Serper по нему гарантированно находит именно вашу точку, а не похожую. Открыть карточку в Google Maps → «Поделиться» → ссылка содержит «cid=…», подставить в шаблон. Если пусто — синк ищет по названию (может найти не то)."}
+                </p>
               </div>
               <div className="space-y-2 sm:col-span-2 lg:col-span-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Шаблон вопросов</label>

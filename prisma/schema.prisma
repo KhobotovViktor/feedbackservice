@@ -15,6 +15,12 @@ model Branch {
   yandexUrl       String?
   dgisUrl         String?
   googleUrl       String?
+  // Distinct from googleUrl (which is the customer-facing review-page link).
+  // googleSearchQuery is the query/URL the Apps Script syncer hands to Serper
+  // to look up *this exact* Google Maps card — best filled with a CID URL
+  // (https://www.google.com/maps?cid=<…>) so Serper can't return a different
+  // business with a similar name. Falls back to the branch name when null.
+  googleSearchQuery String?
   externalId      String?
   templateId      String?
   // How to steer a happy customer's review. ALL = show every configured

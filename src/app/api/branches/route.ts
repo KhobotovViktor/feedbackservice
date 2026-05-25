@@ -14,6 +14,7 @@ export async function GET() {
         yandexUrl: true,
         dgisUrl: true,
         googleUrl: true,
+        googleSearchQuery: true,
         externalId: true,
         templateId: true,
         createdAt: true,
@@ -71,7 +72,7 @@ function normStrategy(v: unknown): ReviewStrategy {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, city, yandexUrl, dgisUrl, googleUrl, externalId, templateId, reviewStrategy } = body;
+    const { name, city, yandexUrl, dgisUrl, googleUrl, googleSearchQuery, externalId, templateId, reviewStrategy } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest) {
         yandexUrl: yandexUrl || null,
         dgisUrl: dgisUrl || null,
         googleUrl: googleUrl || null,
+        googleSearchQuery: googleSearchQuery || null,
         externalId: externalId || null,
         templateId: templateId || null,
         reviewStrategy: normStrategy(reviewStrategy),

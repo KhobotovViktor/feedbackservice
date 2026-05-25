@@ -11,7 +11,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { name, city, yandexUrl, dgisUrl, googleUrl, externalId, templateId, reviewStrategy } = body;
+    const { name, city, yandexUrl, dgisUrl, googleUrl, googleSearchQuery, externalId, templateId, reviewStrategy } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -25,6 +25,10 @@ export async function PATCH(
         yandexUrl,
         dgisUrl,
         googleUrl,
+        // PATCH semantics: only touch the field when the caller actually
+        // sent it. Otherwise we'd nuke the auto-populated CID URL whenever
+        // someone saves an unrelated edit through an older form payload.
+        ...(googleSearchQuery !== undefined ? { googleSearchQuery } : {}),
         externalId,
         templateId: templateId || null,
         ...(REVIEW_STRATEGIES.includes(reviewStrategy as ReviewStrategy)
