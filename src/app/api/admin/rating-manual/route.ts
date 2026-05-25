@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { checkRatingSanity } from "@/lib/rating-sanity";
 
 export async function GET() {
   return NextResponse.json({
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const { branchId, service, rating, reviewCount } = await req.json();
+    const { branchId, service, rating, reviewCount, force } = await req.json();
 
     if (!branchId || !service || rating === undefined || reviewCount === undefined) {
       return NextResponse.json({ error: "Missing data" }, { status: 400 });
@@ -37,6 +38,28 @@ export async function POST(req: Request) {
     const reviewCountVal = parseInt(reviewCount, 10);
     if (isNaN(ratingVal) || isNaN(reviewCountVal)) {
       return NextResponse.json({ error: "Invalid rating or reviewCount" }, { status: 400 });
+    }
+
+    // Same sanity gate as the bridge route. Pass `force: true` in the body to
+    // override (admins legitimately need this for one-off corrections).
+    if (!(force === true || force === "1" || force === 1)) {
+      const sanity = await checkRatingSanity(branchId, service, ratingVal, reviewCountVal);
+      if (!sanity.ok) {
+        console.warn(
+          `rating-manual: rejected ${service} sync for branch ${branchId}: ${sanity.reason}`
+        );
+        return NextResponse.json(
+          {
+            error: "Suspicious data rejected — likely wrong place.",
+            type: "SANITY_REJECTED",
+            reason: sanity.reason,
+            previous: sanity.previous,
+            received: { rating: ratingVal, reviewCount: reviewCountVal },
+            hint: "Resend with { force: true } to override.",
+          },
+          { status: 422 }
+        );
+      }
     }
 
     const record = await prisma.ratingHistory.create({
