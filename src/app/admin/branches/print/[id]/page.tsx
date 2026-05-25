@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Printer, Loader2 } from "lucide-react";
 import "./print.css";
+import { QrWithLogo } from "@/components/ui/qr-with-logo";
 
 export default function QRPrintPage() {
   const params = useParams();
   const id = params.id as string;
   const [branch, setBranch] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchBranch() {
@@ -26,6 +28,20 @@ export default function QRPrintPage() {
       }
     }
     fetchBranch();
+    // Brand logo for the centred overlay; null means the QR component
+    // falls back to /logoalleya.png.
+    (async () => {
+      try {
+        const r = await fetch("/api/settings");
+        if (!r.ok) return;
+        const s = await r.json();
+        if (s && typeof s.brand_logo_url === "string" && s.brand_logo_url.trim()) {
+          setBrandLogoUrl(s.brand_logo_url.trim());
+        }
+      } catch {
+        // silent — default logo will be used
+      }
+    })();
   }, [id]);
 
   if (loading) {
@@ -54,7 +70,6 @@ export default function QRPrintPage() {
       ? window.location.origin
       : process.env.NEXT_PUBLIC_APP_URL || "";
   const qrUrl = `${origin}/survey/qr?branchId=${branch.id}`;
-  const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(qrUrl)}`;
 
   return (
     <div className="min-h-screen bg-slate-50 py-12 md:py-20 flex flex-col items-center print:py-0 print:bg-white">
@@ -104,9 +119,11 @@ export default function QRPrintPage() {
 
           <div className="relative group p-6 bg-white rounded-[3rem] border-4 border-slate-100 shadow-inner">
              <div className="absolute inset-0 bg-indigo-500/5 blur-[60px] rounded-full" />
-             <img 
-               src={qrImage} 
-               alt="Branch QR" 
+             <QrWithLogo
+               value={qrUrl}
+               size={1024}
+               logoUrl={brandLogoUrl}
+               alt="Branch QR"
                className="w-64 h-64 relative z-10"
              />
           </div>

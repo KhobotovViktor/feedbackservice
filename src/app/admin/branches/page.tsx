@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
+import {
   QrCode, X, Copy, Download, LayoutDashboard, Star, Printer, Play,
-  TrendingUp, BarChart3, Plus, Loader2, Building2, MapPin, Trash2, 
+  TrendingUp, BarChart3, Plus, Loader2, Building2, MapPin, Trash2,
   Settings, Bot, ExternalLink, Zap
 } from "lucide-react";
+import { QrWithLogo } from "@/components/ui/qr-with-logo";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area
@@ -74,6 +75,13 @@ export default function BranchesPage() {
   const [serperKey, setSerperKey] = useState("");
   const [templates, setTemplates] = useState<QuestionTemplate[]>([]);
   const [selectedForQR, setSelectedForQR] = useState<Branch | null>(null);
+  // Brand-logo URL pulled from /api/settings (brand_logo_url). Falls through
+  // to /logoalleya.png inside the QR component when null/empty/blocked.
+  const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null);
+  // PNG data: URL of the currently rendered QR (with logo). Used by the
+  // download button — we hand out a real bitmap instead of a third-party
+  // URL so the file actually contains the centred logo.
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [selectedMetrics, setSelectedMetrics] = useState<Record<string, string>>({});
   // Public origin for QR codes / share links. Falls back to the build-time
   // NEXT_PUBLIC_APP_URL during SSR. NEVER hard-code a deploy-specific host
@@ -96,7 +104,25 @@ export default function BranchesPage() {
   useEffect(() => {
     fetchBranches();
     fetchTemplates();
+    // Pull the brand logo once on mount so the QR component already has it
+    // when the modal opens. Silent fallback to default logo on any error.
+    (async () => {
+      try {
+        const res = await fetch("/api/settings");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && typeof data.brand_logo_url === "string" && data.brand_logo_url.trim()) {
+          setBrandLogoUrl(data.brand_logo_url.trim());
+        }
+      } catch {
+        // ignore — QrWithLogo will use the bundled default logo
+      }
+    })();
   }, []);
+
+  // Clear cached PNG when the user picks a different branch so the download
+  // button never hands out a QR from a previous selection.
+  useEffect(() => { setQrDataUrl(null); }, [selectedForQR?.id]);
 
   const fetchTemplates = async () => {
     try {
@@ -993,10 +1019,13 @@ export default function BranchesPage() {
               </div>
 
               <div className="aspect-square glass border-white/60 rounded-[3rem] p-8 md:p-10 flex items-center justify-center shadow-inner relative z-10">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(`${baseUrl}/survey/qr?branchId=${selectedForQR.id}`)}`}
+                <QrWithLogo
+                  value={`${baseUrl}/survey/qr?branchId=${selectedForQR.id}`}
+                  size={1024}
+                  logoUrl={brandLogoUrl}
                   alt="Branch QR"
                   className="w-full h-full rounded-2xl shadow-sm"
+                  onReady={setQrDataUrl}
                 />
               </div>
 
@@ -1013,10 +1042,11 @@ export default function BranchesPage() {
                   Ссылка
                 </button>
                 <a
-                  href={`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(`${baseUrl}/survey/qr?branchId=${selectedForQR.id}`)}`}
-                  target="_blank"
+                  href={qrDataUrl || "#"}
                   download={`qr-${selectedForQR.name}.png`}
-                  className="flex items-center justify-center gap-3 px-6 py-4 premium-gradient text-white rounded-2xl font-black shadow-2xl shadow-indigo-500/20 hover:scale-[1.03] transition-all text-sm"
+                  aria-disabled={!qrDataUrl}
+                  onClick={(e) => { if (!qrDataUrl) e.preventDefault(); }}
+                  className={`flex items-center justify-center gap-3 px-6 py-4 premium-gradient text-white rounded-2xl font-black shadow-2xl shadow-indigo-500/20 transition-all text-sm ${qrDataUrl ? "hover:scale-[1.03]" : "opacity-50 cursor-not-allowed"}`}
                 >
                   <Download className="w-5 h-5" />
                   PNG
