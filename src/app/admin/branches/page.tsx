@@ -213,6 +213,11 @@ export default function BranchesPage() {
       // (auto-populated for the existing 15 branches via DB migration). The
       // bare branch name is the fallback for new/un-set rows.
       googleSearch: b.googleSearchQuery || b.name,
+      // Customer-facing review link. Surfaces to the fallback fetcher when
+      // Serper returned the right CID but no rating: a full /maps/place/...
+      // URL has a richer SSR body than the short ?cid= one, so the chance
+      // of finding rating/count via regex is higher.
+      googleUrl: b.googleUrl || '',
       dgis: b.dgisUrl || ''
     })));
 
