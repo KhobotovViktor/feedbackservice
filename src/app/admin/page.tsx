@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma, Branch, RatingHistory, SurveyResponse } from "@prisma/client";
 import type { LucideIcon } from "lucide-react";
-import { Star, MessageSquare, Users, TrendingUp, Eye, MousePointer2, AlertCircle, Building2 } from "lucide-react";
+import { Star, MessageSquare, Users, TrendingUp, Eye, MousePointer2, AlertCircle, Building2, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OverallMonitoring } from "@/components/dashboard/overall-monitoring";
 import { PeriodFilter } from "@/components/dashboard/period-filter";
@@ -119,6 +119,11 @@ export default async function AdminDashboard({
   // and local tests (dealId "TEST…").
   let crmAvg = 0;
   let crmCount = 0;
+  // CRM survey-link dispatches. One SentSurvey row per real B24 robot fire
+  // (race-safe @unique(dealId), test runs excluded), so count gives the exact
+  // number of links pushed into Open Channels / timeline / SMS fields.
+  let sentSurveyTotal = 0;
+  let prevSentTotal = 0;
   // Click breakdown per review service (YANDEX / 2GIS / GOOGLE).
   const clicksByTarget: Record<string, number> = { YANDEX: 0, "2GIS": 0, GOOGLE: 0 };
   // Per-branch analytics for the "По филиалам" block.
@@ -217,6 +222,16 @@ export default async function AdminDashboard({
         select: { createdAt: true, averageScore: true, tags: true },
         take: 5000,
       }),
+      // Total CRM-survey links sent in the period. SentSurvey has no branchId
+      // (the B24 robot doesn't know which branch attended the customer), so
+      // this is intentionally a network-wide metric — shown to managers as
+      // "по всей сети" in the card subtitle.
+      prisma.sentSurvey.count({
+        where: Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {},
+      }),
+      Object.keys(prevDateFilter).length > 0
+        ? prisma.sentSurvey.count({ where: { createdAt: prevDateFilter } })
+        : Promise.resolve(0),
     ]);
 
     totalResponses = results[0];
@@ -245,6 +260,8 @@ export default async function AdminDashboard({
       if (row.target in a.clicksByTarget) a.clicksByTarget[row.target] = row._count._all;
     }
     trendRows = results[11];
+    sentSurveyTotal = results[12];
+    prevSentTotal = results[13];
   } catch (err) {
     console.error("Dashboard data fetch error:", err);
   }
@@ -330,6 +347,14 @@ export default async function AdminDashboard({
   // Conversion calculations
   const openRate = totalViews > 0 ? Math.round((totalResponses / totalViews) * 100) : 0;
   const clickThroughRate = totalResponses > 0 ? Math.round((totalClicks / totalResponses) * 100) : 0;
+  // CRM dispatch metrics: % of links that turned into a passed survey, and
+  // period-over-period delta for the headline number.
+  const crmConversion = sentSurveyTotal > 0
+    ? Math.round((crmCount / sentSurveyTotal) * 100)
+    : 0;
+  const sentTrend = prevSentTotal > 0
+    ? Math.round(((sentSurveyTotal - prevSentTotal) / prevSentTotal) * 100)
+    : 0;
 
   // Aggregate history from all branches
   const allHistory = branchesRaw.flatMap((b) => b.ratingHistory);
@@ -489,7 +514,7 @@ export default async function AdminDashboard({
               </div>
             </div>
 
-            <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="p-6 rounded-[2rem] bg-indigo-50/50 border border-indigo-100/50">
                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">Лояльность сети</p>
                    <p className="text-3xl font-black text-indigo-600 tracking-tighter">{globalMean}</p>
@@ -515,6 +540,21 @@ export default async function AdminDashboard({
                       </p>
                    </div>
                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[40px] rounded-full group-hover:bg-indigo-500/20 transition-all" />
+                </div>
+                <div className="p-6 rounded-[2rem] bg-sky-50/50 border border-sky-100/50">
+                   <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-black text-sky-500 uppercase tracking-widest">Отправлено из CRM</p>
+                      <Send className="w-3.5 h-3.5 text-sky-400" />
+                   </div>
+                   <p className="text-3xl font-black text-sky-600 tracking-tighter font-display tabular-nums"><CountUp value={sentSurveyTotal} /></p>
+                   <p className="text-[9px] font-bold text-slate-400 mt-1">ссылок на опрос {accessibleBranchIds === null ? "" : "(по всей сети)"} • конверсия {crmConversion}%</p>
+                   <p className={cn(
+                     "text-[10px] font-bold mt-2 flex items-center gap-1",
+                     sentTrend >= 0 ? "text-emerald-500" : "text-rose-500"
+                   )}>
+                      <TrendingUp className={cn("w-3 h-3", sentTrend < 0 && "rotate-180")} />
+                      {sentTrend > 0 ? `+${sentTrend}%` : `${sentTrend}%`} к прошлому периоду
+                   </p>
                 </div>
                 <div className="p-6 rounded-[2rem] bg-emerald-50/50 border border-emerald-100/50">
                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Оценка из CRM</p>
