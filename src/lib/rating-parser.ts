@@ -27,8 +27,13 @@ export function parseRating(service: string, html: string): RatingResult {
       /rating-text"[^>]*>\s*([\d.,]+)\s*<\/span>/i,
     ];
     const countPatterns = [
-      /aria-label="\s*(\d[\d\s ]*)\s+оцен[а-я]*"/i,
+      // Anchor to .business-header-rating-view__text first — that's the only
+      // node that carries the *card's* rating count. Without the anchor the
+      // bare `aria-label="N оценок"` regex can grab an unrelated counter on
+      // the page (observed on the Vologda card: 2279 instead of ~909).
       /business-header-rating-view__text[^>]*aria-label="\s*(\d[\d\s ]*)\s+оцен/i,
+      /business-header-rating-view__text[^>]*>\s*(\d[\d\s ]*)\s+оцен/i,
+      /aria-label="\s*(\d[\d\s ]*)\s+оцен[а-я]*"/i,
       />\s*(\d[\d\s ]*)\s+оцен[а-я]*\s*</i,
       /"reviewCount"\s*:\s*"?(\d+)"?/i,
       /content="[^"]*?(\d+)\s+отзыв/i,

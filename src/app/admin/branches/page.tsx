@@ -330,7 +330,7 @@ export default function BranchesPage() {
       '          // .business-rating-badge-view__rating-text, а count — только',
       '          // в aria-label / тексте .business-header-rating-view__text.',
       '          const rMatch = html.match(/business-rating-badge-view__rating-text"[^>]*>\\s*([\\d.,]+)\\s*</i) || html.match(/rating-badge-view__rating-text"[^>]*>\\s*([\\d.,]+)\\s*</i) || html.match(/aria-label="\\s*Оценка\\s+([\\d.,]+)\\s+[Ии]з/i) || html.match(/"ratingValue"\\s*:\\s*"?([\\d.,]+)"?/i) || html.match(/itemprop="ratingValue"\\s+content="([\\d.,]+)"/i) || html.match(/rating-text"[^>]*>\\s*([\\d.,]+)\\s*<\\/span>/i);',
-      '          const cMatch = html.match(/aria-label="\\s*(\\d[\\d\\s]*)\\s+оцен[а-я]*"/i) || html.match(/business-header-rating-view__text[^>]*aria-label="\\s*(\\d[\\d\\s]*)\\s+оцен/i) || html.match(/>\\s*(\\d[\\d\\s]*)\\s+оцен[а-я]*\\s*</i) || html.match(/itemprop="reviewCount"\\s+content="(\\d+)"/i) || html.match(/"reviewCount"\\s*:\\s*"?(\\d+)"?/i) || html.match(/(\\d+)\\s+оцен/i);',
+      '          const cMatch = html.match(/business-header-rating-view__text[^>]*aria-label="\\s*(\\d[\\d\\s]*)\\s+оцен/i) || html.match(/business-header-rating-view__text[^>]*>\\s*(\\d[\\d\\s]*)\\s+оцен/i) || html.match(/aria-label="\\s*(\\d[\\d\\s]*)\\s+оцен[а-я]*"/i) || html.match(/>\\s*(\\d[\\d\\s]*)\\s+оцен[а-я]*\\s*</i) || html.match(/itemprop="reviewCount"\\s+content="(\\d+)"/i) || html.match(/"reviewCount"\\s*:\\s*"?(\\d+)"?/i) || html.match(/(\\d+)\\s+оцен/i);',
       '          if (rMatch) rating = parseFloat(rMatch[1].replace(",", "."));',
       '          if (cMatch) count = parseInt(cMatch[1].replace(/\\s/g, ""));',
       '          ',
