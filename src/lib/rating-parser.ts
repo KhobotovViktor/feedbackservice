@@ -11,23 +11,41 @@ export function parseRating(service: string, html: string): RatingResult {
   }
 
   if (service === "yandex") {
-    let wRating = html.match(/class=\"Rating-Value\">([\d,.]+)<\/div>/)?.[1] || 
-                  html.match(/\"ratingValue\":\s*\"([\d,.]+)\"/)?.[1] ||
-                  html.match(/rating-text\">([\d,.]+)<\/span>/)?.[1] ||
-                  html.match(/rating-badge-view__rating-text\">([\d,.]+)<\/span>/)?.[1];
+    // Patterns ordered from current Yandex orgpage DOM (May 2026) down to
+    // legacy / SSR / metadata fallbacks. Verified against a real network-shop
+    // card; the previous regex set missed the count node on these cards
+    // because they expose it as aria-label / inline text under
+    // .business-header-rating-view__text, not as the old .Rating-Count div.
+    const ratingPatterns = [
+      /business-rating-badge-view__rating-text"[^>]*>\s*([\d.,]+)\s*</i,
+      /rating-badge-view__rating-text"[^>]*>\s*([\d.,]+)\s*</i,
+      /aria-label="\s*Оценка\s+([\d.,]+)\s+[Ии]з/i,
+      /"ratingValue"\s*:\s*"?([\d.,]+)"?/i,
+      /content="[^"]*?([\d.,]+)\s*из\s*5/i,
+      /content="[^"]*?Рейтинг\s*([\d.,]+)/i,
+      /class="Rating-Value"[^>]*>\s*([\d.,]+)\s*</i,
+      /rating-text"[^>]*>\s*([\d.,]+)\s*<\/span>/i,
+    ];
+    const countPatterns = [
+      /aria-label="\s*(\d[\d\s ]*)\s+оцен[а-я]*"/i,
+      /business-header-rating-view__text[^>]*aria-label="\s*(\d[\d\s ]*)\s+оцен/i,
+      />\s*(\d[\d\s ]*)\s+оцен[а-я]*\s*</i,
+      /"reviewCount"\s*:\s*"?(\d+)"?/i,
+      /content="[^"]*?(\d+)\s+отзыв/i,
+      /content="[^"]*?([\d\s]+)\s+оценок/i,
+      /class="Rating-Count"[^>]*>[^<]*?(\d+)[^<]*?</i,
+      /(\d+)\s+оцен/i,
+    ];
 
-    let wCount = html.match(/class=\"Rating-Count\">[^<]*?(\d+)[^<]*?<\/div>/)?.[1] || 
-                 html.match(/\"reviewCount\":\s*\"(\d+)\"/)?.[1] ||
-                 html.match(/aria-label=\"(\d+)\s+оцен/)?.[1] ||
-                 html.match(/(\d+)\s+оцен/)?.[1];
-    
-    if (!wRating) {
-      const metaRating = html.match(/content=\"[^"]*?([\d,.]+)\s*из\s*5/i) || 
-                         html.match(/content=\"[^"]*?Рейтинг\s*([\d,.]+)/i);
-      const metaCount = html.match(/content=\"[^"]*?(\d+)\s+отзыв/i) ||
-                        html.match(/content=\"[^"]*?([\d\s]+)\s+оценок/i);
-      if (metaRating) wRating = metaRating[1];
-      if (metaCount) wCount = metaCount[1];
+    let wRating: string | undefined;
+    for (const p of ratingPatterns) {
+      const m = html.match(p);
+      if (m) { wRating = m[1]; break; }
+    }
+    let wCount: string | undefined;
+    for (const p of countPatterns) {
+      const m = html.match(p);
+      if (m) { wCount = m[1]; break; }
     }
 
     if (wRating && wCount) {
