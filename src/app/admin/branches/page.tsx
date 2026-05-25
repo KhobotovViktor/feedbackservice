@@ -1039,7 +1039,7 @@ export default function BranchesPage() {
                   className="flex items-center justify-center gap-3 px-6 py-4 glass text-slate-700 bg-white/40 border-white/80 rounded-2xl font-black hover:bg-white transition-all text-sm shadow-sm"
                 >
                   <Copy className="w-5 h-5" />
-                  Ссылка
+                  {"Ссылка на опрос"}
                 </button>
                 <a
                   href={qrDataUrl || "#"}
