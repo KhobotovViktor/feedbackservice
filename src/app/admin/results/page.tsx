@@ -174,13 +174,16 @@ export default async function ResultsPage({
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700 pb-12">
-      <div className="flex flex-col sm:flex-row gap-6 items-center justify-between">
-        <div className="text-center sm:text-left space-y-1">
+      <div className="flex flex-col xl:flex-row gap-6 xl:items-end xl:justify-between">
+        <div className="text-center xl:text-left space-y-1 shrink-0">
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter">Результаты</h1>
           <p className="text-slate-500 text-lg font-medium">История и анализ всех полученных отзывов</p>
         </div>
-        
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+
+        {/* Filter bar — wraps onto multiple lines so a long row of filters
+            never overflows the viewport on intermediate widths. Aligned to
+            the right on xl+ and centred otherwise. */}
+        <div className="flex flex-wrap items-center justify-center xl:justify-end gap-3 sm:gap-4 w-full xl:w-auto">
           {/* Clear Results Button */}
           <ClearResultsButton />
           {/* CSV export (respects current filters) */}
