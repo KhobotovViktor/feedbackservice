@@ -56,6 +56,13 @@ export default async function ResultsPage({
   // Complaint KPI counts across the current branch scope (independent of the
   // type/tag/complaint filters, so the summary shows the full picture).
   const complaintCounts = { NEW: 0, IN_PROGRESS: 0, RESOLVED: 0 };
+  // questionId → question text — lets the table render per-question scores
+  // ("Качество: 5, Поддержка: 5") instead of just the average.
+  const questionMap: Record<string, string> = {};
+  // dispatch dedupe-key → { createdAt, surveyUrl } — lets the table show
+  // how long it took the customer to fill the survey out, and the actual
+  // /s/<code> link that was sent.
+  const sentMap: Record<string, { createdAt: string; surveyUrl: string | null }> = {};
 
   try {
     // Branch scope (role + chosen branch filter), kept separate so the KPI
@@ -119,6 +126,11 @@ export default async function ResultsPage({
         where: { ...scopeWhere, complaintStatus: { not: null } },
         _count: { _all: true },
       }),
+      // Whole question catalogue — used to label per-question answers in the
+      // expandable details. The table currently shows ≤25 rows and we don't
+      // know which templates they belong to (responses don't carry the
+      // template id), so a single sweep is simpler than per-row lookups.
+      prisma.question.findMany({ select: { id: true, text: true } }),
     ]);
     responses = results[0];
     branches = results[1];
@@ -129,6 +141,27 @@ export default async function ResultsPage({
       const s = row.complaintStatus;
       if (s === "NEW" || s === "IN_PROGRESS" || s === "RESOLVED") {
         complaintCounts[s] = row._count._all;
+      }
+    }
+    for (const q of results[5]) questionMap[q.id] = q.text;
+
+    // Pull dispatch rows for the visible responses so the table can show
+    // (a) "Открыто через …" delay between robot fire and submission, and
+    // (b) the actual /s/<code> link that was sent. dedupe key in SentSurvey
+    // is "lead:<id>" for leads, plain "<id>" for deals — mirror that.
+    const dispatchKeys = responses.map((r) =>
+      r.entityType === "lead" ? `lead:${r.dealId}` : r.dealId
+    );
+    if (dispatchKeys.length > 0) {
+      const sentRows = await prisma.sentSurvey.findMany({
+        where: { dealId: { in: dispatchKeys } },
+        select: { dealId: true, createdAt: true, surveyUrl: true },
+      });
+      for (const s of sentRows) {
+        sentMap[s.dealId] = {
+          createdAt: s.createdAt.toISOString(),
+          surveyUrl: s.surveyUrl,
+        };
       }
     }
   } catch (err) {
@@ -243,7 +276,7 @@ export default async function ResultsPage({
         </div>
       ) : (
         <>
-          <ResultsTable responses={responses} portalUrl={portalUrl} />
+          <ResultsTable responses={responses} portalUrl={portalUrl} questionMap={questionMap} sentMap={sentMap} />
 
           {/* Server-side pagination — preserves active filters/sort */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">

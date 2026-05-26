@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Star, User, MessageCircle, TrendingUp, Trash2, Loader2, X, AlertCircle, ExternalLink, Phone, Clock, CheckCircle2 } from "lucide-react";
+import { Calendar, Star, User, MessageCircle, TrendingUp, Trash2, Loader2, X, AlertCircle, ExternalLink, Phone, Clock, CheckCircle2, Link2, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ComplaintStatus = "NEW" | "IN_PROGRESS" | "RESOLVED";
@@ -25,6 +25,41 @@ export interface ResultRow {
   // Close-the-loop fields.
   resolutionNote?: string | null;
   resolvedAt?: string | Date | null;
+  // Raw answer map { questionId: number | string | string[] }. Used together
+  // with the questionMap prop to render "Качество: 5 / Поддержка: 5".
+  answers?: unknown;
+}
+
+// Colour band for the overall score: emerald for excellent (≥ 4.5),
+// amber for ok (≥ 4.0), rose for problematic (< 4.0). Returned as an
+// object so callers can pin specific bits (e.g. just the text colour
+// vs. the full chip background) — keeps Tailwind classes statically
+// analysable for purge.
+function scoreBand(score: number): { text: string; chip: string; label: string } {
+  if (score >= 4.5) return { text: "text-emerald-600", chip: "text-emerald-600 bg-emerald-50 border-emerald-100", label: "Отлично" };
+  if (score >= 4.0) return { text: "text-amber-600", chip: "text-amber-600 bg-amber-50 border-amber-100", label: "Хорошо" };
+  return { text: "text-rose-600", chip: "text-rose-600 bg-rose-50 border-rose-100", label: "Требует внимания" };
+}
+
+// Compact "через 12 мин" / "через 3 ч" / "через 2 дн" for the gap between
+// dispatch and submission. Anything under a minute is "сразу".
+function delayText(from: string | Date, to: string | Date): string {
+  const ms = new Date(to).getTime() - new Date(from).getTime();
+  if (ms < 60_000) return "сразу";
+  const min = Math.floor(ms / 60_000);
+  if (min < 60) return `через ${min} мин`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `через ${h} ч`;
+  return `через ${Math.floor(h / 24)} дн`;
+}
+
+// Pretty-print an answer value — numbers as-is, arrays joined with comma,
+// the rest as plain string. Used in the per-question expanded block.
+function formatAnswer(v: unknown): string {
+  if (v == null) return "—";
+  if (Array.isArray(v)) return v.map((x) => String(x)).join(", ");
+  if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") return String(v);
+  return JSON.stringify(v);
 }
 
 // SLA thresholds (hours) past which an open complaint is flagged overdue.
@@ -115,9 +150,15 @@ function TagChips({ tags }: { tags?: string[] }) {
 export function ResultsTable({
   responses,
   portalUrl = "",
+  questionMap = {},
+  sentMap = {},
 }: {
   responses: ResultRow[];
   portalUrl?: string;
+  /** id вопроса → текст вопроса. Если пусто — детальные ответы не рендерим. */
+  questionMap?: Record<string, string>;
+  /** Ключ SentSurvey (для лидов — "lead:<id>", для сделок — "<id>") → метаданные отправки. */
+  sentMap?: Record<string, { createdAt: string; surveyUrl: string | null }>;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -308,7 +349,15 @@ export function ResultsTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white/40">
-            {responses.map((res) => (
+            {responses.map((res) => {
+              const sentKey = res.entityType === "lead" ? `lead:${res.dealId}` : res.dealId;
+              const sent = sentMap[sentKey];
+              const band = scoreBand(res.averageScore);
+              const answersObj =
+                res.answers && typeof res.answers === "object" && !Array.isArray(res.answers)
+                  ? (res.answers as Record<string, unknown>)
+                  : null;
+              return (
               <tr
                 key={res.id}
                 className={cn(
@@ -331,6 +380,11 @@ export function ResultsTable({
                     <div className="flex flex-col leading-tight">
                       <span className="text-xs font-black text-slate-900 whitespace-nowrap">{fmtDate(res.createdAt)}</span>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{fmtTime(res.createdAt)}</span>
+                      {sent && (
+                        <span className="text-[9px] font-bold text-indigo-500 mt-1 whitespace-nowrap">
+                          {delayText(sent.createdAt, res.createdAt)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </td>
@@ -356,21 +410,39 @@ export function ResultsTable({
                       <Phone className="w-3 h-3 shrink-0" /> {res.phone}
                     </a>
                   )}
-                  {crmLink(portalUrl, res) && (
-                    <a
-                      href={crmLink(portalUrl, res)!}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 mt-1 text-[9px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-colors"
-                    >
-                      <ExternalLink className="w-3 h-3" /> В Битрикс24
-                    </a>
-                  )}
+                  <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1">
+                    {crmLink(portalUrl, res) && (
+                      <a
+                        href={crmLink(portalUrl, res)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" /> В Битрикс24
+                      </a>
+                    )}
+                    {sent?.surveyUrl && (
+                      <a
+                        href={sent.surveyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[9px] font-black text-slate-400 hover:text-indigo-500 uppercase tracking-widest transition-colors"
+                        title="Открыть отправленную ссылку опроса"
+                      >
+                        <Link2 className="w-3 h-3" /> Ссылка опроса
+                      </a>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-6 text-center">
-                  <div className="flex items-center justify-center gap-1.5">
-                    <span className="font-black text-slate-900 text-xl tracking-tighter">{res.averageScore.toFixed(1)}</span>
-                    <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span className={cn("font-black text-xl tracking-tighter tabular-nums", band.text)}>{res.averageScore.toFixed(1)}</span>
+                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                    </div>
+                    <span className={cn("text-[9px] font-black px-2 py-0.5 rounded-md border uppercase tracking-widest", band.chip)}>
+                      {band.label}
+                    </span>
                   </div>
                 </td>
                 <td className="px-6 py-6">
@@ -386,9 +458,25 @@ export function ResultsTable({
                     <span className="text-slate-200 italic">Нет комментария</span>
                   )}
                   <TagChips tags={res.tags} />
+                  {answersObj && Object.keys(answersObj).length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <ListChecks className="w-3 h-3" /> {"Ответы по вопросам"}
+                      </p>
+                      {Object.entries(answersObj).map(([qid, val]) => (
+                        <div key={qid} className="flex items-start gap-2 text-[11px]">
+                          <span className="text-slate-500 font-medium leading-snug flex-1 break-words">
+                            {questionMap[qid] || qid}:
+                          </span>
+                          <span className="font-black text-slate-900 shrink-0 tabular-nums">{formatAnswer(val)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -396,7 +484,13 @@ export function ResultsTable({
       {/* Mobile / tablet cards */}
       <div className="xl:hidden grid grid-cols-1 md:grid-cols-2 gap-6">
         {responses.map((res) => {
-          const ratingColor = res.averageScore >= 4 ? "text-emerald-500 bg-emerald-50 border-emerald-100" : "text-rose-500 bg-rose-50 border-rose-100";
+          const sentKey = res.entityType === "lead" ? `lead:${res.dealId}` : res.dealId;
+          const sent = sentMap[sentKey];
+          const band = scoreBand(res.averageScore);
+          const answersObj =
+            res.answers && typeof res.answers === "object" && !Array.isArray(res.answers)
+              ? (res.answers as Record<string, unknown>)
+              : null;
           return (
             <div
               key={res.id}
@@ -418,6 +512,9 @@ export function ResultsTable({
                     <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                       <Calendar className="w-3.5 h-3.5" />
                       {fmtDate(res.createdAt)} {fmtTime(res.createdAt)}
+                      {sent && (
+                        <span className="text-indigo-500 normal-case">· {delayText(sent.createdAt, res.createdAt)}</span>
+                      )}
                     </div>
                     <div className={cn(
                       "text-[9px] font-black px-3 py-1 rounded-lg border uppercase tracking-widest inline-block",
@@ -431,9 +528,14 @@ export function ResultsTable({
                     </div>
                   </div>
                 </div>
-                <div className={cn("flex items-center gap-2 px-4 py-2 rounded-2xl border shadow-sm", ratingColor)}>
-                  <span className="font-black text-xl tracking-tighter">{res.averageScore.toFixed(1)}</span>
-                  <Star className="w-4 h-4 fill-current" />
+                <div className="flex flex-col items-end gap-1">
+                  <div className={cn("flex items-center gap-2 px-4 py-2 rounded-2xl border shadow-sm", band.chip)}>
+                    <span className="font-black text-xl tracking-tighter tabular-nums">{res.averageScore.toFixed(1)}</span>
+                    <Star className="w-4 h-4 fill-current" />
+                  </div>
+                  <span className={cn("text-[9px] font-black uppercase tracking-widest", band.text)}>
+                    {band.label}
+                  </span>
                 </div>
               </div>
 
@@ -456,16 +558,29 @@ export function ResultsTable({
                       </a>
                     )}
                   </div>
-                  {crmLink(portalUrl, res) && (
-                    <a
-                      href={crmLink(portalUrl, res)!}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-colors"
-                    >
-                      <ExternalLink className="w-3 h-3" /> Открыть в Битрикс24
-                    </a>
-                  )}
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+                    {crmLink(portalUrl, res) && (
+                      <a
+                        href={crmLink(portalUrl, res)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[10px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" /> {"Открыть в Битрикс24"}
+                      </a>
+                    )}
+                    {sent?.surveyUrl && (
+                      <a
+                        href={sent.surveyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-indigo-500 uppercase tracking-widest transition-colors"
+                        title="Открыть отправленную ссылку опроса"
+                      >
+                        <Link2 className="w-3 h-3" /> {"Ссылка опроса"}
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -477,7 +592,7 @@ export function ResultsTable({
               )}
 
               {res.comment && (
-                <div className="p-6 bg-indigo-50/20 rounded-3xl border border-indigo-100/20 mt-auto relative overflow-hidden">
+                <div className="p-6 bg-indigo-50/20 rounded-3xl border border-indigo-100/20 relative overflow-hidden mb-4">
                   <MessageCircle className="absolute -right-4 -bottom-4 w-24 h-24 text-indigo-500/5 rotate-12" />
                   <div className="relative z-10 flex gap-4 items-start">
                     <TrendingUp className="w-6 h-6 text-indigo-400 shrink-0 mt-1 opacity-40" />
@@ -485,6 +600,24 @@ export function ResultsTable({
                       <p className="text-base text-slate-700 font-bold leading-relaxed italic opacity-80">“{res.comment}”</p>
                       <TagChips tags={res.tags} />
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {answersObj && Object.keys(answersObj).length > 0 && (
+                <div className="mt-auto pt-4 border-t border-slate-100 space-y-2">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <ListChecks className="w-3.5 h-3.5" /> {"Ответы по вопросам"}
+                  </p>
+                  <div className="space-y-1.5">
+                    {Object.entries(answersObj).map(([qid, val]) => (
+                      <div key={qid} className="flex items-start gap-3 text-xs">
+                        <span className="text-slate-500 font-medium leading-snug flex-1 break-words">
+                          {questionMap[qid] || qid}:
+                        </span>
+                        <span className="font-black text-slate-900 shrink-0 tabular-nums">{formatAnswer(val)}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
