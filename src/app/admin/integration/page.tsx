@@ -907,8 +907,7 @@ export default function IntegrationPage() {
             </div>
 
             <p className="text-[11px] text-slate-500 font-medium leading-relaxed px-1">
-              Как страница опроса выглядит для клиента. Пустые поля используют значения по умолчанию
-              («Аллея Мебели», логотип и ссылка alleyadoma.ru).
+              {"Как страница опроса и шаблон печати QR-кода (в разделе «Филиалы») выглядят для клиента. Эти же название и логотип подставляются в шапку A4-листовки для печати. Пустые поля показывают встроенные значения по умолчанию."}
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -916,7 +915,7 @@ export default function IntegrationPage() {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Название бренда</label>
                 <input
                   type="text"
-                  placeholder="Аллея Мебели"
+                  placeholder={"Например: «Название компании»"}
                   className="w-full px-5 py-3 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-bold"
                   value={settings.brand_name}
                   onChange={(e) => setSettings({ ...settings, brand_name: e.target.value })}
@@ -926,7 +925,7 @@ export default function IntegrationPage() {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ссылка на сайт</label>
                 <input
                   type="text"
-                  placeholder="https://alleyadoma.ru"
+                  placeholder="https://example.com"
                   className="w-full px-5 py-3 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-bold"
                   value={settings.brand_site_url}
                   onChange={(e) => setSettings({ ...settings, brand_site_url: e.target.value })}
@@ -994,13 +993,13 @@ export default function IntegrationPage() {
                     </div>
                     <input
                       type="text"
-                      placeholder="/logoalleya.png или https://…"
+                      placeholder="/logo.png или https://…"
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-xs font-mono font-bold"
                       value={settings.brand_logo_url.startsWith("data:") ? "" : settings.brand_logo_url}
                       onChange={(e) => setSettings({ ...settings, brand_logo_url: e.target.value })}
                     />
                     <p className="text-[10px] text-slate-400 leading-snug ml-1">
-                      {"Загрузите PNG/JPG/SVG (до 300 КБ) или вставьте прямую ссылку. Этот логотип отображается в центре QR-кода и на странице опроса."}
+                      {"Загрузите PNG/JPG/SVG (до 300 КБ) или вставьте прямую ссылку. Этот логотип отображается в центре QR-кода, в шапке шаблона печати A4 и на странице опроса."}
                     </p>
                   </div>
                 </div>
@@ -1059,8 +1058,7 @@ export default function IntegrationPage() {
             </div>
 
             <p className="text-[10px] text-slate-400 font-medium px-1 leading-relaxed">
-              Логотип задаётся ссылкой (путь вроде <span className="font-mono">/logoalleya.png</span> или внешний <span className="font-mono">https://…</span>).
-              Цвет применяется к кнопкам опроса; пусто — стандартный фиолетовый градиент.
+              {"Логотип задаётся файлом через «Загрузить» либо ссылкой (путь вроде "}<span className="font-mono">/logo.png</span>{" или внешний "}<span className="font-mono">https://…</span>{"). Цвет применяется к кнопкам опроса; пусто — стандартный фиолетовый градиент."}
             </p>
           </div>
 

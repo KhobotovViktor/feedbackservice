@@ -11,7 +11,11 @@ export default function QRPrintPage() {
   const id = params.id as string;
   const [branch, setBranch] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  // Brand fields used in the A4 print header. Empty strings while we wait
+  // for /api/settings, then either the configured value or null (→ fall
+  // back to the bundled defaults visible in JSX).
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null);
+  const [brandName, setBrandName] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchBranch() {
@@ -28,8 +32,8 @@ export default function QRPrintPage() {
       }
     }
     fetchBranch();
-    // Brand logo for the centred overlay; null means the QR component
-    // falls back to /logoalleya.png.
+    // Branding for the print header + QR overlay. Failures are silent —
+    // built-in defaults render in their place.
     (async () => {
       try {
         const r = await fetch("/api/settings");
@@ -38,8 +42,11 @@ export default function QRPrintPage() {
         if (s && typeof s.brand_logo_url === "string" && s.brand_logo_url.trim()) {
           setBrandLogoUrl(s.brand_logo_url.trim());
         }
+        if (s && typeof s.brand_name === "string" && s.brand_name.trim()) {
+          setBrandName(s.brand_name.trim());
+        }
       } catch {
-        // silent — default logo will be used
+        // silent — defaults will be used
       }
     })();
   }, [id]);
@@ -90,14 +97,18 @@ export default function QRPrintPage() {
         {/* Decorative Top Accent */}
         <div className="w-full h-6 premium-gradient absolute top-0 left-0" />
 
-        {/* Brand Header */}
+        {/* Brand Header — value & logo pulled from Settings → Брендинг,
+            with built-in fallbacks for fresh installs. */}
         <div className="mt-6 mb-6 flex flex-col items-center gap-3">
           <div className="w-24 h-24 bg-white rounded-[2rem] shadow-lg border border-slate-50 p-2 flex items-center justify-center">
-             <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
+             {/* eslint-disable-next-line @next/next/no-img-element */}
+             <img src={brandLogoUrl || "/logoalleya.png"} alt="Logo" className="w-full h-full object-contain" />
           </div>
           <div className="text-center space-y-0.5">
             <p className="text-indigo-600 font-black uppercase tracking-[0.4em] text-[9px] leading-none">Сервис обратной связи</p>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-none uppercase">«Аллея Мебели»</h1>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-none uppercase">
+              {brandName ? `«${brandName}»` : "«Ваш бренд»"}
+            </h1>
           </div>
         </div>
 
