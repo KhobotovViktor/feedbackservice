@@ -42,7 +42,13 @@ export async function POST(req: NextRequest) {
     let responsibleName: string | null = payload.responsibleName || null;
     if (!responsibleName && dealId) {
       try {
-        const sent = await prisma.sentSurvey.findUnique({ where: { dealId } });
+        // SentSurvey.dealId mirrors the dedupe key used by the B24 webhook:
+        // leads are stored as "lead:<id>" to avoid id collisions with deals.
+        // Surveys' own dealId carries the bare id, so for leads we have to
+        // re-prefix when looking the dispatch row up.
+        const sentKey =
+          payload.entityType === "lead" ? `lead:${dealId}` : dealId;
+        const sent = await prisma.sentSurvey.findUnique({ where: { dealId: sentKey } });
         if (sent?.responsibleName) responsibleName = sent.responsibleName;
       } catch {
         // best-effort lookup — fall through to null

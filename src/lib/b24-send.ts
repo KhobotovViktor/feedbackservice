@@ -25,12 +25,21 @@ interface DispatchOpts {
   dealData?: DealLike | null;
 }
 
+/** Outcome of an Open Channel send attempt. `usedWebhookUrl` is set when at
+ *  least one Bitrix24 webhook actually accepted the message — the caller can
+ *  resolve it to a B24Webhook row to fill SentSurvey.responsibleName with the
+ *  operator who *actually* talked to the customer. */
+export interface DispatchResult {
+  ok: boolean;
+  usedWebhookUrl?: string;
+}
+
 async function sendToChatViaCandidates(
   sendCandidates: string[],
   type: string,
   id: string,
   message: string
-): Promise<boolean> {
+): Promise<DispatchResult> {
   const entityType = type.toLowerCase();
   console.log(`Searching for chat bound to ${entityType} ${id}...`);
   try {
@@ -45,7 +54,7 @@ async function sendToChatViaCandidates(
       console.log(
         `imopenlines.crm.chat.get error for ${entityType} ${id}: ${chatData.error_description || chatData.error}`
       );
-      return false;
+      return { ok: false };
     }
 
     let chats = chatData.result;
@@ -72,7 +81,7 @@ async function sendToChatViaCandidates(
           console.log(
             `im.message.add OK (msg id ${imData.result}) — user ${sendWebhookUserId} → chat ${chatId}`
           );
-          return true;
+          return { ok: true, usedWebhookUrl: sendBase };
         }
         if (imData.error === "CANCELED") {
           console.log(
@@ -102,7 +111,7 @@ async function sendToChatViaCandidates(
           console.log(
             `imopenlines.crm.message.add OK — user ${sendWebhookUserId} → chat ${chatId}`
           );
-          return true;
+          return { ok: true, usedWebhookUrl: sendBase };
         }
         console.log(
           `imopenlines.crm.message.add error: ${crmData.error_description || crmData.error || "unknown"}`
@@ -112,14 +121,16 @@ async function sendToChatViaCandidates(
   } catch (e) {
     console.error("Error in sendToChatViaCandidates:", e);
   }
-  return false;
+  return { ok: false };
 }
 
 /**
  * Resolve the OL chat for the entity (and its lead/contacts) and deliver the
- * message. Returns true if any candidate webhook accepted it.
+ * message. Returns whether the message was accepted, and which operator
+ * webhook ended up accepting it — that's the operator actually handling the
+ * dialog right now and the best signal of "who's responsible for this chat".
  */
-export async function dispatchSurveyToOpenChannel(opts: DispatchOpts): Promise<boolean> {
+export async function dispatchSurveyToOpenChannel(opts: DispatchOpts): Promise<DispatchResult> {
   const { baseUrl, sendCandidates, entityType, entityId, message } = opts;
   let dealData = opts.dealData ?? null;
 
@@ -183,20 +194,20 @@ export async function dispatchSurveyToOpenChannel(opts: DispatchOpts): Promise<b
   }
 
   // Try order: root entity → deal's lead → deal contacts → lead's contact.
-  let sent = await sendToChatViaCandidates(sendCandidates, entityType, entityId, message);
-  if (!sent && dealLeadId)
-    sent = await sendToChatViaCandidates(sendCandidates, "lead", dealLeadId, message);
-  if (!sent) {
+  let result = await sendToChatViaCandidates(sendCandidates, entityType, entityId, message);
+  if (!result.ok && dealLeadId)
+    result = await sendToChatViaCandidates(sendCandidates, "lead", dealLeadId, message);
+  if (!result.ok) {
     for (const cid of dealContactIds) {
-      sent = await sendToChatViaCandidates(sendCandidates, "contact", cid, message);
-      if (sent) break;
+      result = await sendToChatViaCandidates(sendCandidates, "contact", cid, message);
+      if (result.ok) break;
     }
   }
-  if (!sent && leadContactId && !dealContactIds.includes(leadContactId)) {
-    sent = await sendToChatViaCandidates(sendCandidates, "contact", leadContactId, message);
+  if (!result.ok && leadContactId && !dealContactIds.includes(leadContactId)) {
+    result = await sendToChatViaCandidates(sendCandidates, "contact", leadContactId, message);
   }
 
-  if (sent) console.log("SUCCESS: Message delivered to Open Channel.");
+  if (result.ok) console.log("SUCCESS: Message delivered to Open Channel.");
   else console.log("No Open Channel session accepted the message via any registered webhook.");
-  return sent;
+  return result;
 }

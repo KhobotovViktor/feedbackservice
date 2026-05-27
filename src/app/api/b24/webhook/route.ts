@@ -276,8 +276,13 @@ async function handleWebhook(req: NextRequest) {
 
       // 1. Send the survey link into the customer's Open Channel chat.
       // (Shared with the follow-up reminder job — see src/lib/b24-send.ts.)
+      // If the official ASSIGNED_BY user wasn't a registered per-operator
+      // webhook, the message gets delivered by whoever *is* registered and
+      // currently in the chat — that operator is the best fallback signal
+      // for "who is handling this conversation". Backfill SentSurvey with
+      // their displayName so the survey result shows them.
       try {
-        await dispatchSurveyToOpenChannel({
+        const dispatch = await dispatchSurveyToOpenChannel({
           baseUrl,
           sendCandidates,
           entityType,
@@ -285,6 +290,30 @@ async function handleWebhook(req: NextRequest) {
           message,
           dealData,
         });
+        if (
+          dispatch.ok &&
+          dispatch.usedWebhookUrl &&
+          !safeResponsibleName &&
+          !assignedWebhook?.displayName
+        ) {
+          const normalizedUsed = normalizeB24Url(dispatch.usedWebhookUrl);
+          const used = perOperatorWebhooks.find(
+            (w) => normalizeB24Url(w.url) === normalizedUsed
+          );
+          if (used?.displayName) {
+            try {
+              await prisma.sentSurvey.update({
+                where: { dealId: dedupKey },
+                data: { responsibleName: used.displayName },
+              });
+              console.log(
+                `responsibleName backfilled from dialog operator: ${used.displayName} (webhook user ${used.userId})`
+              );
+            } catch (e) {
+              console.error("Failed to backfill responsibleName from dialog operator:", e);
+            }
+          }
+        }
       } catch (ocError) {
         console.error("FATAL: Open Channel block error:", ocError);
       }
