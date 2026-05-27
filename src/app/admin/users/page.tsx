@@ -247,13 +247,25 @@ export default function UsersPage() {
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => remove(u.id, u.username)}
-                    className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
-                    title="Удалить"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {u.protected ? (
+                    /* Owner account: deletion is blocked server-side too,
+                       so we don't render the trash button at all and avoid
+                       a misleading "click for an error" affordance. */
+                    <div
+                      className="p-2 text-slate-300 shrink-0"
+                      title={"Аккаунт владельца защищён"}
+                    >
+                      <Lock className="w-4 h-4" />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => remove(u.id, u.username)}
+                      className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                      title="Удалить"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Role: locked to ADMIN for the owner, toggle for everyone else */}

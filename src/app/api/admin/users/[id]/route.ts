@@ -116,8 +116,32 @@ export async function DELETE(
     if (me.userId && id === me.userId) {
       return NextResponse.json({ error: "Нельзя удалить самого себя" }, { status: 400 });
     }
-    const target = await prisma.user.findUnique({ where: { id }, select: { role: true } });
-    if (target?.role === "ADMIN") {
+    const target = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: true, username: true },
+    });
+    if (!target) {
+      return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+    }
+
+    // Owner ("Хоботов Виктор") — same rule as in PATCH: locked from both
+    // role/password changes and deletion, even when another admin is the
+    // one trying to remove them. Keeps the panel from accidentally locking
+    // everyone out of the original account.
+    const first = await prisma.user.findFirst({
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    const protectedOwner =
+      target.id === first?.id || /хоботов|hobotov/i.test(target.username);
+    if (protectedOwner) {
+      return NextResponse.json(
+        { error: "Аккаунт владельца защищён от удаления." },
+        { status: 400 }
+      );
+    }
+
+    if (target.role === "ADMIN") {
       const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
       if (adminCount <= 1) {
         return NextResponse.json(
