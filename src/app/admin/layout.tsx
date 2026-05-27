@@ -18,6 +18,12 @@ export default function AdminLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [role, setRole] = useState<"ADMIN" | "MANAGER" | null>(null);
+  // Branding for the sidebar header / mobile header. Falls back to the
+  // bundled defaults so a fresh install still has a recognisable logo.
+  const DEFAULT_LOGO = "/logoalleya.png";
+  const DEFAULT_NAME = "Сервис обратной связи";
+  const [brandLogoUrl, setBrandLogoUrl] = useState<string>(DEFAULT_LOGO);
+  const [brandName, setBrandName] = useState<string>(DEFAULT_NAME);
 
   // Close sidebar on mobile when navigating
   useEffect(() => {
@@ -30,6 +36,25 @@ export default function AdminLayout({
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setRole(d?.role === "MANAGER" ? "MANAGER" : "ADMIN"))
       .catch(() => setRole("ADMIN"));
+  }, []);
+
+  // Pull the configured brand (name + logo URL or data: URL) so the sidebar
+  // matches what the customer sees on the survey page. Silent fallback to
+  // the default Alleya bundle on any error.
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (s && typeof s.brand_logo_url === "string" && s.brand_logo_url.trim()) {
+          setBrandLogoUrl(s.brand_logo_url.trim());
+        }
+        if (s && typeof s.brand_name === "string" && s.brand_name.trim()) {
+          setBrandName(s.brand_name.trim());
+        }
+      })
+      .catch(() => {
+        // already on defaults
+      });
   }, []);
 
   const handleLogout = async () => {
@@ -68,10 +93,11 @@ export default function AdminLayout({
         <div className="glass rounded-2xl p-4 flex items-center justify-between border-white/40 shadow-xl">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg p-1">
-              <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={brandLogoUrl} alt="Logo" className="w-full h-full object-contain" />
             </div>
             <div className="flex flex-col">
-              <span className="font-black text-sm tracking-tight leading-none text-slate-900">Аллея Мебели</span>
+              <span className="font-black text-sm tracking-tight leading-none text-slate-900">{brandName}</span>
               <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest mt-0.5">Feedback Service</span>
             </div>
           </div>
@@ -88,8 +114,9 @@ export default function AdminLayout({
       <nav className="fixed left-8 top-1/2 -translate-y-1/2 z-50 hidden lg:block">
         <div className="glass-dark rounded-[2.5rem] p-3 flex flex-col gap-3 shadow-2xl border-white/5">
           <div className="py-4 mb-2 flex justify-center">
-             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg transform -rotate-6 shrink-0 p-1.5 border border-white/10">
-                <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
+             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg transform -rotate-6 shrink-0 p-1.5 border border-white/10" title={brandName}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={brandLogoUrl} alt="Logo" className="w-full h-full object-contain" />
              </div>
           </div>
           {navItems.map((item) => {
@@ -147,10 +174,11 @@ export default function AdminLayout({
             >
               <div className="flex items-center gap-4 mb-10 px-4">
                 <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-xl p-1.5">
-                  <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={brandLogoUrl} alt="Logo" className="w-full h-full object-contain" />
                 </div>
-                <div className="flex flex-col">
-                  <span className="font-black text-xl text-white tracking-tight leading-none">Аллея Мебели</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-black text-xl text-white tracking-tight leading-none truncate">{brandName}</span>
                   <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mt-1">Feedback Service</span>
                 </div>
               </div>
