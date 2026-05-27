@@ -24,6 +24,8 @@ export default function IntegrationPage() {
     brand_logo_url: "",
     brand_site_url: "",
     brand_accent: "",
+    brand_company_full: "",
+    brand_privacy_contact: "",
     telegram_bot_token: "",
     telegram_chat_id: "",
   });
@@ -84,6 +86,8 @@ export default function IntegrationPage() {
           brand_logo_url: settingsData.brand_logo_url || "",
           brand_site_url: settingsData.brand_site_url || "",
           brand_accent: settingsData.brand_accent || "",
+          brand_company_full: settingsData.brand_company_full || "",
+          brand_privacy_contact: settingsData.brand_privacy_contact || "",
           telegram_bot_token: settingsData.telegram_bot_token || "",
           telegram_chat_id: settingsData.telegram_chat_id || "",
         });
@@ -269,6 +273,8 @@ export default function IntegrationPage() {
           brand_logo_url: settings.brand_logo_url,
           brand_site_url: settings.brand_site_url,
           brand_accent: settings.brand_accent,
+          brand_company_full: settings.brand_company_full,
+          brand_privacy_contact: settings.brand_privacy_contact,
         }),
       });
       setBrandStatus(res.ok ? "success" : "error");
@@ -1031,6 +1037,32 @@ export default function IntegrationPage() {
                     </button>
                   )}
                 </div>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{"Полное юридическое название"}</label>
+                <input
+                  type="text"
+                  placeholder={"Например: ООО «Название компании», ИНН 1234567890"}
+                  className="w-full px-5 py-3 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-bold"
+                  value={settings.brand_company_full}
+                  onChange={(e) => setSettings({ ...settings, brand_company_full: e.target.value })}
+                />
+                <p className="text-[10px] text-slate-400 leading-snug ml-1">
+                  {"Используется на страницах «Политика конфиденциальности» и «Пользовательское соглашение» как «Оператор», а также в подвале шаблона печати A4."}
+                </p>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{"Контакт по персональным данным"}</label>
+                <input
+                  type="text"
+                  placeholder={"Например: privacy@example.com или +7 (000) 000-00-00"}
+                  className="w-full px-5 py-3 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all text-sm font-bold"
+                  value={settings.brand_privacy_contact}
+                  onChange={(e) => setSettings({ ...settings, brand_privacy_contact: e.target.value })}
+                />
+                <p className="text-[10px] text-slate-400 leading-snug ml-1">
+                  {"Адрес или телефон, по которому клиент может направить запрос про обработку персональных данных. Показывается на странице «Политика конфиденциальности»."}
+                </p>
               </div>
             </div>
 

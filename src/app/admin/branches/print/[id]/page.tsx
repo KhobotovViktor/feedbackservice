@@ -154,7 +154,7 @@ export default function QRPrintPage() {
         {/* Brand Footer */}
         <div className="mt-auto mb-4 w-full flex flex-col items-center gap-2 opacity-50">
            <div className="h-px bg-slate-200 w-1/5" />
-           <p className="font-black text-xs text-slate-400 tracking-tighter uppercase">alleya-feedback</p>
+           <p className="font-black text-xs text-slate-400 tracking-tighter uppercase">{brandName || "Сервис обратной связи"}</p>
         </div>
 
         {/* Decorative Bottom Accent */}

@@ -1,14 +1,61 @@
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { prisma } from "@/lib/prisma";
 
-export default function PrivacyPage() {
+// Pull the configured branding so the Operator name, contact and host-domain
+// references in the privacy text reflect whatever organisation is running
+// this install. The Settings table is small and tied to indexes, so this is
+// cheap to read on every page hit.
+async function loadBranding() {
+  let brandName = "сервиса обратной связи";
+  let companyFull = "";
+  let privacyContact = "";
+  let siteHost = "";
+  try {
+    const rows = await prisma.settings.findMany({
+      where: {
+        key: {
+          in: ["brand_name", "brand_company_full", "brand_privacy_contact", "brand_site_url"],
+        },
+      },
+    });
+    for (const r of rows) {
+      const v = (r.value || "").trim();
+      if (!v) continue;
+      if (r.key === "brand_name") brandName = v;
+      else if (r.key === "brand_company_full") companyFull = v;
+      else if (r.key === "brand_privacy_contact") privacyContact = v;
+      else if (r.key === "brand_site_url") {
+        try {
+          siteHost = new URL(v).host;
+        } catch {
+          siteHost = v.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+        }
+      }
+    }
+  } catch {
+    // Fresh installs / DB unreachable → use the generic copy below.
+  }
+  return { brandName, companyFull, privacyContact, siteHost };
+}
+
+export default async function PrivacyPage() {
+  const { brandName, companyFull, privacyContact, siteHost } = await loadBranding();
+  // Show only the company name in italic blocks where it'd otherwise be
+  // empty quotes. Falls through to the generic brandName.
+  const operator = companyFull || brandName;
+  const goalSubject = companyFull || brandName;
+  const finalContact = privacyContact
+    ? `по адресу ${privacyContact}`
+    : "по официальным контактам, указанным на сайте";
+
   return (
     <div className="min-h-screen p-6 md:p-12 relative overflow-hidden">
       <div className="mesh-gradient" />
-      
+
       <main className="max-w-4xl mx-auto relative z-10 animate-in fade-in slide-in-from-bottom-5 duration-700">
-        <Link 
-          href="/login" 
+        <Link
+          href="/login"
           className="inline-flex items-center gap-2 text-indigo-600 font-bold mb-12 hover:gap-4 transition-all"
         >
           <ArrowLeft size={20} />
@@ -30,7 +77,7 @@ export default function PrivacyPage() {
             <section className="space-y-4">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">1. Общие положения</h2>
               <p>
-                Настоящая политика обработки персональных данных составлена в соответствии с требованиями Федерального закона от 27.07.2006. №152-ФЗ «О персональных данных» и определяет порядок обработки персональных данных и меры по обеспечению их безопасности в сервисе «Аллея Фидбек» (далее — Оператор).
+                {`Настоящая политика обработки персональных данных составлена в соответствии с требованиями Федерального закона от 27.07.2006 № 152-ФЗ «О персональных данных» и определяет порядок обработки персональных данных и меры по обеспечению их безопасности в сервисе ${operator} (далее — Оператор).`}
               </p>
             </section>
 
@@ -39,7 +86,7 @@ export default function PrivacyPage() {
               <p>Оператор может обрабатывать следующие персональные данные, которые пользователь добровольно вводит в форму обратной связи:</p>
               <ul className="list-disc pl-6 space-y-2 marker:text-indigo-500">
                 <li>Имя (для обращения к клиенту);</li>
-                <li>Номер телефона или Адрес электронной почты (для предоставления ответа на отзыв);</li>
+                <li>Номер телефона или адрес электронной почты (для предоставления ответа на отзыв);</li>
                 <li>Текст отзыва и информация о заказе.</li>
               </ul>
             </section>
@@ -47,39 +94,39 @@ export default function PrivacyPage() {
             <section className="space-y-4">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">3. Цели обработки данных</h2>
               <p>
-                Цель обработки персональных данных пользователя — качественное обслуживание клиентов компании «Аллея Мебели», сбор обратной связи о работе сервиса и разрешение спорных ситуаций.
+                {`Цель обработки персональных данных пользователя — качественное обслуживание клиентов компании ${goalSubject}, сбор обратной связи о работе сервиса и разрешение спорных ситуаций.`}
               </p>
             </section>
 
             <section className="space-y-4">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">4. Правовые основания</h2>
               <p>
-                Оператор обрабатывает персональные данные пользователя только в случае их заполнения и/или отправки пользователем самостоятельно через специальные формы, расположенные на сайте feedback.alleyadoma.ru. Отправляя данные, пользователь выражает свое согласие с данной Политикой.
+                {`Оператор обрабатывает персональные данные пользователя только в случае их заполнения и/или отправки пользователем самостоятельно через специальные формы, расположенные на сайте${siteHost ? ` ${siteHost}` : ""}. Отправляя данные, пользователь выражает своё согласие с данной Политикой.`}
               </p>
             </section>
 
             <section className="space-y-4">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">5. Порядок сбора и передачи данных</h2>
-              <p>Безопасность персональных данных обеспечивается путем реализации правовых, организационных и технических мер:</p>
+              <p>Безопасность персональных данных обеспечивается путём реализации правовых, организационных и технических мер:</p>
               <ul className="list-disc pl-6 space-y-4 marker:text-indigo-500">
-                <li>Использование защищенного протокола передачи данных HTTPS.</li>
+                <li>Использование защищённого протокола передачи данных HTTPS.</li>
                 <li>Данные не передаются третьим лицам, за исключением случаев, связанных с исполнением действующего законодательства.</li>
-                <li>Срок обработки персональных данных является неограниченным. Пользователь может в любой момент отозвать свое согласие, направив уведомление Оператору.</li>
+                <li>Срок обработки персональных данных является неограниченным. Пользователь может в любой момент отозвать своё согласие, направив уведомление Оператору.</li>
               </ul>
             </section>
 
             <section className="space-y-4">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">6. Заключительные положения</h2>
               <p>
-                Пользователь может получить любые разъяснения по интересующим вопросам, касающимся обработки его персональных данных, обратившись к Оператору через форму на данном сайте или по официальным контактам компании «Аллея Мебели».
+                {`Пользователь может получить любые разъяснения по интересующим вопросам, касающимся обработки его персональных данных, обратившись к Оператору через форму на данном сайте или ${finalContact}.`}
               </p>
             </section>
           </div>
 
           <div className="pt-12 border-t border-indigo-100/30 flex flex-col items-center gap-6">
-            <p className="text-slate-400 text-sm font-bold">© 2026 ИП Шевелёв Е.Н.</p>
-            <Link 
-              href="/login" 
+            <p className="text-slate-400 text-sm font-bold">{`© ${new Date().getFullYear()} ${operator}`}</p>
+            <Link
+              href="/login"
               className="px-8 py-4 premium-gradient text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-indigo-500/20 hover:scale-105 transition-transform"
             >
               Вернуться на главную

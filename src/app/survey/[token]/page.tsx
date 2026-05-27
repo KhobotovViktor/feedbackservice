@@ -19,16 +19,17 @@ interface Question {
 const isNumVal = (v: unknown): v is number => typeof v === "number" && !isNaN(v);
 
 const DEFAULT_QUESTIONS: Question[] = [
-  { id: "1", text: "Как вы оцениваете качество обслуживания в “Аллея Мебели”?" },
+  { id: "1", text: "Как вы оцениваете качество обслуживания?" },
   { id: "2", text: "Оцените, пожалуйста, работу сотрудника службы поддержки." },
 ];
 
 // Survey-page branding — overridable from Settings → «Интеграция».
-// Falls back to these defaults so existing deployments look unchanged.
+// Falls back to these defaults for fresh installs; the QR / login / nav
+// pages share the same /logoalleya.png file as a built-in placeholder.
 const DEFAULT_BRAND = {
-  name: "Аллея Мебели",
+  name: "Сервис обратной связи",
   logoUrl: "/logoalleya.png",
-  siteUrl: "https://alleyadoma.ru",
+  siteUrl: "",
   accent: "",
 };
 

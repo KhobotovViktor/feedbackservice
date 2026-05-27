@@ -44,6 +44,15 @@ const ALLOWED_KEYS = [
   "brand_logo_url",
   "brand_site_url",
   "brand_accent",
+  // Legal-side branding for footers / Privacy / Terms pages.
+  //   brand_company_full — full legal name with org type & details
+  //     (e.g. "ООО «Компания», ИНН 1234567890") — shows up as the
+  //     "Оператор" in the privacy/terms texts and in printed leaflets.
+  //   brand_privacy_contact — public contact for data-processing
+  //     requests (email / phone / address). Substituted into the
+  //     privacy policy and the terms-of-service page.
+  "brand_company_full",
+  "brand_privacy_contact",
   // Telegram channel for negative-feedback alerts.
   "telegram_bot_token",
   "telegram_chat_id",

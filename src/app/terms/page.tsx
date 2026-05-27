@@ -1,11 +1,44 @@
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { prisma } from "@/lib/prisma";
 
-export default function TermsPage() {
+// Pull the configured branding so the Service/Operator references reflect
+// whatever organisation runs this install. Cheap (small key→value table).
+async function loadBranding() {
+  let brandName = "сервис обратной связи";
+  let companyFull = "";
+  let siteHost = "";
+  try {
+    const rows = await prisma.settings.findMany({
+      where: { key: { in: ["brand_name", "brand_company_full", "brand_site_url"] } },
+    });
+    for (const r of rows) {
+      const v = (r.value || "").trim();
+      if (!v) continue;
+      if (r.key === "brand_name") brandName = v;
+      else if (r.key === "brand_company_full") companyFull = v;
+      else if (r.key === "brand_site_url") {
+        try {
+          siteHost = new URL(v).host;
+        } catch {
+          siteHost = v.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+        }
+      }
+    }
+  } catch {
+    // generic copy below
+  }
+  return { brandName, companyFull, siteHost };
+}
+
+export default async function TermsPage() {
+  const { brandName, companyFull, siteHost } = await loadBranding();
+  const operator = companyFull || brandName;
+
   return (
     <div className="min-h-screen bg-white text-slate-900 py-16 px-6 md:py-24 animate-in fade-in duration-700">
       <div className="max-w-3xl mx-auto space-y-12">
-        <Link 
+        <Link
           href="/login"
           className="inline-flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors font-bold text-sm group"
         >
@@ -27,18 +60,18 @@ export default function TermsPage() {
             <p>
               В настоящем Соглашении используются следующие термины:
               <br />
-              <b>Сервис</b> — программный комплекс «Аллея Фидбек», расположенный по адресу feedback.alleyadoma.ru.
+              <b>Сервис</b> — {`программный комплекс «${brandName}»${siteHost ? `, расположенный по адресу ${siteHost}` : ""}.`}
               <br />
               <b>Пользователь</b> — любое физическое лицо, использующее интерфейс Сервиса для отправки отзыва.
               <br />
-              <b>Оператор</b> — администрация сети «Аллея Мебели», ответственная за обработку полученных данных.
+              <b>Оператор</b> — {`${operator}, ответственный за обработку полученных данных.`}
             </p>
           </section>
 
           <section className="space-y-4">
             <h2 className="text-2xl font-black text-slate-900 tracking-tight">2. Предмет соглашения</h2>
             <p>
-              Сервис предоставляет Пользователю возможность оставить добровольный и анонимный (или персонализированный, по желанию) отзыв о качестве обслуживания в филиалах «Аллея Мебели».
+              {`Сервис предоставляет Пользователю возможность оставить добровольный и анонимный (или персонализированный, по желанию) отзыв о качестве обслуживания у Оператора${companyFull ? "" : ` (${brandName})`}.`}
             </p>
           </section>
 
@@ -68,7 +101,7 @@ export default function TermsPage() {
         </div>
 
         <div className="pt-12 border-t border-slate-100 flex flex-col items-center gap-6">
-           <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Аллея Мебели © {new Date().getFullYear()}</p>
+           <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">{`${operator} © ${new Date().getFullYear()}`}</p>
         </div>
       </div>
     </div>

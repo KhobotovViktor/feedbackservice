@@ -275,10 +275,15 @@ export async function POST(req: NextRequest) {
 
           // 1. Quality of service
           if (settingsMap.b24_field_quality) {
+            // Match the "service quality" question by keyword in any
+            // language/branding — the bare "качество" / "quality" /
+            // "обслуживания" tokens are reliable, brand name in the text
+            // would just over-fit to one organisation's wording.
             const q = questions.find(
               (q) =>
                 q.text.toLowerCase().includes("качество обслуживания") ||
-                q.text.toLowerCase().includes("аллея мебели")
+                q.text.toLowerCase().includes("качество") ||
+                q.text.toLowerCase().includes("quality")
             );
             const qv = q ? answersMap[q.id] : undefined;
             const q0v = questions[0] ? answersMap[questions[0].id] : undefined;

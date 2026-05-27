@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Lock, User, Loader2, AlertCircle } from "lucide-react";
@@ -11,7 +11,27 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Brand fields pulled from Settings → Брендинг so the login card shows
+  // the configured logo and company name instead of the bundled defaults.
+  const [brandLogoUrl, setBrandLogoUrl] = useState<string>("/logoalleya.png");
+  const [brandName, setBrandName] = useState<string>("Сервис обратной связи");
   const router = useRouter();
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (s && typeof s.brand_logo_url === "string" && s.brand_logo_url.trim()) {
+          setBrandLogoUrl(s.brand_logo_url.trim());
+        }
+        if (s && typeof s.brand_name === "string" && s.brand_name.trim()) {
+          setBrandName(s.brand_name.trim());
+        }
+      })
+      .catch(() => {
+        // ignore — defaults remain
+      });
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,11 +75,12 @@ export default function LoginPage() {
           <div className="relative z-10 space-y-8">
             <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto shadow-xl shadow-indigo-100 border border-slate-50 overflow-hidden p-2">
-                <img src="/logoalleya.png" alt="Logo" className="w-full h-full object-contain" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={brandLogoUrl} alt="Logo" className="w-full h-full object-contain" />
               </div>
               <div className="space-y-1">
                 <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px] leading-none mb-1">Сервис обратной связи</p>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none">«Аллея Мебели»</h1>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none break-words">{`«${brandName}»`}</h1>
               </div>
             </div>
 

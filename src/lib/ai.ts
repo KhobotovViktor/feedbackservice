@@ -47,6 +47,24 @@ async function callClaude(system: string, user: string, maxTokens: number): Prom
 }
 
 /**
+ * Read the configured brand name from Settings, with a generic fallback —
+ * we plug it into AI system prompts so the model has business context but
+ * we don't hard-code any particular organisation. Cheap (small table,
+ * single round-trip); safe to call per request.
+ */
+async function getBrandName(): Promise<string> {
+  try {
+    const { prisma } = await import("./prisma");
+    const row = await prisma.settings.findUnique({ where: { key: "brand_name" } });
+    const v = row?.value?.trim();
+    if (v) return v;
+  } catch {
+    // ignore — fall back below
+  }
+  return "клиентский сервис";
+}
+
+/**
  * Classify a single comment into zero or more tags from AI_TAGS.
  * Returns [] for empty input, when AI is off, or on any failure.
  */
@@ -54,8 +72,9 @@ export async function tagComment(comment: string): Promise<AiTag[]> {
   const text = (comment || "").trim();
   if (!text || !aiConfigured()) return [];
 
+  const brand = await getBrandName();
   const system =
-    `Ты классифицируешь отзывы клиентов мебельного магазина «Аллея Мебели». ` +
+    `Ты классифицируешь отзывы клиентов организации «${brand}». ` +
     `Доступные теги: ${AI_TAGS.join(", ")}. ` +
     `Верни ТОЛЬКО JSON-массив подходящих тегов из этого списка (можно несколько, можно один). ` +
     `Если ни один тег не подходит — верни []. Никакого текста кроме JSON-массива.`;
@@ -89,8 +108,9 @@ export async function summarizeProblems(comments: string[]): Promise<string> {
   // Cap input so we stay well within token limits.
   const joined = cleaned.slice(0, 300).map((c, i) => `${i + 1}. ${c}`).join("\n").slice(0, 14000);
 
+  const brand = await getBrandName();
   const system =
-    `Ты — аналитик клиентского опыта мебельного магазина «Аллея Мебели». ` +
+    `Ты — аналитик клиентского опыта организации «${brand}». ` +
     `На основе списка комментариев клиентов выдели ТОП-3 проблемы за период. ` +
     `Ответ строго на русском, в виде маркированного списка из не более чем 3 пунктов. ` +
     `Каждый пункт: суть проблемы и примерно сколько раз она встречается. ` +

@@ -598,7 +598,7 @@ export default function BranchesPage() {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Название</label>
                 <input 
                   type="text" 
-                  placeholder="Напр: Аллея Мебели Глобус"
+                  placeholder={"Например: «Магазин, г. Москва»"}
                   className="w-full px-5 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-bold"
                   value={newBranch.name}
                   onChange={e => setNewBranch({...newBranch, name: e.target.value})}
