@@ -169,7 +169,7 @@ export default function SurveyPage() {
         // settings fetch failure abort the whole init.
         let sData: Record<string, string> = {};
         try {
-          const sRes = await fetch("/api/settings");
+          const sRes = await fetch("/api/public-settings");
           if (sRes.ok) sData = await sRes.json();
         } catch {
           // best-effort: review links will just fall back to branch values

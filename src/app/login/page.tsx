@@ -11,14 +11,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Brand fields pulled from Settings → Брендинг so the login card shows
-  // the configured logo and company name instead of the bundled defaults.
+  // Brand fields pulled from /api/public-settings (whitelisted, no auth
+  // needed) so the login card shows the configured logo, company name and
+  // legal footer instead of the bundled defaults.
   const [brandLogoUrl, setBrandLogoUrl] = useState<string>("/logoalleya.png");
   const [brandName, setBrandName] = useState<string>("Сервис обратной связи");
+  const [brandCompanyFull, setBrandCompanyFull] = useState<string>("");
   const router = useRouter();
 
   useEffect(() => {
-    fetch("/api/settings")
+    fetch("/api/public-settings")
       .then((r) => (r.ok ? r.json() : null))
       .then((s) => {
         if (s && typeof s.brand_logo_url === "string" && s.brand_logo_url.trim()) {
@@ -26,6 +28,9 @@ export default function LoginPage() {
         }
         if (s && typeof s.brand_name === "string" && s.brand_name.trim()) {
           setBrandName(s.brand_name.trim());
+        }
+        if (s && typeof s.brand_company_full === "string" && s.brand_company_full.trim()) {
+          setBrandCompanyFull(s.brand_company_full.trim());
         }
       })
       .catch(() => {
@@ -149,10 +154,10 @@ export default function LoginPage() {
 
             <div className="flex flex-col items-center gap-2 pt-4">
               <p className="text-center text-slate-400 text-[10px] font-medium leading-relaxed max-w-[280px]">
-                &copy; {new Date().getFullYear()} ИП Шевелёв Е.Н. ИНН 352526561274 ОГРНИП 316352500061315. Доступ только для сотрудников компании.
+                {`© ${new Date().getFullYear()} ${brandCompanyFull || brandName}. Доступ только для сотрудников компании.`}
               </p>
-              <Link 
-                href="/privacy" 
+              <Link
+                href="/privacy"
                 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-600 transition-colors"
               >
                 Политика конфиденциальности

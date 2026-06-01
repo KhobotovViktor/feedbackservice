@@ -93,6 +93,9 @@ export async function proxy(req: NextRequest) {
     path === "/api/admin/report" ||
     // Analytics recorded from the survey page (no session)
     path === "/api/analytics" ||
+    // Public branding (logo / name / review links) for the login &
+    // survey pages — strictly whitelisted set of safe keys.
+    path === "/api/public-settings" ||
     // Public health probe for uptime monitoring.
     path === "/api/health";
 
