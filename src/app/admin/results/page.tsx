@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import type { Prisma, SurveyResponse, Branch } from "@prisma/client";
-import { Building2, MessageCircle, Filter, ChevronLeft, ChevronRight, Download, Tag, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
+import { Building2, MessageCircle, Filter, ChevronLeft, ChevronRight, Download, Tag, AlertCircle, Clock, CheckCircle2, UserCheck } from "lucide-react";
 import { BranchFilter } from "@/components/results/branch-filter";
 import { TypeFilter } from "@/components/results/type-filter";
 import { TagFilter } from "@/components/results/tag-filter";
 import { ComplaintFilter } from "@/components/results/complaint-filter";
+import { ResponsibleFilter } from "@/components/results/responsible-filter";
 import { ClearResultsButton } from "@/components/results/clear-results-button";
 import { ResultsTable } from "@/components/results/results-table";
 import { getAccessibleBranchIds } from "@/lib/access";
@@ -17,9 +18,9 @@ const PAGE_SIZE = 25;
 export default async function ResultsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string; type?: string; tag?: string; complaint?: string; sortBy?: string; order?: string; page?: string }>;
+  searchParams: Promise<{ branchId?: string; type?: string; tag?: string; complaint?: string; responsible?: string; sortBy?: string; order?: string; page?: string }>;
 }) {
-  const { branchId, type = "all", tag = "all", complaint = "all", sortBy = "date", order = "desc", page } = await searchParams;
+  const { branchId, type = "all", tag = "all", complaint = "all", responsible = "all", sortBy = "date", order = "desc", page } = await searchParams;
   const sortDir: "asc" | "desc" = order === "asc" ? "asc" : "desc";
   const pageNum = Math.max(1, parseInt(page || "1", 10) || 1);
 
@@ -30,6 +31,7 @@ export default async function ResultsPage({
     if (type && type !== "all") params.set("type", type);
     if (tag && tag !== "all") params.set("tag", tag);
     if (complaint && complaint !== "all") params.set("complaint", complaint);
+    if (responsible && responsible !== "all") params.set("responsible", responsible);
     if (sortBy && sortBy !== "date") params.set("sortBy", sortBy);
     if (order && order !== "desc") params.set("order", order);
     if (p > 1) params.set("page", String(p));
@@ -37,11 +39,12 @@ export default async function ResultsPage({
     return qs ? `?${qs}` : "?";
   };
 
-  // CSV export keeps the active branch/type/tag filters.
+  // CSV export keeps the active branch/type/tag/responsible filters.
   const exportParams = new URLSearchParams();
   if (branchId) exportParams.set("branchId", branchId);
   if (type && type !== "all") exportParams.set("type", type);
   if (tag && tag !== "all") exportParams.set("tag", tag);
+  if (responsible && responsible !== "all") exportParams.set("responsible", responsible);
   const exportHref = `/api/admin/results/export${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
 
   // Role scope: MANAGER sees only assigned branches; ADMIN sees all.
@@ -49,6 +52,10 @@ export default async function ResultsPage({
 
   let responses: ResponseRow[] = [];
   let branches: { id: string; name: string }[] = [];
+  // List of distinct responsibleName values within the current branch scope —
+  // feeds the «Ответственный» filter dropdown. Nulls/empty are stripped here
+  // and surfaced as a special "Без ответственного" option in the filter UI.
+  let responsibles: string[] = [];
   let total = 0;
   // Bitrix24 portal base (e.g. https://am35.bitrix24.ru) for deep-links into
   // deals/leads from the results table.
@@ -95,6 +102,14 @@ export default async function ResultsPage({
     else if (complaint === "in_progress") where.complaintStatus = "IN_PROGRESS";
     else if (complaint === "resolved") where.complaintStatus = "RESOLVED";
 
+    // «Ответственный» filter. "__none__" → only rows without a responsible
+    // (null or empty string), any other non-"all" value → exact match.
+    if (responsible === "__none__") {
+      where.OR = [{ responsibleName: null }, { responsibleName: "" }];
+    } else if (responsible && responsible !== "all") {
+      where.responsibleName = responsible;
+    }
+
     // "source" sorts by the related branch name at the DB level so pagination
     // stays correct (the old in-memory sort only ordered the current page).
     const orderBy: Prisma.SurveyResponseOrderByWithRelationInput =
@@ -131,6 +146,15 @@ export default async function ResultsPage({
       // know which templates they belong to (responses don't carry the
       // template id), so a single sweep is simpler than per-row lookups.
       prisma.question.findMany({ select: { id: true, text: true } }),
+      // Distinct list of responsibleName values inside the branch scope —
+      // independent of the other filters so the dropdown stays usable when
+      // the user drills down. Nulls/empties are dropped client-side.
+      prisma.surveyResponse.findMany({
+        where: { ...scopeWhere, responsibleName: { not: null } },
+        select: { responsibleName: true },
+        distinct: ["responsibleName"],
+        orderBy: { responsibleName: "asc" },
+      }),
     ]);
     responses = results[0];
     branches = results[1];
@@ -144,6 +168,9 @@ export default async function ResultsPage({
       }
     }
     for (const q of results[5]) questionMap[q.id] = q.text;
+    responsibles = results[6]
+      .map((r) => r.responsibleName)
+      .filter((n): n is string => typeof n === "string" && n.trim().length > 0);
 
     // Pull dispatch rows for the visible responses so the table can show
     // (a) "Открыто через …" delay between robot fire and submission, and
@@ -234,6 +261,17 @@ export default async function ResultsPage({
             </div>
             <div className="flex-1 sm:flex-none">
               <ComplaintFilter defaultValue={complaint} />
+            </div>
+          </div>
+
+          {/* Responsible Filter */}
+          <div className="flex items-center gap-2 p-1 md:p-1.5 glass rounded-2xl md:rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
+            <div className="flex-1 sm:flex-none flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-3">
+              <UserCheck className="w-4 h-4 md:w-5 md:h-5 text-indigo-400" />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xs:inline">{"Ответственный:"}</span>
+            </div>
+            <div className="flex-1 sm:flex-none">
+              <ResponsibleFilter options={responsibles} defaultValue={responsible} />
             </div>
           </div>
         </div>

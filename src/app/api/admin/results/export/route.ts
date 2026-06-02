@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
   const branchId = searchParams.get("branchId") || undefined;
   const type = searchParams.get("type") || "all";
   const tag = searchParams.get("tag") || "all";
+  const responsible = searchParams.get("responsible") || "all";
 
   const accessible = await getAccessibleBranchIds();
   const where: Prisma.SurveyResponseWhereInput = {};
@@ -42,6 +43,13 @@ export async function GET(req: NextRequest) {
   if (type === "positive") where.averageScore = { gte: 4.5 };
   if (type === "negative") where.averageScore = { lt: 4.5 };
   if (tag && tag !== "all") where.tags = { has: tag };
+  // Mirror the «Ответственный» filter on the Results page so the exported
+  // file matches what's on screen.
+  if (responsible === "__none__") {
+    where.OR = [{ responsibleName: null }, { responsibleName: "" }];
+  } else if (responsible && responsible !== "all") {
+    where.responsibleName = responsible;
+  }
   if (accessible !== null) {
     if (branchId === "crm") where.branchId = { in: [] };
     else if (typeof where.branchId === "string") {
