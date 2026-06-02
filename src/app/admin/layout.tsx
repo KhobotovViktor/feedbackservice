@@ -75,10 +75,11 @@ export default function AdminLayout({
   const allNav = [
     { label: "Дашборд", href: "/admin", icon: LayoutDashboard, adminOnly: false },
     { label: "Результаты", href: "/admin/results", icon: MessageSquare, adminOnly: false },
-    { label: "Интеграция", href: "/admin/integration", icon: LinkIcon, adminOnly: true },
     { label: "Филиалы", href: "/admin/branches", icon: Building2, adminOnly: true },
     { label: "Шаблоны", href: "/admin/templates", icon: LayoutDashboard, adminOnly: true },
     { label: "Пользователи", href: "/admin/users", icon: Users, adminOnly: true },
+    // «Интеграция» moved to the bottom, below «Пользователи», per request.
+    { label: "Интеграция", href: "/admin/integration", icon: LinkIcon, adminOnly: true },
   ];
   // Until role resolves, show only the non-admin items to avoid flashing
   // links a manager can't use. ADMIN (and legacy) see everything.
