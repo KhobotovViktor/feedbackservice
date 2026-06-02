@@ -14,6 +14,7 @@ export default function IntegrationPage() {
     b24_field_support: "",
     b24_field_average: "",
     b24_field_comment: "",
+    b24_field_phone: "",
     b24_template_id: "",
     review_yandex: "",
     review_2gis: "",
@@ -77,6 +78,7 @@ export default function IntegrationPage() {
           b24_field_support: settingsData.b24_field_support || "",
           b24_field_average: settingsData.b24_field_average || "",
           b24_field_comment: settingsData.b24_field_comment || "",
+          b24_field_phone: settingsData.b24_field_phone || "",
           b24_template_id: settingsData.b24_template_id || "",
           review_yandex: settingsData.review_yandex || "",
           review_2gis: settingsData.review_2gis || "",
@@ -588,6 +590,18 @@ export default function IntegrationPage() {
                       className="w-full px-5 py-3 rounded-xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-mono font-bold"
                       value={settings.b24_field_comment}
                       onChange={(e) => setSettings({ ...settings, b24_field_comment: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      {"Телефон (для callback)"}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="UF_CRM_..."
+                      className="w-full px-5 py-3 rounded-xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-mono font-bold"
+                      value={settings.b24_field_phone}
+                      onChange={(e) => setSettings({ ...settings, b24_field_phone: e.target.value })}
                     />
                   </div>
                 </div>

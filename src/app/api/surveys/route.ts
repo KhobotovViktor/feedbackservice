@@ -153,6 +153,10 @@ export async function POST(req: NextRequest) {
     // Negative responses open a complaint to work through (close-the-loop).
     const NEGATIVE_THRESHOLD = 4.5;
     const isNegative = averageScore < NEGATIVE_THRESHOLD;
+    // Normalised contact phone (negative-feedback step). Reused for storage,
+    // the B24 field-mapping and the group-chat callback line below.
+    const sanitizedPhone =
+      typeof phone === "string" && phone.trim() ? phone.trim().slice(0, 32) : null;
     const entityType =
       payload.entityType === "lead" || payload.entityType === "deal"
         ? payload.entityType
@@ -165,7 +169,7 @@ export async function POST(req: NextRequest) {
           averageScore,
           answers,
           comment,
-          phone: typeof phone === "string" && phone.trim() ? phone.trim().slice(0, 32) : null,
+          phone: sanitizedPhone,
           branchId: effectiveBranchId,
           responsibleName: responsibleName || null,
           entityType,
@@ -223,6 +227,7 @@ export async function POST(req: NextRequest) {
           text += `🏢 Филиал: ${esc(branchName)}\n`;
           text += `⭐ Оценка: ${averageScore.toFixed(1)}\n`;
           text += `👤 Ответственный: ${esc(responsibleName || "—")}\n`;
+          if (sanitizedPhone) text += `📞 Телефон: ${esc(sanitizedPhone)}\n`;
           if (isCrm) text += `🔗 ${label} № ${esc(dealId)}\n`;
           if (comment) text += `\n💬 ${esc(String(comment))}`;
           await sendTelegramMessage(text);
@@ -320,6 +325,12 @@ export async function POST(req: NextRequest) {
             updateData[settingsMap.b24_field_comment] = comment;
           }
 
+          // 5. Callback phone — only for negative responses where the client
+          // left a number. Lets a manager ring back fast to save the review.
+          if (settingsMap.b24_field_phone && isNegative && sanitizedPhone) {
+            updateData[settingsMap.b24_field_phone] = sanitizedPhone;
+          }
+
           if (Object.keys(updateData).length > 0) {
             console.log(
               `Updating Bitrix24 Deal ${dealId} with:`,
@@ -385,6 +396,8 @@ export async function POST(req: NextRequest) {
           }
 
           msg += `\n👤 [b]Ответственный:[/b] ${responsibleName || "—"}\n`;
+          // Callback phone front-and-centre so the team can ring back quickly.
+          if (sanitizedPhone) msg += `📞 [b]Телефон для связи:[/b] ${sanitizedPhone}\n`;
           if (isCrm) {
             msg += `🔗 [b]${entityLabel}:[/b] [url=${portal}/crm/${crmType}/details/${dealId}/]№ ${dealId}[/url]`;
           } else {

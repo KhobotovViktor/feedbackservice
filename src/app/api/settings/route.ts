@@ -30,6 +30,8 @@ const ALLOWED_KEYS = [
   "b24_field_support",
   "b24_field_average",
   "b24_field_comment",
+  // CRM field for the callback phone left on a negative response.
+  "b24_field_phone",
   "review_yandex",
   "review_2gis",
   "review_google_maps",
