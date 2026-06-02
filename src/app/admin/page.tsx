@@ -106,6 +106,11 @@ export default async function AdminDashboard({
   let totalResponses = 0;
   let totalViews = 0;
   let totalClicks = 0;
+  // Unique visitors who opened at least one map link (one per survey token),
+  // as opposed to totalClicks which counts every (token, platform) pair.
+  // The funnel uses this so "перешли на карты" can't exceed "прошли опрос"
+  // and the conversion rate stays ≤ 100 %.
+  let uniqueClickers = 0;
   let negativeResponses = 0;
   let branchesRaw: BranchRow[] = [];
   let trendRows: { createdAt: Date; averageScore: number; tags: string[] }[] = [];
@@ -232,6 +237,13 @@ export default async function AdminDashboard({
       Object.keys(prevDateFilter).length > 0
         ? prisma.sentSurvey.count({ where: { createdAt: prevDateFilter } })
         : Promise.resolve(0),
+      // CLICK dedupe keys for the period. Each is "c:<tokenHash>:<target>",
+      // so distinct <tokenHash> = unique visitors who clicked a map link.
+      // Selecting only the key keeps this light even with many rows.
+      prisma.analyticsEvent.findMany({
+        where: { ...whereWithDate, type: "CLICK" },
+        select: { dedupeKey: true },
+      }),
     ]);
 
     totalResponses = results[0];
@@ -262,6 +274,20 @@ export default async function AdminDashboard({
     trendRows = results[11];
     sentSurveyTotal = results[12];
     prevSentTotal = results[13];
+    // Distinct visitors who clicked a map link. dedupeKey = "c:<hash>:<target>"
+    // → group by <hash>. Legacy rows without a key (pre-dedupe) are counted
+    // each as their own visitor so we never under-count history.
+    const clickerHashes = new Set<string>();
+    let legacyClickers = 0;
+    for (const row of results[14]) {
+      const key = row.dedupeKey;
+      if (key && key.startsWith("c:")) {
+        clickerHashes.add(key.split(":")[1] || key);
+      } else {
+        legacyClickers++;
+      }
+    }
+    uniqueClickers = clickerHashes.size + legacyClickers;
   } catch (err) {
     console.error("Dashboard data fetch error:", err);
   }
@@ -344,9 +370,11 @@ export default async function AdminDashboard({
     ? Math.round(((totalResponses - prevResponsesCount) / prevResponsesCount) * 100) 
     : 0;
 
-  // Conversion calculations
+  // Conversion calculations. clickThroughRate uses uniqueClickers (people),
+  // not totalClicks (per-platform events), so it stays ≤ 100 % and the funnel
+  // narrows monotonically (views ≥ responses ≥ clickers).
   const openRate = totalViews > 0 ? Math.round((totalResponses / totalViews) * 100) : 0;
-  const clickThroughRate = totalResponses > 0 ? Math.round((totalClicks / totalResponses) * 100) : 0;
+  const clickThroughRate = totalResponses > 0 ? Math.round((uniqueClickers / totalResponses) * 100) : 0;
   // CRM dispatch metrics: % of links that turned into a passed survey, and
   // period-over-period delta for the headline number.
   const crmConversion = sentSurveyTotal > 0
@@ -398,13 +426,13 @@ export default async function AdminDashboard({
           desc={`${openRate}% клиентов завершили опрос до конца.`}
           className="md:row-span-1"
         />
-        <BentoMetricCard 
-          label="Переход на карты" 
-          value={totalClicks} 
-          icon={MousePointer2} 
-          color="text-amber-600" 
-          bg="bg-amber-50" 
-          desc={`${clickThroughRate}% перешли на карты после оценки.`}
+        <BentoMetricCard
+          label="Переход на карты"
+          value={uniqueClickers}
+          icon={MousePointer2}
+          color="text-amber-600"
+          bg="bg-amber-50"
+          desc={`${clickThroughRate}% перешли на карты после оценки. Всего переходов по платформам: ${totalClicks}.`}
           className="md:row-span-1"
         />
         <BentoMetricCard 
@@ -488,12 +516,16 @@ export default async function AdminDashboard({
               <div className="space-y-3 pl-8 md:pl-32">
                 <div className="flex justify-between items-center px-4">
                   <span className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em]">Переход на карты ({clickThroughRate}%)</span>
-                  <span className="text-lg md:text-2xl font-black text-slate-900">{totalClicks}</span>
+                  <span className="text-lg md:text-2xl font-black text-slate-900">{uniqueClickers}</span>
                 </div>
                 <div className="h-4 bg-slate-100/50 rounded-full border border-white/40 overflow-hidden">
                   <div className="h-full bg-amber-500 w-full rounded-full shadow-lg shadow-amber-500/20" style={{ width: `${(Number(openRate) * Number(clickThroughRate) / 100) || 0}%` }}></div>
                 </div>
-                {/* Breakdown: which map service customers opened */}
+                {/* Breakdown: which map service customers opened. These are
+                    click counts per platform, so the sum can exceed the
+                    unique-visitor number above when one person opens several
+                    maps — hence the clarifying caption. */}
+                <p className="text-[9px] font-bold text-slate-400 px-4 pt-1">Переходы по платформам (один человек мог открыть несколько):</p>
                 <div className="flex flex-wrap gap-2 px-4 pt-1">
                   {[
                     { key: "YANDEX", label: "Яндекс", icon: "yandex" },
