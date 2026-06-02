@@ -56,6 +56,10 @@ const ALLOWED_KEYS = [
   // Telegram channel for negative-feedback alerts.
   "telegram_bot_token",
   "telegram_chat_id",
+  // Rating-drop alert threshold (stars). When a synced map rating crosses
+  // below this value, a Telegram alert fires. Empty → default 4.0; "0" or
+  // "off" disables rating-drop alerts.
+  "alert_min_rating",
 ] as const;
 
 export async function POST(req: NextRequest) {

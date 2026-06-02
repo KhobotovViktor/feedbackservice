@@ -28,6 +28,7 @@ export default function IntegrationPage() {
     brand_privacy_contact: "",
     telegram_bot_token: "",
     telegram_chat_id: "",
+    alert_min_rating: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -90,6 +91,7 @@ export default function IntegrationPage() {
           brand_privacy_contact: settingsData.brand_privacy_contact || "",
           telegram_bot_token: settingsData.telegram_bot_token || "",
           telegram_chat_id: settingsData.telegram_chat_id || "",
+          alert_min_rating: settingsData.alert_min_rating || "",
         });
 
         const bList = Array.isArray(branchesData)
@@ -738,6 +740,24 @@ export default function IntegrationPage() {
                   <p className="text-[10px] text-slate-400 font-medium mt-1 px-1 leading-relaxed">
                     Создайте бота через <span className="font-bold">@BotFather</span>, добавьте его в нужный чат/группу и укажите
                     токен и chat_id. Пусто — Telegram-уведомления выключены. Не забудьте «Сохранить конфигурацию».
+                  </p>
+
+                  {/* Rating-drop alert threshold */}
+                  <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 shrink-0">
+                      {"Порог алерта о падении рейтинга"}
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="4.0"
+                      className="w-full sm:w-32 px-5 py-3 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 focus:bg-white outline-none transition-all text-sm font-mono font-bold"
+                      value={settings.alert_min_rating}
+                      onChange={(e) => setSettings({ ...settings, alert_min_rating: e.target.value })}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-medium px-1 leading-relaxed">
+                    {"Когда синхронизированный рейтинг филиала опускается ниже этого значения, в Telegram придёт алерт. Пусто = 4.0; «0» — отключить. Также в еженедельный отчёт добавляется предупреждение, если синхронизация рейтингов давно не обновлялась."}
                   </p>
                 </div>
               </div>

@@ -2,8 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { checkRatingSanity } from "@/lib/rating-sanity";
+import { sendTelegramMessage } from "@/lib/telegram";
 
 export const dynamic = 'force-dynamic';
+
+// Resolve the rating-drop alert threshold from Settings. Empty/unset → 4.0
+// (alerts on by default once Telegram is configured); "0"/"off"/"none" → off
+// (returns null). Any number → that threshold.
+async function getAlertThreshold(): Promise<number | null> {
+  try {
+    const row = await prisma.settings.findUnique({ where: { key: "alert_min_rating" } });
+    const raw = row?.value?.trim().toLowerCase();
+    if (raw === undefined || raw === "") return 4.0;
+    if (raw === "0" || raw === "off" || raw === "none") return null;
+    const n = parseFloat(raw);
+    return Number.isFinite(n) && n > 0 ? n : 4.0;
+  } catch {
+    return 4.0;
+  }
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -61,6 +78,14 @@ async function handleSync(branchId: string, service: string, rating: string, rev
       }
     }
 
+    // Capture the previous rating BEFORE inserting the new one, so we can
+    // detect a downward crossing of the alert threshold.
+    const prevForAlert = await prisma.ratingHistory.findFirst({
+      where: { branchId, service },
+      orderBy: { createdAt: "desc" },
+      select: { rating: true },
+    });
+
     const record = await prisma.ratingHistory.create({
       data: { branchId, service, rating: ratingVal, reviewCount: reviewCountVal }
     });
@@ -69,6 +94,30 @@ async function handleSync(branchId: string, service: string, rating: string, rev
       where: { id: branchId },
       data: { updatedAt: new Date() }
     });
+
+    // Rating-drop alert: fire only on a downward CROSSING of the threshold
+    // (previous ≥ threshold > new), so we alert once per dip instead of on
+    // every sync while a branch sits below it. Fire-and-forget — never blocks
+    // or fails the sync. No-op when Telegram isn't configured.
+    void (async () => {
+      try {
+        const threshold = await getAlertThreshold();
+        if (threshold === null) return;
+        const prev = prevForAlert?.rating;
+        const crossedDown = prev !== undefined && prev >= threshold && ratingVal < threshold;
+        if (!crossedDown) return;
+        const svc = service === "yandex" ? "Яндекс" : service === "2gis" ? "2ГИС" : "Google";
+        const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        let text = `📉 <b>Падение рейтинга</b>\n`;
+        text += `🏢 Филиал: ${esc(branch.name)}\n`;
+        text += `🗺 Платформа: ${esc(svc)}\n`;
+        text += `⭐ ${prev?.toFixed(1)} → <b>${ratingVal.toFixed(1)}</b> (порог ${threshold.toFixed(1)})\n`;
+        text += `💬 Отзывов: ${reviewCountVal}`;
+        await sendTelegramMessage(text);
+      } catch (e) {
+        console.error("rating-drop alert failed:", e);
+      }
+    })();
 
     revalidatePath("/admin/branches");
     revalidatePath("/admin");

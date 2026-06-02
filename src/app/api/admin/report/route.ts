@@ -28,7 +28,7 @@ async function run(req: NextRequest) {
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 3600_000);
   const dateScope = { createdAt: { gte: since } };
 
-  const [total, avgAgg, negativeCount, openComplaints, clicks, branches] =
+  const [total, avgAgg, negativeCount, openComplaints, clicks, branches, lastRating] =
     await Promise.all([
       prisma.surveyResponse.count({ where: dateScope }),
       prisma.surveyResponse.aggregate({ where: dateScope, _avg: { averageScore: true } }),
@@ -43,6 +43,13 @@ async function run(req: NextRequest) {
           surveyResponses: { where: dateScope, select: { averageScore: true } },
         },
       }),
+      // Health-check: when did rating sync last write anything? A stale value
+      // means the Apps Script syncer (or upstream DOM/Serper) has broken
+      // silently — we surface it in the report so it doesn't go unnoticed.
+      prisma.ratingHistory.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      }),
     ]);
 
   const avg = avgAgg._avg.averageScore ?? 0;
@@ -56,6 +63,17 @@ async function run(req: NextRequest) {
   msg += `⚠️ [b]Негативных за период:[/b] ${negativeCount}\n`;
   msg += `🔴 [b]Открытых жалоб (всего):[/b] ${openComplaints}\n`;
   msg += `🗺 [b]Переходов на карты:[/b] ${clicks}\n`;
+
+  // Rating-sync freshness warning. > 2 days stale (or never) = likely broken.
+  const STALE_MS = 2 * 24 * 3600_000;
+  const lastSyncAt = lastRating?.createdAt ?? null;
+  const syncStale = !lastSyncAt || Date.now() - lastSyncAt.getTime() > STALE_MS;
+  if (syncStale) {
+    const whenTxt = lastSyncAt
+      ? lastSyncAt.toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" })
+      : "никогда";
+    msg += `\n⚠️ [b]Синхронизация рейтингов не обновлялась[/b] (последняя: ${whenTxt}). Проверьте Google Apps Script.\n`;
+  }
 
   const branchLines = branches
     .map((b) => {
