@@ -20,7 +20,10 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      # npm install (not ci): vitest's platform-optional deps (@emnapi/*,
+      # native esbuild/rollup) aren't enumerated for Linux in a Windows-
+      # generated lockfile, so `npm ci`'s strict sync check fails.
+      - run: npm install --no-audit --no-fund
       - run: npx prisma generate
       - name: Type-check
         run: npx tsc --noEmit

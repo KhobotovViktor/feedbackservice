@@ -23,7 +23,11 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      # npm install (not ci): vitest pulls platform-optional deps (@emnapi/*,
+      # esbuild/rollup native binaries) that a Windows-generated lockfile
+      # doesn't enumerate for Linux, so `npm ci` fails its strict sync check.
+      # install resolves the right platform tree on the runner itself.
+      - run: npm install --no-audit --no-fund
       - run: npx prisma generate
       - run: npm run build
 
