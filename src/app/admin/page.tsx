@@ -8,6 +8,7 @@ import { PeriodFilter } from "@/components/dashboard/period-filter";
 import { AiInsights } from "@/components/dashboard/ai-insights";
 import { TrendsPanel } from "@/components/dashboard/trends-panel";
 import { StaffPanel } from "@/components/dashboard/staff-panel";
+import { TimePanel } from "@/components/dashboard/time-panel";
 import { CountUp } from "@/components/dashboard/count-up";
 import { getAccessibleBranchIds } from "@/lib/access";
 
@@ -328,6 +329,25 @@ export default async function AdminDashboard({
     console.error("Dashboard data fetch error:", err);
   }
 
+  // Previous-period branch averages → period-over-period delta in the
+  // "По филиалам" panel. Only when a comparable previous window exists
+  // (30d / custom); for "all time" we skip the delta.
+  const prevBranchAvg: Record<string, number> = {};
+  if (Object.keys(prevDateFilter).length > 0) {
+    try {
+      const grouped = await prisma.surveyResponse.groupBy({
+        by: ["branchId"],
+        where: { createdAt: prevDateFilter, ...branchScope },
+        _avg: { averageScore: true },
+      });
+      for (const g of grouped) {
+        if (g.branchId) prevBranchAvg[g.branchId] = g._avg.averageScore ?? 0;
+      }
+    } catch (e) {
+      console.error("prev branch avg failed:", e);
+    }
+  }
+
   const branchStats = branchesRaw.map((branch) => {
     const scores = branch.surveyResponses.map((r) => r.averageScore);
     const avg =
@@ -337,10 +357,17 @@ export default async function AdminDashboard({
       clicks: 0,
       clicksByTarget: { YANDEX: 0, "2GIS": 0, GOOGLE: 0 },
     };
+    const prevAvg = prevBranchAvg[branch.id];
+    // Delta only when both periods have data, rounded to 0.1★.
+    const delta =
+      prevAvg !== undefined && prevAvg > 0 && avg > 0
+        ? Math.round((avg - prevAvg) * 10) / 10
+        : null;
     return {
       id: branch.id,
       name: branch.name,
       avg,
+      delta, // ПоП изменение средней (или null)
       count: scores.length, // прохождения (успешные ответы)
       views: a.views, // открытия опроса (QR/ссылка)
       clicks: a.clicks, // переходы на карты
@@ -387,6 +414,25 @@ export default async function AdminDashboard({
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
     .map(([tag, count]) => ({ tag, count }));
+
+  // ── Distribution by day-of-week and hour (Europe/Moscow) ───────────────
+  // Moscow has no DST, so shifting UTC by +3h and reading UTC components
+  // gives exact local day/hour without pulling in Intl per row.
+  const MSK_OFFSET = 3 * 3600_000;
+  const dowDist = Array.from({ length: 7 }, () => ({ count: 0, negative: 0 })); // Пн..Вс
+  const hourDist = Array.from({ length: 24 }, () => ({ count: 0, negative: 0 }));
+  for (const r of trendRows) {
+    const m = new Date(new Date(r.createdAt).getTime() + MSK_OFFSET);
+    const dowIdx = (m.getUTCDay() + 6) % 7; // 0 = Monday
+    const h = m.getUTCHours();
+    const neg = r.averageScore < 4.5 ? 1 : 0;
+    dowDist[dowIdx].count += 1;
+    dowDist[dowIdx].negative += neg;
+    hourDist[h].count += 1;
+    hourDist[h].negative += neg;
+  }
+  const dowLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+  const timeDow = dowDist.map((d, i) => ({ label: dowLabels[i], ...d }));
 
   // Network loyalty = average of ALL responses in the period (branch + CRM/QR),
   // taken from the DB aggregate above rather than only branch-attached rows.
@@ -653,9 +699,20 @@ export default async function AdminDashboard({
                 {/* Header: name (full, wraps) + average rating */}
                 <div className="flex justify-between items-start gap-3 mb-4">
                   <p className="font-bold text-slate-800 text-sm leading-snug break-words flex-1">{branch.name}</p>
-                  <div className="flex items-center gap-1 text-slate-900 font-black text-sm shrink-0">
-                    {branch.avg.toFixed(1)}
-                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <div className="flex items-center gap-1 text-slate-900 font-black text-sm">
+                      {branch.avg.toFixed(1)}
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    </div>
+                    {branch.delta !== null && branch.delta !== 0 && (
+                      <span className={cn(
+                        "inline-flex items-center gap-0.5 text-[9px] font-black tabular-nums",
+                        branch.delta > 0 ? "text-emerald-500" : "text-rose-500"
+                      )}>
+                        <TrendingUp className={cn("w-2.5 h-2.5", branch.delta < 0 && "rotate-180")} />
+                        {branch.delta > 0 ? "+" : ""}{branch.delta.toFixed(1)}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -708,6 +765,9 @@ export default async function AdminDashboard({
 
       {/* Per-operator performance */}
       <StaffPanel staff={staffStats} />
+
+      {/* When responses arrive — by day of week & hour */}
+      <TimePanel dow={timeDow} hours={hourDist} />
 
       {/* AI analysis of free-text comments */}
       <AiInsights branches={branchStats.map((b) => ({ id: b.id, name: b.name }))} />

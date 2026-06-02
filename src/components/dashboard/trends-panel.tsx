@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { TrendingUp, Tag } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -129,10 +130,15 @@ export function TrendsPanel({ weekly, csat, nps, total, topTags }: Props) {
         {topTags.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {topTags.map((t) => (
-              <span key={t.tag} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100/50 rounded-xl text-xs font-black">
+              <Link
+                key={t.tag}
+                href={`/admin/results?tag=${encodeURIComponent(t.tag)}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100/50 rounded-xl text-xs font-black hover:bg-indigo-100 hover:border-indigo-200 transition-all"
+                title={`Показать отзывы с темой «${t.tag}»`}
+              >
                 #{t.tag}
                 <span className="text-indigo-400">{t.count}</span>
-              </span>
+              </Link>
             ))}
           </div>
         ) : (
