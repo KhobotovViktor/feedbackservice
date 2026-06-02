@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, LayoutDashboard, Settings, Loader2, Trash2, Edit2, Check, Building2, ChevronLeft, Star, Flag, Smile, Frown, Clock, Eye } from "lucide-react";
+import { Plus, LayoutDashboard, Settings, Loader2, Trash2, Edit2, Check, Building2, ChevronLeft, Star, Flag, Smile, Frown, Clock, Eye, ChevronUp, ChevronDown, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -136,6 +136,10 @@ export default function TemplatesPage() {
   const [newQuestionType, setNewQuestionType] = useState("RATING");
   const [newQuestionOptions, setNewQuestionOptions] = useState("");
   const [newQuestionShowIf, setNewQuestionShowIf] = useState("always");
+  // Inline editing of an existing question's text + reorder busy flag.
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+  const [editQuestionText, setEditQuestionText] = useState("");
+  const [reordering, setReordering] = useState(false);
 
   const [view, setView] = useState<"list" | "detail">("list");
   const [editingMetadata, setEditingMetadata] = useState(false);
@@ -243,6 +247,48 @@ export default function TemplatesPage() {
         setNewQuestionShowIf("always");
         fetchQuestions(selectedTemplate.id);
         fetchTemplates(); // To update question count
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Swap a question with its neighbour and persist the new order via the
+  // reorder endpoint (single transaction). idx is the current position.
+  const moveQuestion = async (idx: number, dir: -1 | 1) => {
+    if (!selectedTemplate || reordering) return;
+    const target = idx + dir;
+    if (target < 0 || target >= questions.length) return;
+    const reordered = [...questions];
+    [reordered[idx], reordered[target]] = [reordered[target], reordered[idx]];
+    setQuestions(reordered); // optimistic
+    setReordering(true);
+    try {
+      await fetch("/api/questions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reorder: reordered.map((q) => q.id) }),
+      });
+    } catch (err) {
+      console.error(err);
+      fetchQuestions(selectedTemplate.id); // revert to server truth on error
+    } finally {
+      setReordering(false);
+    }
+  };
+
+  const saveQuestionEdit = async () => {
+    if (!selectedTemplate || !editingQuestionId || !editQuestionText.trim()) return;
+    try {
+      const res = await fetch("/api/questions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingQuestionId, text: editQuestionText.trim() }),
+      });
+      if (res.ok) {
+        setEditingQuestionId(null);
+        setEditQuestionText("");
+        fetchQuestions(selectedTemplate.id);
       }
     } catch (err) {
       console.error(err);
@@ -592,40 +638,96 @@ export default function TemplatesPage() {
                   ) : (
                     <div className="grid grid-cols-1 gap-3">
                       {questions.map((q, idx) => (
-                        <motion.div 
+                        <motion.div
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
-                          key={q.id} 
-                          className="flex items-center justify-between p-5 glass border-white/60 rounded-2xl group hover:bg-white transition-all shadow-sm"
+                          key={q.id}
+                          className="flex items-center justify-between p-5 glass border-white/60 rounded-2xl group hover:bg-white transition-all shadow-sm gap-2"
                         >
-                          <div className="flex items-center gap-3 md:gap-5 min-w-0 pr-2">
+                          <div className="flex items-center gap-3 md:gap-5 min-w-0 pr-2 flex-1">
+                            {/* Reorder controls */}
+                            <div className="flex flex-col gap-0.5 shrink-0">
+                              <button
+                                onClick={() => moveQuestion(idx, -1)}
+                                disabled={idx === 0 || reordering}
+                                title="Выше"
+                                className="p-1 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-md transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+                              >
+                                <ChevronUp className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => moveQuestion(idx, 1)}
+                                disabled={idx === questions.length - 1 || reordering}
+                                title="Ниже"
+                                className="p-1 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-md transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+                              >
+                                <ChevronDown className="w-4 h-4" />
+                              </button>
+                            </div>
                             <span className="shrink-0 w-8 h-8 md:w-10 md:h-10 flex items-center justify-center bg-white border border-slate-100 rounded-xl text-[10px] md:text-xs font-black text-slate-900 shadow-sm">
                               {idx + 1}
                             </span>
-                            <div className="min-w-0">
-                              <p className="text-slate-800 font-bold text-sm md:text-lg leading-snug break-words overflow-hidden">{q.text}</p>
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-500 border border-indigo-100/50 uppercase tracking-wider">
-                                  {QUESTION_TYPE_LABEL[q.type ?? "RATING"] ?? "Звёзды"}
-                                </span>
-                                {q.showIf && (
-                                  <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 border border-amber-100/50 uppercase tracking-wider">
-                                    {q.showIf === "negative" ? "при низкой оценке" : "при высокой оценке"}
-                                  </span>
-                                )}
-                              </div>
+                            <div className="min-w-0 flex-1">
+                              {editingQuestionId === q.id ? (
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    value={editQuestionText}
+                                    onChange={(e) => setEditQuestionText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") saveQuestionEdit();
+                                      if (e.key === "Escape") { setEditingQuestionId(null); setEditQuestionText(""); }
+                                    }}
+                                    className="flex-1 px-3 py-2 bg-white border border-indigo-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none text-sm font-bold"
+                                  />
+                                  <div className="flex gap-1 shrink-0">
+                                    <button onClick={saveQuestionEdit} title="Сохранить" className="p-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 transition-all">
+                                      <Check className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => { setEditingQuestionId(null); setEditQuestionText(""); }} title="Отмена" className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-all">
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <p className="text-slate-800 font-bold text-sm md:text-lg leading-snug break-words overflow-hidden">{q.text}</p>
+                                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                    <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-500 border border-indigo-100/50 uppercase tracking-wider">
+                                      {QUESTION_TYPE_LABEL[q.type ?? "RATING"] ?? "Звёзды"}
+                                    </span>
+                                    {q.showIf && (
+                                      <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 border border-amber-100/50 uppercase tracking-wider">
+                                        {q.showIf === "negative" ? "при низкой оценке" : "при высокой оценке"}
+                                      </span>
+                                    )}
+                                  </div>
+                                </>
+                              )}
                             </div>
                           </div>
-                          <button 
-                            onClick={async () => {
-                              await fetch(`/api/questions?id=${q.id}`, { method: "DELETE" });
-                              fetchQuestions(selectedTemplate.id);
-                              fetchTemplates();
-                            }}
-                            className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all lg:opacity-0 lg:group-hover:opacity-100"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
+                          {editingQuestionId !== q.id && (
+                            <div className="flex items-center shrink-0">
+                              <button
+                                onClick={() => { setEditingQuestionId(q.id); setEditQuestionText(q.text); }}
+                                title="Редактировать текст"
+                                className="p-3 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-xl transition-all lg:opacity-0 lg:group-hover:opacity-100"
+                              >
+                                <Edit2 className="w-5 h-5" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  await fetch(`/api/questions?id=${q.id}`, { method: "DELETE" });
+                                  fetchQuestions(selectedTemplate.id);
+                                  fetchTemplates();
+                                }}
+                                className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all lg:opacity-0 lg:group-hover:opacity-100"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            </div>
+                          )}
                         </motion.div>
                       ))}
                     </div>
