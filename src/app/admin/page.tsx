@@ -7,6 +7,7 @@ import { OverallMonitoring } from "@/components/dashboard/overall-monitoring";
 import { PeriodFilter } from "@/components/dashboard/period-filter";
 import { AiInsights } from "@/components/dashboard/ai-insights";
 import { TrendsPanel } from "@/components/dashboard/trends-panel";
+import { StaffPanel } from "@/components/dashboard/staff-panel";
 import { CountUp } from "@/components/dashboard/count-up";
 import { getAccessibleBranchIds } from "@/lib/access";
 
@@ -129,6 +130,8 @@ export default async function AdminDashboard({
   // number of links pushed into Open Channels / timeline / SMS fields.
   let sentSurveyTotal = 0;
   let prevSentTotal = 0;
+  // Per-operator performance, derived from responsibleName on responses.
+  let staffStats: { name: string; count: number; avg: number; negative: number }[] = [];
   // Click breakdown per review service (YANDEX / 2GIS / GOOGLE).
   const clicksByTarget: Record<string, number> = { YANDEX: 0, "2GIS": 0, GOOGLE: 0 };
   // Per-branch analytics for the "По филиалам" block.
@@ -244,6 +247,20 @@ export default async function AdminDashboard({
         where: { ...whereWithDate, type: "CLICK" },
         select: { dedupeKey: true },
       }),
+      // Per-operator stats: responses + average score grouped by the
+      // CRM responsible. Honours the same scope/date filter as everything
+      // else on the page. A second group-by counts negatives per operator.
+      prisma.surveyResponse.groupBy({
+        by: ["responsibleName"],
+        where: whereWithDate,
+        _count: { _all: true },
+        _avg: { averageScore: true },
+      }),
+      prisma.surveyResponse.groupBy({
+        by: ["responsibleName"],
+        where: { ...whereWithDate, averageScore: { lt: 4.5 } },
+        _count: { _all: true },
+      }),
     ]);
 
     totalResponses = results[0];
@@ -288,6 +305,25 @@ export default async function AdminDashboard({
       }
     }
     uniqueClickers = clickerHashes.size + legacyClickers;
+
+    // Build per-operator stats: merge the totals group-by with the negatives
+    // group-by, keyed by responsibleName. Rows with no responsible become
+    // "Без ответственного". Sorted by volume desc.
+    const negByName = new Map<string, number>();
+    for (const row of results[16]) {
+      negByName.set(row.responsibleName ?? "", row._count._all);
+    }
+    staffStats = results[15]
+      .map((row) => {
+        const key = row.responsibleName ?? "";
+        return {
+          name: key || "Без ответственного",
+          count: row._count._all,
+          avg: row._avg.averageScore ?? 0,
+          negative: negByName.get(key) ?? 0,
+        };
+      })
+      .sort((a, b) => b.count - a.count);
   } catch (err) {
     console.error("Dashboard data fetch error:", err);
   }
@@ -669,6 +705,9 @@ export default async function AdminDashboard({
 
       {/* Weekly trends, NPS/CSAT and top comment tags */}
       <TrendsPanel weekly={weekly} csat={csat} nps={nps} total={trendTotal} topTags={topTags} />
+
+      {/* Per-operator performance */}
+      <StaffPanel staff={staffStats} />
 
       {/* AI analysis of free-text comments */}
       <AiInsights branches={branchStats.map((b) => ({ id: b.id, name: b.name }))} />
