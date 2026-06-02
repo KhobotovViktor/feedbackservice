@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
   const type = searchParams.get("type") || "all";
   const tag = searchParams.get("tag") || "all";
   const responsible = searchParams.get("responsible") || "all";
+  const q = (searchParams.get("q") || "").trim();
 
   const accessible = await getAccessibleBranchIds();
   const where: Prisma.SurveyResponseWhereInput = {};
@@ -49,6 +50,20 @@ export async function GET(req: NextRequest) {
     where.OR = [{ responsibleName: null }, { responsibleName: "" }];
   } else if (responsible && responsible !== "all") {
     where.responsibleName = responsible;
+  }
+  // Mirror the full-text search.
+  if (q) {
+    where.AND = [
+      {
+        OR: [
+          { comment: { contains: q, mode: "insensitive" } },
+          { clientId: { contains: q, mode: "insensitive" } },
+          { dealId: { contains: q, mode: "insensitive" } },
+          { responsibleName: { contains: q, mode: "insensitive" } },
+          { phone: { contains: q } },
+        ],
+      },
+    ];
   }
   if (accessible !== null) {
     if (branchId === "crm") where.branchId = { in: [] };

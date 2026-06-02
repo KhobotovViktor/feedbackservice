@@ -10,12 +10,22 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const branchId = searchParams.get("branchId");
+    // templateId lets the Templates editor preview a survey for a template
+    // that isn't attached to any branch yet. survey/check resolves the
+    // template straight from the token (see its "templateId in token" branch).
+    const templateId = searchParams.get("templateId");
 
-    if (!branchId) {
-      return NextResponse.json({ error: "Missing branchId" }, { status: 400 });
+    if (!branchId && !templateId) {
+      return NextResponse.json({ error: "Missing branchId or templateId" }, { status: 400 });
     }
 
-    const token = await createSurveyToken("TEST_CLIENT", "TEST_DEAL", branchId, true);
+    const token = await createSurveyToken(
+      "TEST_CLIENT",
+      "TEST_DEAL",
+      branchId || null,
+      true,
+      templateId || null
+    );
 
     // Use the public origin (not req.nextUrl.origin — that reflects the
     // internal HOSTNAME/PORT and produces broken https://localhost:3000 URLs

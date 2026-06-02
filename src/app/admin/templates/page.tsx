@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, LayoutDashboard, Settings, Loader2, Trash2, Edit2, Check, Building2, ChevronLeft, Star, Flag, Smile, Frown, Clock } from "lucide-react";
+import { Plus, LayoutDashboard, Settings, Loader2, Trash2, Edit2, Check, Building2, ChevronLeft, Star, Flag, Smile, Frown, Clock, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -512,13 +512,23 @@ export default function TemplatesPage() {
                         <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 rounded-full text-[9px] font-black text-indigo-500 uppercase tracking-widest border border-indigo-100/50">
                           Active Template
                         </div>
-                        <button 
+                        <button
                           onClick={() => setEditingMetadata(true)}
                           className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all"
                           title="Редактировать название и порог"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
+                        <a
+                          href={`/api/admin/test/generate-survey-token?templateId=${selectedTemplate.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-black text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100/50 rounded-lg uppercase tracking-widest transition-all"
+                          title="Открыть опрос с этим шаблоном в тестовом режиме"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          {"Предпросмотр"}
+                        </a>
                       </div>
                       <h2 className="text-2xl md:text-4xl font-black text-slate-900 tracking-tighter leading-tight break-words overflow-hidden">{selectedTemplate.name}</h2>
                       <div className="flex items-center gap-4 mt-2">

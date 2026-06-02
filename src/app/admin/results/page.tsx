@@ -7,6 +7,7 @@ import { TypeFilter } from "@/components/results/type-filter";
 import { TagFilter } from "@/components/results/tag-filter";
 import { ComplaintFilter } from "@/components/results/complaint-filter";
 import { ResponsibleFilter } from "@/components/results/responsible-filter";
+import { ResultsSearch } from "@/components/results/results-search";
 import { ClearResultsButton } from "@/components/results/clear-results-button";
 import { ResultsTable } from "@/components/results/results-table";
 import { getAccessibleBranchIds } from "@/lib/access";
@@ -18,9 +19,10 @@ const PAGE_SIZE = 25;
 export default async function ResultsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string; type?: string; tag?: string; complaint?: string; responsible?: string; sortBy?: string; order?: string; page?: string }>;
+  searchParams: Promise<{ branchId?: string; type?: string; tag?: string; complaint?: string; responsible?: string; q?: string; sortBy?: string; order?: string; page?: string }>;
 }) {
   const { branchId, type = "all", tag = "all", complaint = "all", responsible = "all", sortBy = "date", order = "desc", page } = await searchParams;
+  const q = ((await searchParams).q || "").trim();
   const sortDir: "asc" | "desc" = order === "asc" ? "asc" : "desc";
   const pageNum = Math.max(1, parseInt(page || "1", 10) || 1);
 
@@ -32,6 +34,7 @@ export default async function ResultsPage({
     if (tag && tag !== "all") params.set("tag", tag);
     if (complaint && complaint !== "all") params.set("complaint", complaint);
     if (responsible && responsible !== "all") params.set("responsible", responsible);
+    if (q) params.set("q", q);
     if (sortBy && sortBy !== "date") params.set("sortBy", sortBy);
     if (order && order !== "desc") params.set("order", order);
     if (p > 1) params.set("page", String(p));
@@ -39,12 +42,13 @@ export default async function ResultsPage({
     return qs ? `?${qs}` : "?";
   };
 
-  // CSV export keeps the active branch/type/tag/responsible filters.
+  // CSV export keeps the active branch/type/tag/responsible/search filters.
   const exportParams = new URLSearchParams();
   if (branchId) exportParams.set("branchId", branchId);
   if (type && type !== "all") exportParams.set("type", type);
   if (tag && tag !== "all") exportParams.set("tag", tag);
   if (responsible && responsible !== "all") exportParams.set("responsible", responsible);
+  if (q) exportParams.set("q", q);
   const exportHref = `/api/admin/results/export${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
 
   // Role scope: MANAGER sees only assigned branches; ADMIN sees all.
@@ -110,6 +114,23 @@ export default async function ResultsPage({
       where.responsibleName = responsible;
     }
 
+    // Full-text search across comment / client / deal id / responsible.
+    // Case-insensitive contains. AND-combined with the filters above; uses
+    // a dedicated key so it doesn't clobber the responsible "__none__" OR.
+    if (q) {
+      where.AND = [
+        {
+          OR: [
+            { comment: { contains: q, mode: "insensitive" } },
+            { clientId: { contains: q, mode: "insensitive" } },
+            { dealId: { contains: q, mode: "insensitive" } },
+            { responsibleName: { contains: q, mode: "insensitive" } },
+            { phone: { contains: q } },
+          ],
+        },
+      ];
+    }
+
     // "source" sorts by the related branch name at the DB level so pagination
     // stays correct (the old in-memory sort only ordered the current page).
     const orderBy: Prisma.SurveyResponseOrderByWithRelationInput =
@@ -167,7 +188,7 @@ export default async function ResultsPage({
         complaintCounts[s] = row._count._all;
       }
     }
-    for (const q of results[5]) questionMap[q.id] = q.text;
+    for (const qrow of results[5]) questionMap[qrow.id] = qrow.text;
     responsibles = results[6]
       .map((r) => r.responsibleName)
       .filter((n): n is string => typeof n === "string" && n.trim().length > 0);
@@ -211,6 +232,8 @@ export default async function ResultsPage({
             never overflows the viewport on intermediate widths. Aligned to
             the right on xl+ and centred otherwise. */}
         <div className="flex flex-wrap items-center justify-center xl:justify-end gap-3 sm:gap-4 w-full xl:w-auto">
+          {/* Full-text search */}
+          <ResultsSearch defaultValue={q} />
           {/* Clear Results Button */}
           <ClearResultsButton />
           {/* CSV export (respects current filters) */}
