@@ -24,6 +24,8 @@ jobs:
       - run: npx prisma generate
       - name: Type-check
         run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm test
       - name: Build
         run: npm run build
       - name: Lint (non-blocking)

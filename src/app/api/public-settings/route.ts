@@ -23,7 +23,17 @@ const PUBLIC_KEYS = [
 
 export const dynamic = "force-dynamic";
 
+// Tiny in-memory cache. Branding changes rarely but this endpoint is hit by
+// every login and survey load, so a short TTL spares the DB a query per hit.
+// Process-local (PM2 fork) — fine for a value that's eventually consistent;
+// a save in the admin shows up within TTL seconds.
+const CACHE_TTL_MS = 30_000;
+let cache: { at: number; data: Record<string, string> } | null = null;
+
 export async function GET() {
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) {
+    return NextResponse.json(cache.data);
+  }
   try {
     const rows = await prisma.settings.findMany({
       where: { key: { in: [...PUBLIC_KEYS] } },
@@ -37,11 +47,13 @@ export async function GET() {
         out[r.key] = r.value ?? "";
       }
     }
+    cache = { at: Date.now(), data: out };
     return NextResponse.json(out);
   } catch (err) {
     console.error("public-settings GET failed:", err);
-    // Never break the login / survey page with a 500 — return an empty
-    // payload so the UI degrades to its built-in defaults.
+    // Serve a stale cache if we have one; otherwise an empty payload so the
+    // login / survey page degrades to its built-in defaults instead of 500.
+    if (cache) return NextResponse.json(cache.data);
     return NextResponse.json({}, { status: 200 });
   }
 }

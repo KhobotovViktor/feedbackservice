@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { fetchWithRetry } from "@/lib/fetch-retry";
 
 // Optional duplicate channel for negative-feedback alerts via a Telegram bot.
 // Configured from Settings (telegram_bot_token / telegram_chat_id) — degrades
@@ -9,22 +10,24 @@ async function postTelegram(
   chatId: string,
   text: string
 ): Promise<{ ok: boolean; error?: string }> {
-  // Hard timeout so a blocked/unreachable api.telegram.org (common on RU VPS)
-  // can't hang the request until nginx returns a 502.
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 10000);
   try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-      }),
-      signal: ctrl.signal,
-    });
+    // fetchWithRetry gives a per-attempt 10s timeout (so a blocked/unreachable
+    // api.telegram.org on a RU VPS can't hang us) plus one retry on a 429/5xx
+    // or network blip.
+    const r = await fetchWithRetry(
+      `https://api.telegram.org/bot${token}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+        }),
+      },
+      { retries: 1, timeoutMs: 10000 }
+    );
     const j = await r.json().catch(() => ({}));
     return { ok: Boolean(j?.ok), error: j?.description };
   } catch (e) {
@@ -35,8 +38,6 @@ async function postTelegram(
           ? e.message
           : String(e);
     return { ok: false, error: msg };
-  } finally {
-    clearTimeout(timer);
   }
 }
 

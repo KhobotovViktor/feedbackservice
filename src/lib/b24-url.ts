@@ -36,7 +36,13 @@ export function isSafeB24Url(url: string): boolean {
     return false;
   }
 
-  return host.includes("bitrix24.");
+  // "bitrix24" must be the registrable domain: <portal>.bitrix24.<tld>.
+  // A bare host.includes("bitrix24.") check was unsafe — it accepted
+  // attacker domains like "bitrix24.fake.com.attacker.io" (bitrix24 is
+  // just the leftmost label there). Require it to be the second-to-last
+  // label so only genuine *.bitrix24.<tld> portals pass.
+  const labels = host.split(".");
+  return labels.length >= 2 && labels[labels.length - 2] === "bitrix24";
 }
 
 /**

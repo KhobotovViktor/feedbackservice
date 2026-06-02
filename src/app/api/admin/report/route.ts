@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
+import { fetchWithRetry } from "@/lib/fetch-retry";
 
 /**
  * Scheduled summary report. Posts a 7-day rollup to the Bitrix24 group chat.
@@ -103,7 +104,7 @@ async function run(req: NextRequest) {
     const raw = sm.b24_group_chat_id.trim();
     const dialogId = raw.startsWith("chat") ? raw : `chat${raw}`;
     try {
-      const r = await fetch(`${base}/im.message.add.json`, {
+      const r = await fetchWithRetry(`${base}/im.message.add.json`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ DIALOG_ID: dialogId, MESSAGE: msg }),
