@@ -28,11 +28,15 @@ export function QuestionInput({
   if (type === "NPS") {
     return (
       <div className="space-y-2">
-        <div className="grid grid-cols-11 gap-1.5">
+        {/* 6 columns on phones (two tidy rows of 6+5, ~48px tap targets),
+            all 11 in one row from sm up. grid-cols-11 alone gave ~30px
+            buttons on a 375px screen — too small to tap reliably. */}
+        <div className="grid grid-cols-6 sm:grid-cols-11 gap-1.5 sm:gap-1.5">
           {Array.from({ length: 11 }, (_, n) => (
             <button
               key={n}
               type="button"
+              aria-label={`Оценка ${n} из 10`}
               onClick={() => onChange(n)}
               className={`aspect-square rounded-xl text-sm font-black transition-all ${
                 value === n

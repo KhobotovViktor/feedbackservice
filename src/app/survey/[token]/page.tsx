@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Confetti } from "@/components/confetti";
 import { QuestionInput } from "@/components/survey/question-input";
-import { CheckCircle, MessageSquare, ArrowRight, MapPin } from "lucide-react";
+import { CheckCircle, MessageSquare, ArrowRight, MapPin, Loader2 } from "lucide-react";
 
 interface Question {
   id: string;
@@ -50,7 +50,13 @@ export default function SurveyPage() {
   const params = useParams();
   const token = params.token as string;
   const [loading, setLoading] = useState(true);
+  // `error` is for FATAL load-time failures (bad/expired token) — it replaces
+  // the whole page. `submitError` is for recoverable SEND failures — shown
+  // inline so the form (and the user's typed comment/phone) survives and they
+  // can retry.
   const [error, setError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [questions, setQuestions] = useState<Question[]>(DEFAULT_QUESTIONS);
   const [answers, setAnswers] = useState<Record<string, number | string>>({});
   const [comment, setComment] = useState("");
@@ -74,6 +80,31 @@ export default function SurveyPage() {
   const [brand, setBrand] = useState(DEFAULT_BRAND);
   // Slide texts from the active template (falls back to defaults).
   const [texts, setTexts] = useState(DEFAULT_TEXTS);
+
+  // Draft persistence: restore a comment/phone saved before a reload or a
+  // failed send, and keep saving them as the user types. Survives connection
+  // blips so a long negative comment is never lost. Cleared on success.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(`survey_draft:${token}`);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (typeof d?.comment === "string") setComment(d.comment);
+        if (typeof d?.phone === "string") setPhone(d.phone);
+      }
+    } catch {
+      // ignore — sessionStorage may be unavailable (privacy mode)
+    }
+  }, [token]);
+  useEffect(() => {
+    try {
+      if (comment || phone) {
+        sessionStorage.setItem(`survey_draft:${token}`, JSON.stringify({ comment, phone }));
+      }
+    } catch {
+      // ignore
+    }
+  }, [comment, phone, token]);
 
   // Apply a /check response to the survey UI: questions, review links, the
   // positive-rating threshold, the balancing recommendation and the VIEW
@@ -252,6 +283,9 @@ export default function SurveyPage() {
   };
 
   const submitFeedback = async (avg: number, positive: boolean) => {
+    if (submitting) return; // guard against double-tap
+    setSubmitting(true);
+    setSubmitError(null);
     try {
       // Update state immediately to avoid race conditions in UI
       setIsPositive(positive);
@@ -279,19 +313,25 @@ export default function SurveyPage() {
         } catch {
           // body wasn't JSON
         }
-        setError(errMsg);
+        // Inline error — keeps the form mounted so the typed comment/phone
+        // aren't lost and the user can simply press the button again.
+        setSubmitError(errMsg);
         return;
       }
 
       if (!isTest) {
         // Per-token device lock — see init() for rationale.
         localStorage.setItem(`survey_completed:${token}`, "true");
+        // Clear the saved draft once successfully submitted.
+        try { sessionStorage.removeItem(`survey_draft:${token}`); } catch {}
       }
-      
+
       // Ensure state is updated before showing success
       setStep("success");
     } catch {
-      setError("Ошибка при отправке. Попробуйте позже.");
+      setSubmitError("Не удалось отправить — проверьте соединение и попробуйте ещё раз. Ваш отзыв сохранён.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -423,6 +463,7 @@ export default function SurveyPage() {
     return typeof v === "string" && v !== ""; // CHOICE / YESNO
   };
   const allAnswered = visibleQuestions.length > 0 && visibleQuestions.every(isAnswered);
+  const answeredCount = visibleQuestions.filter(isAnswered).length;
 
   return (
     <div className="min-h-screen p-4 md:p-8 flex items-center justify-center" style={accentStyle}>
@@ -498,6 +539,22 @@ export default function SurveyPage() {
                 </div>
               </div>
 
+              {/* Per-question progress — only meaningful with 2+ questions. */}
+              {visibleQuestions.length > 1 && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                    <span>Прогресс</span>
+                    <span className="tabular-nums">{answeredCount} / {visibleQuestions.length}</span>
+                  </div>
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full premium-gradient rounded-full transition-all duration-500"
+                      style={{ width: `${Math.round((answeredCount / visibleQuestions.length) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-10">
                 {visibleQuestions.map((q) => (
                   <div key={q.id} className="space-y-4">
@@ -517,12 +574,18 @@ export default function SurveyPage() {
                 ))}
               </div>
 
+              {submitError && (
+                <div className="flex items-start gap-2 p-4 bg-rose-50 text-rose-600 rounded-2xl text-sm font-bold border border-rose-100">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <span>{submitError}</span>
+                </div>
+              )}
               <button
-                disabled={!allAnswered}
+                disabled={!allAnswered || submitting}
                 onClick={handleSubmitRating}
                 className="w-full py-5 premium-gradient text-white rounded-[1.5rem] font-black text-lg flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:grayscale transition-all shadow-2xl shadow-indigo-500/20"
               >
-                Продолжить <ArrowRight className="w-6 h-6" />
+                {submitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Продолжить <ArrowRight className="w-6 h-6" /></>}
               </button>
 
               <div className="pt-8 text-center border-t border-slate-100">
@@ -571,11 +634,18 @@ export default function SurveyPage() {
                 className="w-full px-6 py-4 rounded-[1.5rem] bg-slate-50/50 border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all font-medium placeholder:text-slate-400"
               />
 
+              {submitError && (
+                <div className="flex items-start gap-2 p-4 bg-rose-50 text-rose-600 rounded-2xl text-sm font-bold border border-rose-100">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <span>{submitError}</span>
+                </div>
+              )}
               <button
                 onClick={handleSubmitFeedback}
-                className="w-full py-5 premium-gradient text-white rounded-[1.5rem] font-black text-lg shadow-2xl shadow-indigo-500/20 hover:scale-[1.02] transition-all"
+                disabled={submitting}
+                className="w-full py-5 premium-gradient text-white rounded-[1.5rem] font-black text-lg shadow-2xl shadow-indigo-500/20 hover:scale-[1.02] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
               >
-                Отправить отзыв
+                {submitting ? <Loader2 className="w-6 h-6 animate-spin" /> : (submitError ? "Повторить отправку" : "Отправить отзыв")}
               </button>
             </motion.div>
           )}
