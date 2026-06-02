@@ -9,6 +9,7 @@ import { AiInsights } from "@/components/dashboard/ai-insights";
 import { TrendsPanel } from "@/components/dashboard/trends-panel";
 import { StaffPanel } from "@/components/dashboard/staff-panel";
 import { TimePanel } from "@/components/dashboard/time-panel";
+import { BranchComparison } from "@/components/dashboard/branch-comparison";
 import { CountUp } from "@/components/dashboard/count-up";
 import { getAccessibleBranchIds } from "@/lib/access";
 
@@ -352,6 +353,7 @@ export default async function AdminDashboard({
     const scores = branch.surveyResponses.map((r) => r.averageScore);
     const avg =
       scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    const negative = scores.filter((s) => s < 4.5).length;
     const a = perBranch[branch.id] ?? {
       views: 0,
       clicks: 0,
@@ -369,11 +371,19 @@ export default async function AdminDashboard({
       avg,
       delta, // ПоП изменение средней (или null)
       count: scores.length, // прохождения (успешные ответы)
+      negative, // ответы с оценкой < 4.5
       views: a.views, // открытия опроса (QR/ссылка)
       clicks: a.clicks, // переходы на карты
       clicksByTarget: a.clicksByTarget,
     };
   });
+
+  // Branch comparison ranking: only branches with responses in the period,
+  // sorted best-average first (ties → more responses first). Drives the
+  // explicit «Сравнение филиалов» table.
+  const branchRanking = branchStats
+    .filter((b) => b.count > 0)
+    .sort((a, b) => (b.avg - a.avg) || (b.count - a.count));
 
   // ── Weekly trends + NPS/CSAT + top comment tags ─────────────────────────
   const weekMap = new Map<string, { sum: number; count: number; negative: number; ts: number }>();
@@ -759,6 +769,9 @@ export default async function AdminDashboard({
           </div>
         </div>
       </div>
+
+      {/* Explicit branch leaderboard / comparison */}
+      <BranchComparison branches={branchRanking} />
 
       {/* Weekly trends, NPS/CSAT and top comment tags */}
       <TrendsPanel weekly={weekly} csat={csat} nps={nps} total={trendTotal} topTags={topTags} />
