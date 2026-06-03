@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isSafeB24Url } from "@/lib/b24-url";
+import { logAudit } from "@/lib/audit";
 
 export async function GET() {
   try {
@@ -87,9 +88,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const changedKeys: string[] = [];
     const updates = [];
     for (const key of ALLOWED_KEYS) {
       if (body[key] !== undefined) {
+        changedKeys.push(key);
         updates.push(
           prisma.settings.upsert({
             where: { key },
@@ -101,6 +104,10 @@ export async function POST(req: NextRequest) {
     }
 
     await Promise.all(updates);
+
+    if (changedKeys.length > 0) {
+      void logAudit("settings.update", null, `Изменены настройки: ${changedKeys.join(", ")}`);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

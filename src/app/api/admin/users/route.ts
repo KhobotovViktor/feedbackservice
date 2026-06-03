@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
 
 // User management — ADMIN only. Path is session-gated by proxy.ts; we add an
 // explicit role check here so a logged-in MANAGER can't manage accounts.
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest) {
       },
       select: { id: true, username: true, role: true },
     });
+    void logAudit("user.create", user.username, `Создан пользователь «${user.username}» (${user.role})`);
     return NextResponse.json(user, { status: 201 });
   } catch (error) {
     console.error("Failed to create user:", error);

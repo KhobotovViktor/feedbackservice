@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
 
 async function requireAdmin() {
   const me = await getCurrentUser();
@@ -97,6 +98,13 @@ export async function PATCH(
         branches: { select: { id: true, name: true } },
       },
     });
+
+    const changes: string[] = [];
+    if (data.role) changes.push(`роль → ${data.role}`);
+    if (data.password) changes.push("смена пароля");
+    if (data.branches) changes.push("изменены филиалы");
+    void logAudit("user.update", updated.username, changes.join(", ") || "обновление");
+
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Failed to update user:", error);
@@ -151,6 +159,7 @@ export async function DELETE(
       }
     }
     await prisma.user.delete({ where: { id } });
+    void logAudit("user.delete", target.username, `Удалён пользователь «${target.username}»`);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete user:", error);

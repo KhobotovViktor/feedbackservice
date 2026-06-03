@@ -202,6 +202,21 @@ model SentSurvey {
   followUpCount   Int      @default(0)
 }
 
+// Lightweight audit trail of administrator actions (status changes, settings
+// edits, user CRUD). Append-only; no FK to User so a deleted user's history
+// is preserved (username is snapshotted at write time).
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  username  String?
+  action    String   // machine key, e.g. "complaint.status", "settings.update"
+  target    String?  // affected object id / name
+  details   String?  // human-readable summary
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model B24Webhook {
   id          String   @id @default(cuid())
   // Bitrix24 user ID this webhook acts as (e.g. "706", "847").

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Users, Plus, Trash2, Building2, Play, Power, Palette, Upload, X } from "lucide-react";
+import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Users, Plus, Trash2, Building2, Play, Power, Palette, Upload, X, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -34,6 +34,7 @@ export default function IntegrationPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<null | "success" | "error">(null);
+  const [showToken, setShowToken] = useState(false);
   const [branches, setBranches] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   // Per-operator webhooks
@@ -726,14 +727,24 @@ export default function IntegrationPage() {
                     Telegram-бот (дубль уведомлений о негативе)
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input
-                      type="password"
-                      placeholder="Токен бота (от @BotFather)"
-                      autoComplete="off"
-                      className="px-5 py-3.5 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 focus:bg-white outline-none transition-all text-sm font-mono font-bold"
-                      value={settings.telegram_bot_token}
-                      onChange={(e) => setSettings({ ...settings, telegram_bot_token: e.target.value })}
-                    />
+                    <div className="relative">
+                      <input
+                        type={showToken ? "text" : "password"}
+                        placeholder="Токен бота (от @BotFather)"
+                        autoComplete="off"
+                        className="w-full px-5 py-3.5 pr-12 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 focus:bg-white outline-none transition-all text-sm font-mono font-bold"
+                        value={settings.telegram_bot_token}
+                        onChange={(e) => setSettings({ ...settings, telegram_bot_token: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowToken((v) => !v)}
+                        aria-label={showToken ? "Скрыть токен" : "Показать токен"}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-sky-500 transition-colors"
+                      >
+                        {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                     <input
                       type="text"
                       placeholder="chat_id (напр. -1001234567890)"

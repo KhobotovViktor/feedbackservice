@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
 
 const VALID_STATUSES = ["NEW", "IN_PROGRESS", "RESOLVED"] as const;
 type ComplaintStatus = (typeof VALID_STATUSES)[number];
+const STATUS_LABEL: Record<ComplaintStatus, string> = {
+  NEW: "Новая",
+  IN_PROGRESS: "В работе",
+  RESOLVED: "Решена",
+};
 
 /**
  * Update the complaint-handling state of a single survey response
@@ -45,6 +51,12 @@ export async function PATCH(
       },
       select: { id: true, complaintStatus: true, resolvedAt: true, resolutionNote: true },
     });
+
+    void logAudit(
+      "complaint.status",
+      id,
+      `Статус жалобы → «${STATUS_LABEL[status]}»${resolutionNote ? ` (заметка: ${resolutionNote.slice(0, 80)})` : ""}`
+    );
 
     return NextResponse.json({ success: true, response: updated });
   } catch (error) {

@@ -1,9 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { aiConfigured } from "@/lib/ai";
-import { CheckCircle2, AlertTriangle, XCircle, Database, Webhook, Send, MessageSquare, Bot, Star, RefreshCw } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, Database, Webhook, Send, MessageSquare, Bot, Star, RefreshCw, ScrollText } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+const ACTION_LABEL: Record<string, string> = {
+  "settings.update": "Настройки",
+  "complaint.status": "Жалоба",
+  "user.create": "Пользователь +",
+  "user.update": "Пользователь ✎",
+  "user.delete": "Пользователь ✕",
+};
 
 type Level = "ok" | "warn" | "bad";
 
@@ -74,9 +82,10 @@ export default async function StatusPage() {
   let lastCrmRating: Date | null = null;
   let ratingByService: { service: string; last: Date | null }[] = [];
   let staleBranchSyncs = 0;
+  let auditRows: { id: string; username: string | null; action: string; target: string | null; details: string | null; createdAt: Date }[] = [];
 
   try {
-    const [count, settings, sent, crm, grouped, branchesWithRatings] = await Promise.all([
+    const [count, settings, sent, crm, grouped, branchesWithRatings, audit] = await Promise.all([
       prisma.surveyResponse.count(),
       prisma.settings.findMany({
         where: { key: { in: ["b24_webhook_url", "b24_group_chat_id", "telegram_bot_token", "telegram_chat_id"] } },
@@ -86,6 +95,7 @@ export default async function StatusPage() {
       prisma.ratingHistory.groupBy({ by: ["service"], _max: { createdAt: true } }),
       // Per (branch, service) latest sync — count how many are stale (> 2 days).
       prisma.ratingHistory.groupBy({ by: ["branchId", "service"], _max: { createdAt: true } }),
+      prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 25 }),
     ]);
     responses = count;
     settingsMap = Object.fromEntries(settings.map((s) => [s.key, s.value]));
@@ -96,6 +106,7 @@ export default async function StatusPage() {
     staleBranchSyncs = branchesWithRatings.filter(
       (b) => !b._max.createdAt || b._max.createdAt.getTime() < cutoff
     ).length;
+    auditRows = audit;
   } catch (e) {
     console.error("status page DB error:", e);
     dbOk = false;
@@ -184,6 +195,37 @@ export default async function StatusPage() {
       <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 px-1">
         <RefreshCw className="w-3.5 h-3.5" />
         Данные обновляются при каждом открытии страницы. Зелёный — норма, жёлтый — обратите внимание, красный — требует действий.
+      </div>
+
+      {/* Audit trail */}
+      <div className="bento-card bg-white/60 p-6 md:p-8 space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+            <ScrollText className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">Журнал действий</h2>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Последние операции администраторов</p>
+          </div>
+        </div>
+        {auditRows.length === 0 ? (
+          <p className="text-sm text-slate-400 font-medium italic py-6 text-center">Записей пока нет.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {auditRows.map((a) => (
+              <div key={a.id} className="flex items-start gap-3 p-3 glass border-white/60 rounded-xl text-[12px]">
+                <span className="text-[10px] font-black text-slate-400 tabular-nums shrink-0 w-28">
+                  {a.createdAt.toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                </span>
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-500 border border-indigo-100/50 uppercase tracking-wider shrink-0">
+                  {ACTION_LABEL[a.action] ?? a.action}
+                </span>
+                <span className="font-bold text-slate-700 shrink-0">{a.username || "—"}</span>
+                <span className="text-slate-500 font-medium leading-snug break-words flex-1">{a.details || a.target || ""}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
