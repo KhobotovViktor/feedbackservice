@@ -140,6 +140,7 @@ export async function proxy(req: NextRequest) {
         path.startsWith("/admin/branches") ||
         path.startsWith("/admin/templates") ||
         path.startsWith("/admin/users") ||
+        path.startsWith("/admin/status") ||
         path.startsWith("/api/admin/users") ||
         path.startsWith("/api/admin/b24-webhooks") ||
         path.startsWith("/api/admin/b24-bind-event") ||

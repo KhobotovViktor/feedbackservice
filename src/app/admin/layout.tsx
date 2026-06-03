@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, MessageSquare, LogOut, Link as LinkIcon, Building2, Menu, X, Loader2, Users } from "lucide-react";
+import { LayoutDashboard, MessageSquare, LogOut, Link as LinkIcon, Building2, Menu, X, Loader2, Users, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -78,6 +78,7 @@ export default function AdminLayout({
     { label: "Филиалы", href: "/admin/branches", icon: Building2, adminOnly: true },
     { label: "Шаблоны", href: "/admin/templates", icon: LayoutDashboard, adminOnly: true },
     { label: "Пользователи", href: "/admin/users", icon: Users, adminOnly: true },
+    { label: "Состояние", href: "/admin/status", icon: Activity, adminOnly: true },
     // «Интеграция» moved to the bottom, below «Пользователи», per request.
     { label: "Интеграция", href: "/admin/integration", icon: LinkIcon, adminOnly: true },
   ];
