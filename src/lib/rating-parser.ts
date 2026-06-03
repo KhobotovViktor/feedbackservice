@@ -26,20 +26,20 @@ export function parseRating(service: string, html: string): RatingResult {
       /class="Rating-Value"[^>]*>\s*([\d.,]+)\s*</i,
       /rating-text"[^>]*>\s*([\d.,]+)\s*<\/span>/i,
     ];
+    // Business decision: count = number of text REVIEWS ("отзывы"), NOT total
+    // ratings ("оценки"). A Yandex card shows both — e.g. Vologda: "2264
+    // оценки" but "892 отзыва". The parser used to grab whichever appeared
+    // first, causing the value to flip between the two. We now prefer the
+    // review count (JSON-LD reviewCount, then "N отзыв…"), and only fall back
+    // to the ratings count when no review count is present.
     const countPatterns = [
-      // Anchor to .business-header-rating-view__text first — that's the only
-      // node that carries the *card's* rating count. Without the anchor the
-      // bare `aria-label="N оценок"` regex can grab an unrelated counter on
-      // the page (observed on the Vologda card: 2279 instead of ~909).
-      /business-header-rating-view__text[^>]*aria-label="\s*(\d[\d\s ]*)\s+оцен/i,
-      /business-header-rating-view__text[^>]*>\s*(\d[\d\s ]*)\s+оцен/i,
-      /aria-label="\s*(\d[\d\s ]*)\s+оцен[а-я]*"/i,
-      />\s*(\d[\d\s ]*)\s+оцен[а-я]*\s*</i,
       /"reviewCount"\s*:\s*"?(\d+)"?/i,
       /content="[^"]*?(\d+)\s+отзыв/i,
-      /content="[^"]*?([\d\s]+)\s+оценок/i,
-      /class="Rating-Count"[^>]*>[^<]*?(\d+)[^<]*?</i,
-      /(\d+)\s+оцен/i,
+      /(\d[\d\s ]*)\s+отзыв[а-я]*/i,
+      // Fallbacks: ratings count, if the page exposes no review count at all.
+      /business-header-rating-view__text[^>]*aria-label="\s*(\d[\d\s ]*)\s+оцен/i,
+      /aria-label="\s*(\d[\d\s ]*)\s+оцен[а-я]*"/i,
+      /(\d[\d\s ]*)\s+оцен[а-я]*/i,
     ];
 
     let wRating: string | undefined;
