@@ -55,4 +55,5 @@ jobs:
             cp public/favicon.ico favicon.ico 2>/dev/null || true; \
             cp public/icon.png icon.png 2>/dev/null || true; \
             node_modules/.bin/pm2 restart feedback --update-env && \
-            node_modules/.bin/pm2 save"
+            node_modules/.bin/pm2 save && \
+            node_modules/.bin/pm2 flush feedback"

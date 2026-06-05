@@ -6,6 +6,7 @@ import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 import { tagComment, aiConfigured } from "@/lib/ai";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
 import { sendTelegramMessage } from "@/lib/telegram";
+import { verbose } from "@/lib/log";
 
 export async function POST(req: NextRequest) {
   if (!rateLimit(`sv:${getClientIp(req)}`, 15, 60_000)) {
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     // Sandbox mode for testing — no persistence, no score needed.
     if (isTest) {
-      console.log("Test survey detected. Skipping persistence and B24 updates.");
+      verbose("Test survey detected. Skipping persistence and B24 updates.");
       return NextResponse.json({ success: true, isTest: true });
     }
 
@@ -332,7 +333,7 @@ export async function POST(req: NextRequest) {
           }
 
           if (Object.keys(updateData).length > 0) {
-            console.log(
+            verbose(
               `Updating Bitrix24 Deal ${dealId} with:`,
               JSON.stringify(updateData)
             );

@@ -6,6 +6,7 @@ import { getAppOrigin } from "@/lib/url";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 import { dispatchSurveyToOpenChannel } from "@/lib/b24-send";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { verbose } from "@/lib/log";
 
 function isValidId(value: string): boolean {
   return value.length > 0 && value.length <= 128 && !/[{}\n\r]/.test(value);
@@ -95,7 +96,7 @@ async function handleWebhook(req: NextRequest) {
       // P2002 = unique constraint violation on the @unique(dealId).
       const code = (e as { code?: string } | null)?.code;
       if (code === "P2002") {
-        console.log(
+        verbose(
           `Survey already dispatched for ${entityType} ${entityId}. Skipping to prevent duplicates.`
         );
         return NextResponse.json({
@@ -140,7 +141,7 @@ async function handleWebhook(req: NextRequest) {
   const appUrl = getAppOrigin(req);
   
   const fullSurveyUrl = `${appUrl}/survey/${token}`;
-  console.log(`Generated Full Survey URL: ${fullSurveyUrl}`);
+  verbose(`Generated Full Survey URL: ${fullSurveyUrl}`);
 
   // Generate Short Link. The SentSurvey claim above already prevents
   // duplicate dispatch, so we only need to mint a short code here.
@@ -156,7 +157,7 @@ async function handleWebhook(req: NextRequest) {
         },
       });
       surveyUrl = `${appUrl}/s/${code}`;
-      console.log(`Generated Short Survey URL: ${surveyUrl}`);
+      verbose(`Generated Short Survey URL: ${surveyUrl}`);
     } catch (shortError) {
       console.error("Shortening failed, using full URL:", shortError);
     }
@@ -174,7 +175,7 @@ async function handleWebhook(req: NextRequest) {
 
   // Outbound notification to Bitrix24 (Skip if it's a test)
   if (isTest) {
-    console.log("Test mode: Skipping B24 outbound notifications.");
+    verbose("Test mode: Skipping B24 outbound notifications.");
     return NextResponse.json({
       surveyUrl,
       token,
@@ -211,7 +212,7 @@ async function handleWebhook(req: NextRequest) {
         const dealDataRaw = await dealRes.json();
         dealData = (dealDataRaw.result as EntityData) ?? null;
         if (!dealData) {
-          console.log(
+          verbose(
             `${entityGetMethod} returned no result for ${entityType} ${entityId} — ${dealDataRaw.error_description || dealDataRaw.error || "empty result"}`
           );
         }
@@ -247,7 +248,7 @@ async function handleWebhook(req: NextRequest) {
         ? perOperatorWebhooks.find((w) => w.userId === assignedById)
         : undefined;
       if (assignedWebhook) {
-        console.log(
+        verbose(
           `Routing to per-operator webhook for ASSIGNED_BY_ID=${assignedById}`
         );
         pushCandidate(assignedWebhook.url);
@@ -266,7 +267,7 @@ async function handleWebhook(req: NextRequest) {
             where: { dealId: dedupKey },
             data: { responsibleName: assignedWebhook.displayName },
           });
-          console.log(
+          verbose(
             `responsibleName set from webhook mapping: ${assignedWebhook.displayName}`
           );
         } catch (e) {
@@ -306,7 +307,7 @@ async function handleWebhook(req: NextRequest) {
                 where: { dealId: dedupKey },
                 data: { responsibleName: used.displayName },
               });
-              console.log(
+              verbose(
                 `responsibleName backfilled from dialog operator: ${used.displayName} (webhook user ${used.userId})`
               );
             } catch (e) {
@@ -337,7 +338,7 @@ async function handleWebhook(req: NextRequest) {
             `crm.timeline.comment.add error: ${timelineData.error_description || timelineData.error}`
           );
         } else {
-          console.log(`Timeline comment added (id ${timelineData.result})`);
+          verbose(`Timeline comment added (id ${timelineData.result})`);
         }
       } catch (e) {
         console.error("crm.timeline.comment.add request failed:", e);
@@ -350,7 +351,7 @@ async function handleWebhook(req: NextRequest) {
       const existingValue = dealData ? dealData[linkField] : null;
 
       if (!existingValue || String(existingValue).trim() === "") {
-        console.log(`Field ${linkField} is empty. Updating with survey link.`);
+        verbose(`Field ${linkField} is empty. Updating with survey link.`);
         const updateMethod =
           entityType === "lead" ? "crm.lead.update.json" : "crm.deal.update.json";
         try {
@@ -372,7 +373,7 @@ async function handleWebhook(req: NextRequest) {
           console.error(`${updateMethod} request failed:`, e);
         }
       } else {
-        console.log(
+        verbose(
           `Field ${linkField} already contains data ("${existingValue}"). Skipping update to prevent overwriting.`
         );
       }

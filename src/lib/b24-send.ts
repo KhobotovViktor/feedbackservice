@@ -6,6 +6,8 @@
 // (and its contacts) and sends the message via the first operator allowed to
 // write into that chat.
 
+import { verbose } from "@/lib/log";
+
 type EntityType = "deal" | "lead";
 
 interface DealLike {
@@ -41,7 +43,7 @@ async function sendToChatViaCandidates(
   message: string
 ): Promise<DispatchResult> {
   const entityType = type.toLowerCase();
-  console.log(`Searching for chat bound to ${entityType} ${id}...`);
+  verbose(`Searching for chat bound to ${entityType} ${id}...`);
   try {
     const chatUrl =
       `${sendCandidates[sendCandidates.length - 1]}/imopenlines.crm.chat.get.json` +
@@ -51,7 +53,7 @@ async function sendToChatViaCandidates(
     const chatRes = await fetch(chatUrl);
     const chatData = await chatRes.json();
     if (chatData.error) {
-      console.log(
+      verbose(
         `imopenlines.crm.chat.get error for ${entityType} ${id}: ${chatData.error_description || chatData.error}`
       );
       return { ok: false };
@@ -68,7 +70,7 @@ async function sendToChatViaCandidates(
       for (const sendBase of sendCandidates) {
         const sendWebhookUserId = sendBase.match(/\/rest\/(\d+)\//)?.[1] || "1";
 
-        console.log(
+        verbose(
           `Attempting im.message.add via user ${sendWebhookUserId} to Chat ${chatId}...`
         );
         const imRes = await fetch(`${sendBase}/im.message.add.json`, {
@@ -78,17 +80,17 @@ async function sendToChatViaCandidates(
         });
         const imData = await imRes.json();
         if (imData.result) {
-          console.log(
+          verbose(
             `im.message.add OK (msg id ${imData.result}) — user ${sendWebhookUserId} → chat ${chatId}`
           );
           return { ok: true, usedWebhookUrl: sendBase };
         }
         if (imData.error === "CANCELED") {
-          console.log(
+          verbose(
             `im.message.add denied — user ${sendWebhookUserId} is not a member of chat ${chatId}'s Open Line`
           );
         } else {
-          console.log(
+          verbose(
             `im.message.add error: ${imData.error_description || imData.error || "unknown"}`
           );
         }
@@ -108,12 +110,12 @@ async function sendToChatViaCandidates(
         });
         const crmData = await crmRes.json();
         if (crmData.result) {
-          console.log(
+          verbose(
             `imopenlines.crm.message.add OK — user ${sendWebhookUserId} → chat ${chatId}`
           );
           return { ok: true, usedWebhookUrl: sendBase };
         }
-        console.log(
+        verbose(
           `imopenlines.crm.message.add error: ${crmData.error_description || crmData.error || "unknown"}`
         );
       }
@@ -134,7 +136,7 @@ export async function dispatchSurveyToOpenChannel(opts: DispatchOpts): Promise<D
   const { baseUrl, sendCandidates, entityType, entityId, message } = opts;
   let dealData = opts.dealData ?? null;
 
-  console.log(`Open Channel Delivery attempt for ${entityType} ${entityId}`);
+  verbose(`Open Channel Delivery attempt for ${entityType} ${entityId}`);
 
   // Lazily fetch the entity if not provided (follow-up path).
   if (!dealData) {
@@ -207,7 +209,7 @@ export async function dispatchSurveyToOpenChannel(opts: DispatchOpts): Promise<D
     result = await sendToChatViaCandidates(sendCandidates, "contact", leadContactId, message);
   }
 
-  if (result.ok) console.log("SUCCESS: Message delivered to Open Channel.");
-  else console.log("No Open Channel session accepted the message via any registered webhook.");
+  if (result.ok) verbose("SUCCESS: Message delivered to Open Channel.");
+  else verbose("No Open Channel session accepted the message via any registered webhook.");
   return result;
 }

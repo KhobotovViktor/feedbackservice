@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 import { dispatchSurveyToOpenChannel } from "@/lib/b24-send";
+import { verbose } from "@/lib/log";
 
 /**
  * Follow-up reminder job: re-sends the survey link to customers who were sent
@@ -117,7 +118,7 @@ async function run(req: NextRequest) {
     remindersSent++;
   }
 
-  console.log(
+  verbose(
     `Follow-up run: ${remindersSent} reminders, ${skippedCompleted} already completed, ${pending.length} candidates.`
   );
   return NextResponse.json({
