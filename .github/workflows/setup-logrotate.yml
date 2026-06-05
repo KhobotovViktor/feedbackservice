@@ -1,0 +1,51 @@
+name: Setup PM2 log rotation
+
+# One-shot maintenance task: install & configure pm2-logrotate on the server
+# so PM2 logs stop filling the disk, flush accumulated logs, and print disk
+# diagnostics (df/du before+after). Runs from a GitHub runner over SSH (its IP
+# isn't under the local fail2ban ban). Same secrets as Deploy.
+on:
+  workflow_dispatch:
+
+jobs:
+  logrotate:
+    runs-on: ubuntu-latest
+    env:
+      REMOTE: /home/bitrix/ext_www/feedback.alleyadoma.ru
+    steps:
+      - name: Configure pm2-logrotate + disk diagnostics
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          SSHOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $HOME/.ssh/id_deploy"
+          ssh $SSHOPTS -p "$PORT" "$USER@$HOST" "bash -s" <<'REMOTE_SCRIPT'
+            set -e
+            cd /home/bitrix/ext_www/feedback.alleyadoma.ru
+            PM2=node_modules/.bin/pm2
+            echo '=== DISK (before) ==='
+            df -h / || true
+            echo '=== Largest log/cache dirs (before) ==='
+            du -sh ~/.pm2/logs ~/.npm .next 2>/dev/null || true
+            du -sh ~/.pm2/logs/* 2>/dev/null | sort -rh | head -10 || true
+            echo '=== Install pm2-logrotate ==='
+            $PM2 install pm2-logrotate || pm2 install pm2-logrotate
+            echo '=== Configure rotation (10M / 7 files / compress / hourly) ==='
+            $PM2 set pm2-logrotate:max_size 10M
+            $PM2 set pm2-logrotate:retain 7
+            $PM2 set pm2-logrotate:compress true
+            $PM2 set pm2-logrotate:rotateInterval '0 * * * *'
+            echo '=== Flush accumulated logs ==='
+            $PM2 flush || true
+            echo '=== DISK (after) ==='
+            df -h / || true
+            du -sh ~/.pm2/logs ~/.npm .next 2>/dev/null || true
+            echo '=== PM2 modules + process list ==='
+            $PM2 ls || true
+          REMOTE_SCRIPT
