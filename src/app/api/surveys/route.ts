@@ -6,6 +6,7 @@ import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 import { tagComment, aiConfigured } from "@/lib/ai";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
 import { sendTelegramMessage } from "@/lib/telegram";
+import { fetchWithRetry } from "@/lib/fetch-retry";
 import { verbose } from "@/lib/log";
 
 export async function POST(req: NextRequest) {
@@ -53,6 +54,61 @@ export async function POST(req: NextRequest) {
         if (sent?.responsibleName) responsibleName = sent.responsibleName;
       } catch {
         // best-effort lookup — fall through to null
+      }
+    }
+
+    // 3rd fallback: still unknown → ask Bitrix24 for the deal/lead's current
+    // ASSIGNED_BY and resolve a display name. Covers links where the robot
+    // never passed ?responsible= and the operator wasn't pre-registered (the
+    // ~21% of dispatches with an empty responsible). Best-effort, never blocks.
+    const isRealCrmId =
+      dealId && dealId !== "0" && dealId !== "TEST_DEAL" && !dealId.startsWith("QR");
+    if (!responsibleName && isRealCrmId) {
+      try {
+        const wh = await prisma.settings.findUnique({ where: { key: "b24_webhook_url" } });
+        if (wh?.value && isSafeB24Url(wh.value)) {
+          const base = normalizeB24Url(wh.value);
+          const getMethod = payload.entityType === "lead" ? "crm.lead.get.json" : "crm.deal.get.json";
+          const dr = await fetchWithRetry(
+            `${base}/${getMethod}?id=${encodeURIComponent(dealId)}`,
+            {},
+            { retries: 1, timeoutMs: 8000 }
+          );
+          const dj = await dr.json();
+          const assignedById = dj?.result?.ASSIGNED_BY_ID
+            ? String(dj.result.ASSIGNED_BY_ID)
+            : null;
+          if (assignedById) {
+            // a) prefer the registered operator's display name…
+            const op = await prisma.b24Webhook.findUnique({
+              where: { userId: assignedById },
+              select: { displayName: true },
+            });
+            if (op?.displayName) {
+              responsibleName = op.displayName;
+            } else {
+              // b) …otherwise ask B24 for the user's name.
+              const ur = await fetchWithRetry(
+                `${base}/user.get.json?ID=${encodeURIComponent(assignedById)}`,
+                {},
+                { retries: 1, timeoutMs: 8000 }
+              );
+              const uj = await ur.json();
+              const u = Array.isArray(uj?.result) ? uj.result[0] : null;
+              const full = [u?.LAST_NAME, u?.NAME].filter(Boolean).join(" ").trim();
+              if (full) responsibleName = full.slice(0, 256);
+            }
+          }
+          // Backfill the dispatch row so follow-ups and re-submits reuse it.
+          if (responsibleName) {
+            const sentKey = payload.entityType === "lead" ? `lead:${dealId}` : dealId;
+            await prisma.sentSurvey
+              .update({ where: { dealId: sentKey }, data: { responsibleName } })
+              .catch(() => {});
+          }
+        }
+      } catch (e) {
+        console.error("responsible lookup from B24 failed:", e);
       }
     }
 
