@@ -56,3 +56,6 @@ google_njs_test.html
 
 # deployment helpers (contain credentials)
 /.deploy
+
+# Claude Code worktrees / local state
+.claude/
