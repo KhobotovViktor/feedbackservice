@@ -42,12 +42,14 @@ function getKey(): Uint8Array | null {
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
 
-  // 1. Static assets — skip CSP injection (browsers don't render them as HTML)
+  // 1. Static assets — skip CSP injection (browsers don't render them as HTML).
+  //    The dotted-path check is scoped to NON-/api paths: a bare `includes(".")`
+  //    would let any API route containing a dot bypass the auth gate entirely.
   if (
-    path.includes(".") ||
     path.startsWith("/_next") ||
     path.startsWith("/icons/") ||
-    path === "/favicon.ico"
+    path === "/favicon.ico" ||
+    (/\.[a-zA-Z0-9]+$/.test(path) && !path.startsWith("/api/"))
   ) {
     return NextResponse.next();
   }
@@ -74,7 +76,13 @@ export async function proxy(req: NextRequest) {
     path.startsWith("/survey") ||
     path.startsWith("/s/") ||
     path.startsWith("/api/auth") ||
-    path.startsWith("/api/surveys") ||
+    // Survey endpoints: ONLY the public ones bypass the session gate —
+    // opening a survey (GET /api/surveys/check) and submitting it (POST
+    // /api/surveys). The mutating GET-list / PATCH / DELETE under /api/surveys
+    // fall through to the session gate (and role/branch checks in-handler), so
+    // a blanket startsWith no longer exposes a global wipe to any caller.
+    path === "/api/surveys/check" ||
+    (path === "/api/surveys" && req.method === "POST") ||
     path.startsWith("/api/b24/webhook") ||
     // Open Line "dialog closed" event handler — enforces its own rate limit
     // and optional shared secret, so it bypasses the session gate like the robot

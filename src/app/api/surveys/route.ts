@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifySurveyToken } from "@/lib/auth-utils";
-import { getSession } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 import { tagComment, aiConfigured } from "@/lib/ai";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
@@ -57,60 +57,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3rd fallback: still unknown → ask Bitrix24 for the deal/lead's current
-    // ASSIGNED_BY and resolve a display name. Covers links where the robot
-    // never passed ?responsible= and the operator wasn't pre-registered (the
-    // ~21% of dispatches with an empty responsible). Best-effort, never blocks.
-    const isRealCrmId =
-      dealId && dealId !== "0" && dealId !== "TEST_DEAL" && !dealId.startsWith("QR");
-    if (!responsibleName && isRealCrmId) {
-      try {
-        const wh = await prisma.settings.findUnique({ where: { key: "b24_webhook_url" } });
-        if (wh?.value && isSafeB24Url(wh.value)) {
-          const base = normalizeB24Url(wh.value);
-          const getMethod = payload.entityType === "lead" ? "crm.lead.get.json" : "crm.deal.get.json";
-          const dr = await fetchWithRetry(
-            `${base}/${getMethod}?id=${encodeURIComponent(dealId)}`,
-            {},
-            { retries: 1, timeoutMs: 8000 }
-          );
-          const dj = await dr.json();
-          const assignedById = dj?.result?.ASSIGNED_BY_ID
-            ? String(dj.result.ASSIGNED_BY_ID)
-            : null;
-          if (assignedById) {
-            // a) prefer the registered operator's display name…
-            const op = await prisma.b24Webhook.findUnique({
-              where: { userId: assignedById },
-              select: { displayName: true },
-            });
-            if (op?.displayName) {
-              responsibleName = op.displayName;
-            } else {
-              // b) …otherwise ask B24 for the user's name.
-              const ur = await fetchWithRetry(
-                `${base}/user.get.json?ID=${encodeURIComponent(assignedById)}`,
-                {},
-                { retries: 1, timeoutMs: 8000 }
-              );
-              const uj = await ur.json();
-              const u = Array.isArray(uj?.result) ? uj.result[0] : null;
-              const full = [u?.LAST_NAME, u?.NAME].filter(Boolean).join(" ").trim();
-              if (full) responsibleName = full.slice(0, 256);
-            }
-          }
-          // Backfill the dispatch row so follow-ups and re-submits reuse it.
-          if (responsibleName) {
-            const sentKey = payload.entityType === "lead" ? `lead:${dealId}` : dealId;
-            await prisma.sentSurvey
-              .update({ where: { dealId: sentKey }, data: { responsibleName } })
-              .catch(() => {});
-          }
-        }
-      } catch (e) {
-        console.error("responsible lookup from B24 failed:", e);
-      }
-    }
+    // NB: a 3rd fallback that asks Bitrix24 for the deal/lead's ASSIGNED_BY
+    // when the responsible is still unknown used to run HERE, on the critical
+    // path — up to ~16-32s of blocking B24 calls before the customer's "thank
+    // you". It now runs AFTER the response is returned, in the fire-and-forget
+    // B24 block below, and back-fills both SurveyResponse and SentSurvey.
 
     // City-selection scenario: when the client picked a city, that city's
     // branch overrides the token's branch — so the saved response, the group
@@ -260,87 +211,139 @@ export async function POST(req: NextRequest) {
       })();
     }
 
-    // Negative feedback → optional Telegram alert (duplicate of the B24 chat).
-    // Fire-and-forget; no-op when Telegram isn't configured.
-    if (isNegative) {
-      void (async () => {
-        try {
-          const esc = (s: string) =>
-            s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-          let branchName = "Без филиала";
-          if (effectiveBranchId) {
-            const b = await prisma.branch.findUnique({
-              where: { id: effectiveBranchId },
-              select: { name: true },
-            });
-            if (b) branchName = b.name;
-          }
-          const when = new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow" });
-          const isCrm =
-            dealId && dealId !== "0" && dealId !== "TEST_DEAL" && !dealId.startsWith("QR");
-          const label = entityType === "lead" ? "Лид" : "Сделка";
-          let text = `⚠️ <b>Негативный отзыв</b>\n`;
-          text += `📅 ${esc(when)}\n`;
-          text += `🏢 Филиал: ${esc(branchName)}\n`;
-          text += `⭐ Оценка: ${averageScore.toFixed(1)}\n`;
-          text += `👤 Ответственный: ${esc(responsibleName || "—")}\n`;
-          if (sanitizedPhone) text += `📞 Телефон: ${esc(sanitizedPhone)}\n`;
-          if (isCrm) text += `🔗 ${label} № ${esc(dealId)}\n`;
-          if (comment) text += `\n💬 ${esc(String(comment))}`;
-          await sendTelegramMessage(text);
-        } catch (e) {
-          console.error("Telegram negative alert failed:", e);
-        }
-      })();
-    }
+    // Everything that talks to Bitrix24 / Telegram now runs AFTER the response
+    // is returned — one fire-and-forget block. The customer never waits on a
+    // slow or unreachable B24, and nothing here can fail the submission.
+    // Outbound calls use fetchWithRetry with a hard per-attempt timeout.
+    void (async () => {
+      // BBCode is the chat markup ([b], [url], …). Customer-supplied text
+      // (comment, free-text answers) and even admin-supplied labels must not
+      // be able to inject tags, so we neutralise brackets in interpolated
+      // values. The static template keeps its real [b]/[url] tags.
+      const escBB = (s: unknown) => String(s).replace(/[[\]]/g, " ");
+      const isCrm =
+        dealId && dealId !== "0" && dealId !== "TEST_DEAL" && !dealId.startsWith("QR");
+      const when = new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow" });
 
-    // Handle B24 Field Mapping + Group Chat Notification
-    try {
-      const settings = await prisma.settings.findMany({
-        where: { key: { startsWith: "b24_" } },
-      });
-      const settingsMap = settings.reduce<Record<string, string>>(
-        (acc, curr) => {
+      try {
+        const settings = await prisma.settings.findMany({
+          where: { key: { startsWith: "b24_" } },
+        });
+        const settingsMap = settings.reduce<Record<string, string>>((acc, curr) => {
           acc[curr.key] = curr.value;
           return acc;
-        },
-        {}
-      );
+        }, {});
+        const b24Base =
+          settingsMap.b24_webhook_url && isSafeB24Url(settingsMap.b24_webhook_url)
+            ? normalizeB24Url(settingsMap.b24_webhook_url)
+            : null;
 
-      if (settingsMap.b24_webhook_url && isSafeB24Url(settingsMap.b24_webhook_url)) {
-        const cleanBaseUrl = normalizeB24Url(settingsMap.b24_webhook_url);
+        // 0. Resolve the responsible operator from B24 when still unknown (the
+        //    ~21% of dispatches the robot sent without ?responsible=). Moved
+        //    off the critical path; back-fills the response and dispatch rows.
+        if (!responsibleName && isCrm && b24Base) {
+          try {
+            const getMethod =
+              entityType === "lead" ? "crm.lead.get.json" : "crm.deal.get.json";
+            const dr = await fetchWithRetry(
+              `${b24Base}/${getMethod}?id=${encodeURIComponent(dealId)}`,
+              {},
+              { retries: 1, timeoutMs: 8000 }
+            );
+            const dj = await dr.json();
+            const assignedById = dj?.result?.ASSIGNED_BY_ID
+              ? String(dj.result.ASSIGNED_BY_ID)
+              : null;
+            if (assignedById) {
+              const op = await prisma.b24Webhook.findUnique({
+                where: { userId: assignedById },
+                select: { displayName: true },
+              });
+              if (op?.displayName) {
+                responsibleName = op.displayName;
+              } else {
+                const ur = await fetchWithRetry(
+                  `${b24Base}/user.get.json?ID=${encodeURIComponent(assignedById)}`,
+                  {},
+                  { retries: 1, timeoutMs: 8000 }
+                );
+                const uj = await ur.json();
+                const u = Array.isArray(uj?.result) ? uj.result[0] : null;
+                const full = [u?.LAST_NAME, u?.NAME].filter(Boolean).join(" ").trim();
+                if (full) responsibleName = full.slice(0, 256);
+              }
+            }
+            if (responsibleName) {
+              const sentKey = entityType === "lead" ? `lead:${dealId}` : dealId;
+              await Promise.all([
+                prisma.surveyResponse
+                  .update({ where: { dealId }, data: { responsibleName } })
+                  .catch(() => {}),
+                prisma.sentSurvey
+                  .update({ where: { dealId: sentKey }, data: { responsibleName } })
+                  .catch(() => {}),
+              ]);
+            }
+          } catch (e) {
+            console.error("responsible lookup from B24 failed:", e);
+          }
+        }
 
-        // Fetch questions — used for both field mapping and notification message.
-        // Read straight from the DB instead of self-calling /api/questions:
-        // that endpoint is admin-gated by proxy.ts, so a server-side fetch
-        // (which has no session cookie) gets a 401 and the field-mapping
-        // block silently no-ops. The user-visible symptom was the survey
-        // link reaching the deal but the UF_-graded fields staying empty.
-        // If the token carried a templateId we narrow to its questions;
-        // otherwise we fall back to all questions (legacy behavior).
+        // Branch name (shared by the Telegram alert and the chat card).
+        let branchName = "Без филиала";
+        if (effectiveBranchId) {
+          const b = await prisma.branch.findUnique({
+            where: { id: effectiveBranchId },
+            select: { name: true },
+          });
+          if (b) branchName = b.name;
+        }
+
+        // 1. Negative-feedback Telegram alert. No-op when not configured.
+        if (isNegative) {
+          try {
+            const esc = (s: string) =>
+              s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const label = entityType === "lead" ? "Лид" : "Сделка";
+            let text = `⚠️ <b>Негативный отзыв</b>\n`;
+            text += `📅 ${esc(when)}\n`;
+            text += `🏢 Филиал: ${esc(branchName)}\n`;
+            text += `⭐ Оценка: ${averageScore.toFixed(1)}\n`;
+            text += `👤 Ответственный: ${esc(responsibleName || "—")}\n`;
+            if (sanitizedPhone) text += `📞 Телефон: ${esc(sanitizedPhone)}\n`;
+            if (isCrm) text += `🔗 ${label} № ${esc(dealId)}\n`;
+            if (comment) text += `\n💬 ${esc(String(comment))}`;
+            await sendTelegramMessage(text);
+          } catch (e) {
+            console.error("Telegram negative alert failed:", e);
+          }
+        }
+
+        // 2. Bitrix24 field mapping + group-chat card.
+        if (!b24Base) return;
+        const cleanBaseUrl = b24Base;
+
+        // Read questions straight from the DB (the /api/questions endpoint is
+        // admin-gated, so a server-side fetch with no cookie would 401).
         type Q = { id: string; text: string };
         let questions: Q[] = [];
         try {
-          const dbQuestions = await prisma.question.findMany({
+          questions = await prisma.question.findMany({
             where: effectiveTemplateId ? { templateId: effectiveTemplateId } : {},
             orderBy: { order: "asc" },
             select: { id: true, text: true },
           });
-          questions = dbQuestions;
         } catch (qErr) {
           console.error("Direct question load failed:", qErr);
         }
 
-        // 1–4. Update Bitrix24 deal fields
-        if (questions.length > 0) {
+        // 1–5. Write graded fields back to the deal/lead. Pick the method by
+        // entityType — the bug before always called crm.deal.update, so lead
+        // surveys silently dropped their scores (or hit an unrelated deal).
+        if (isCrm && questions.length > 0) {
           const updateData: Record<string, string | number> = {};
 
-          // 1. Quality of service
           if (settingsMap.b24_field_quality) {
-            // Match the "service quality" question by keyword in any
-            // language/branding — the bare "качество" / "quality" /
-            // "обслуживания" tokens are reliable, brand name in the text
-            // would just over-fit to one organisation's wording.
             const q = questions.find(
               (q) =>
                 q.text.toLowerCase().includes("качество обслуживания") ||
@@ -349,14 +352,10 @@ export async function POST(req: NextRequest) {
             );
             const qv = q ? answersMap[q.id] : undefined;
             const q0v = questions[0] ? answersMap[questions[0].id] : undefined;
-            if (isNum(qv)) {
-              updateData[settingsMap.b24_field_quality] = qv;
-            } else if (isNum(q0v)) {
-              updateData[settingsMap.b24_field_quality] = q0v;
-            }
+            if (isNum(qv)) updateData[settingsMap.b24_field_quality] = qv;
+            else if (isNum(q0v)) updateData[settingsMap.b24_field_quality] = q0v;
           }
 
-          // 2. Support worker
           if (settingsMap.b24_field_support) {
             const q = questions.find(
               (q) =>
@@ -365,72 +364,53 @@ export async function POST(req: NextRequest) {
             );
             const qv = q ? answersMap[q.id] : undefined;
             const q1v = questions[1] ? answersMap[questions[1].id] : undefined;
-            if (isNum(qv)) {
-              updateData[settingsMap.b24_field_support] = qv;
-            } else if (isNum(q1v)) {
-              updateData[settingsMap.b24_field_support] = q1v;
-            }
+            if (isNum(qv)) updateData[settingsMap.b24_field_support] = qv;
+            else if (isNum(q1v)) updateData[settingsMap.b24_field_support] = q1v;
           }
 
-          // 3. Average
           if (settingsMap.b24_field_average) {
             updateData[settingsMap.b24_field_average] = averageScore;
           }
-
-          // 4. Comment (only if negative)
           if (settingsMap.b24_field_comment && averageScore < 4 && comment) {
             updateData[settingsMap.b24_field_comment] = comment;
           }
-
-          // 5. Callback phone — only for negative responses where the client
-          // left a number. Lets a manager ring back fast to save the review.
           if (settingsMap.b24_field_phone && isNegative && sanitizedPhone) {
             updateData[settingsMap.b24_field_phone] = sanitizedPhone;
           }
 
           if (Object.keys(updateData).length > 0) {
-            verbose(
-              `Updating Bitrix24 Deal ${dealId} with:`,
-              JSON.stringify(updateData)
+            const updMethod =
+              entityType === "lead" ? "crm.lead.update.json" : "crm.deal.update.json";
+            verbose(`Updating Bitrix24 ${entityType ?? "deal"} ${dealId} with:`, JSON.stringify(updateData));
+            await fetchWithRetry(
+              `${cleanBaseUrl}/${updMethod}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: dealId, fields: updateData }),
+              },
+              { retries: 1, timeoutMs: 8000 }
             );
-            await fetch(`${cleanBaseUrl}/crm.deal.update.json`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: dealId, fields: updateData }),
-            });
           }
         }
 
-        // 5. Group chat notification — sent for EVERY new response (not just
-        // negatives), with full context for the team.
+        // Group-chat card — sent for EVERY new response.
         if (settingsMap.b24_group_chat_id) {
-          const branchId = effectiveBranchId;
-          let branchName = "Без филиала";
-          if (branchId) {
-            const b = await prisma.branch.findUnique({ where: { id: branchId } });
-            if (b) branchName = b.name;
-          }
-
-          // Portal base, e.g. https://am35.bitrix24.ru (strip /rest/<id>/<token>).
           const portal = cleanBaseUrl.replace(/\/rest\/.*$/, "");
           const crmType = entityType === "lead" ? "lead" : "deal";
-          const isCrm =
-            dealId && dealId !== "0" && dealId !== "TEST_DEAL" && !dealId.startsWith("QR");
           const entityLabel = entityType === "lead" ? "Лид" : "Сделка";
-          const when = new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow" });
 
           const head = isNegative ? "⚠️ [b]Новая оценка (негатив)[/b]" : "✅ [b]Новая оценка[/b]";
           let msg = `${head}\n\n`;
           msg += `📅 [b]Дата:[/b] ${when}\n`;
-          msg += `🏢 [b]Филиал:[/b] ${branchName}\n`;
+          msg += `🏢 [b]Филиал:[/b] ${escBB(branchName)}\n`;
           msg += `⭐ [b]Общая оценка:[/b] ${averageScore.toFixed(1)}\n`;
 
-          // Per-question scores. Prefer the template questions of the branch.
           let displayQuestions: { id: string; text: string }[] = questions;
-          if (branchId) {
+          if (effectiveBranchId) {
             try {
               const branchData = await prisma.branch.findUnique({
-                where: { id: branchId },
+                where: { id: effectiveBranchId },
                 include: { template: { include: { questions: { orderBy: { order: "asc" } } } } },
               });
               const templateQs = branchData?.template?.questions;
@@ -447,38 +427,40 @@ export async function POST(req: NextRequest) {
               const score = answersMap[q.id];
               if (score !== undefined && score !== null && score !== "") {
                 const shown = Array.isArray(score) ? score.join(", ") : String(score);
-                msg += `• ${q.text}: ${shown}\n`;
+                msg += `• ${escBB(q.text)}: ${escBB(shown)}\n`;
               }
             }
           }
 
-          msg += `\n👤 [b]Ответственный:[/b] ${responsibleName || "—"}\n`;
-          // Callback phone front-and-centre so the team can ring back quickly.
-          if (sanitizedPhone) msg += `📞 [b]Телефон для связи:[/b] ${sanitizedPhone}\n`;
+          msg += `\n👤 [b]Ответственный:[/b] ${escBB(responsibleName || "—")}\n`;
+          if (sanitizedPhone) msg += `📞 [b]Телефон для связи:[/b] ${escBB(sanitizedPhone)}\n`;
           if (isCrm) {
             msg += `🔗 [b]${entityLabel}:[/b] [url=${portal}/crm/${crmType}/details/${dealId}/]№ ${dealId}[/url]`;
           } else {
             msg += `🔗 [b]Источник:[/b] QR / прямая ссылка`;
           }
-          if (comment) msg += `\n\n💬 [b]Комментарий:[/b] ${comment}`;
+          if (comment) msg += `\n\n💬 [b]Комментарий:[/b] ${escBB(String(comment))}`;
 
           const rawChatId = settingsMap.b24_group_chat_id.trim();
           const dialogId = rawChatId.startsWith("chat") ? rawChatId : `chat${rawChatId}`;
-
           try {
-            await fetch(`${cleanBaseUrl}/im.message.add.json`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ DIALOG_ID: dialogId, MESSAGE: msg }),
-            });
+            await fetchWithRetry(
+              `${cleanBaseUrl}/im.message.add.json`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ DIALOG_ID: dialogId, MESSAGE: msg }),
+              },
+              { retries: 1, timeoutMs: 8000 }
+            );
           } catch (e) {
             console.error("Group chat notification failed:", e);
           }
         }
+      } catch (b24Error) {
+        console.error("Failed post-response B24/Telegram block:", b24Error);
       }
-    } catch (b24Error) {
-      console.error("Failed to update B24 fields:", b24Error);
-    }
+    })();
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -489,21 +471,26 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session) {
+    // Deletion is an ADMIN-only, destructive action. MANAGERs (and the
+    // formerly public path) must not be able to remove responses.
+    const me = await getCurrentUser();
+    if (!me) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (me.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-    // Optional body { ids: [...] } → delete just those responses.
-    // No body / empty ids → wipe everything (the "Очистить" button).
     let ids: string[] | null = null;
+    let wipeAll = false;
     try {
       const body = await req.json();
       if (Array.isArray(body?.ids)) {
         ids = body.ids.filter((x: unknown): x is string => typeof x === "string");
       }
+      wipeAll = body?.all === true;
     } catch {
-      // no JSON body — fall through to full wipe
+      // no JSON body
     }
 
     if (ids && ids.length > 0) {
@@ -514,6 +501,15 @@ export async function DELETE(req: NextRequest) {
         where: { id: { in: ids } },
       });
       return NextResponse.json({ success: true, deleted: result.count });
+    }
+
+    // Full wipe requires an explicit { all: true } confirmation — an empty /
+    // malformed body must never silently nuke every response + dispatch row.
+    if (!wipeAll) {
+      return NextResponse.json(
+        { error: "Specify { ids: [...] } to delete selected, or { all: true } to wipe everything." },
+        { status: 400 }
+      );
     }
 
     await prisma.surveyResponse.deleteMany({});

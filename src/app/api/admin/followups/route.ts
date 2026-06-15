@@ -81,9 +81,18 @@ async function run(req: NextRequest) {
     const entityId = s.dealId.replace(/^lead:/, "");
 
     // Already completed? Don't remind — and stamp followUpSentAt so we stop
-    // reconsidering it on every run.
+    // reconsidering it on every run. Match the entity type too: SurveyResponse
+    // stores the bare id for both deals and leads, so a lead "123" and a deal
+    // "123" share a dealId — without this filter a responded deal would wrongly
+    // mark the lead's reminder as done (and vice-versa). Legacy deal responses
+    // may have a null entityType, so treat null as "deal".
     const responded = await prisma.surveyResponse.findFirst({
-      where: { dealId: entityId },
+      where: {
+        dealId: entityId,
+        ...(entityType === "lead"
+          ? { entityType: "lead" }
+          : { OR: [{ entityType: "deal" }, { entityType: null }] }),
+      },
       select: { id: true },
     });
     if (responded) {

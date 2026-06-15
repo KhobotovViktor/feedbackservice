@@ -21,12 +21,9 @@ export async function GET() {
         _count: {
           select: { surveyResponses: true }
         },
-        surveyResponses: {
-          select: { averageScore: true }
-        },
         template: {
-          select: { 
-            id: true, 
+          select: {
+            id: true,
             name: true,
             _count: {
               select: { questions: true }
@@ -34,22 +31,28 @@ export async function GET() {
           }
         },
         ratingHistory: {
-          orderBy: { createdAt: "desc" }
+          orderBy: { createdAt: "desc" },
+          // Only the fields the branches chart actually plots — don't ship the
+          // id/branchId of every history row.
+          select: { service: true, rating: true, reviewCount: true, createdAt: true },
         }
       }
     });
 
+    // Per-branch average computed in the DB, instead of shipping every response
+    // row (thousands) to the server just to average them in JS.
+    const avgRows = await prisma.surveyResponse.groupBy({
+      by: ["branchId"],
+      _avg: { averageScore: true },
+    });
+    const avgByBranch = new Map(
+      avgRows.map((r) => [r.branchId, r._avg.averageScore])
+    );
+
     const branches = branchesRaw.map((branch) => {
-      const scores = branch.surveyResponses.map((r) => r.averageScore);
-      const avg =
-        scores.length > 0
-          ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
-          : "0.0";
-      // Strip the per-row response list from the response; only the average
-      // is shipped to clients.
-      const { surveyResponses: _drop, ...rest } = branch;
-      void _drop;
-      return { ...rest, averageScore: avg };
+      const a = avgByBranch.get(branch.id);
+      const avg = typeof a === "number" ? a.toFixed(1) : "0.0";
+      return { ...branch, averageScore: avg };
     });
 
     return NextResponse.json({ 

@@ -15,7 +15,12 @@ export function ClearResultsButton() {
 
     try {
       setIsClearing(true);
-      const res = await fetch("/api/surveys", { method: "DELETE" });
+      const res = await fetch("/api/surveys", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        // Explicit confirmation — the server refuses a full wipe without it.
+        body: JSON.stringify({ all: true }),
+      });
       if (res.ok) {
         router.refresh();
       } else {

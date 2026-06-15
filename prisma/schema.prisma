@@ -97,6 +97,10 @@ model Question {
   updatedAt  DateTime          @updatedAt
   templateId String?
   template   QuestionTemplate? @relation(fields: [templateId], references: [id])
+
+  // Questions are almost always fetched by template (survey render, field
+  // mapping, scoring) — index the FK so those lookups don't seq-scan.
+  @@index([templateId])
 }
 
 model SurveyResponse {
@@ -132,6 +136,10 @@ model SurveyResponse {
 
   @@index([clientId])
   @@index([complaintStatus])
+  // createdAt is the dominant filter/sort across dashboard, results and export;
+  // branchId backs the per-branch role scope and aggregates.
+  @@index([createdAt])
+  @@index([branchId])
 }
 
 enum ComplaintStatus {
@@ -187,6 +195,8 @@ model AnalyticsEvent {
 
   @@index([type])
   @@index([branchId])
+  // Dashboard/report funnel filters events by createdAt window.
+  @@index([createdAt])
 }
 
 model SentSurvey {
@@ -200,6 +210,9 @@ model SentSurvey {
   surveyUrl       String?
   followUpSentAt  DateTime?
   followUpCount   Int      @default(0)
+
+  // Backs the follow-up job's scan (followUpSentAt IS NULL + createdAt window).
+  @@index([followUpSentAt, createdAt])
 }
 
 // Lightweight audit trail of administrator actions (status changes, settings

@@ -5,6 +5,7 @@ import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircl
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
+import { SECRET_MASK } from "@/lib/secret-mask";
 
 export default function IntegrationPage() {
   const [settings, setSettings] = useState({
@@ -364,9 +365,15 @@ export default function IntegrationPage() {
                 <div className="relative group">
                   <input
                     type="text"
-                    placeholder="https://your-domain.bitrix24.ru/rest/1/xxxxx/..."
+                    placeholder={
+                      settings.b24_webhook_url === SECRET_MASK
+                        ? "•••••• сохранён — вставьте новый URL, чтобы заменить"
+                        : "https://your-domain.bitrix24.ru/rest/1/xxxxx/..."
+                    }
                     className="w-full px-6 py-4 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white outline-none transition-all font-mono text-sm font-bold truncate pr-14"
-                    value={settings.b24_webhook_url}
+                    // Masked secret: show empty (with a "saved" placeholder) but
+                    // keep the mask in state so re-saving keeps the stored value.
+                    value={settings.b24_webhook_url === SECRET_MASK ? "" : settings.b24_webhook_url}
                     onChange={(e) => setSettings({ ...settings, b24_webhook_url: e.target.value })}
                   />
                   <Webhook className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-500 transition-colors" />
@@ -730,10 +737,15 @@ export default function IntegrationPage() {
                     <div className="relative">
                       <input
                         type={showToken ? "text" : "password"}
-                        placeholder="Токен бота (от @BotFather)"
+                        placeholder={
+                          settings.telegram_bot_token === SECRET_MASK
+                            ? "•••• токен сохранён — введите новый, чтобы заменить"
+                            : "Токен бота (от @BotFather)"
+                        }
                         autoComplete="off"
                         className="w-full px-5 py-3.5 pr-12 rounded-2xl border border-slate-100 bg-slate-50/50 focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 focus:bg-white outline-none transition-all text-sm font-mono font-bold"
-                        value={settings.telegram_bot_token}
+                        // Masked secret: show empty but keep the mask in state.
+                        value={settings.telegram_bot_token === SECRET_MASK ? "" : settings.telegram_bot_token}
                         onChange={(e) => setSettings({ ...settings, telegram_bot_token: e.target.value })}
                       />
                       <button

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { getAccessibleBranchIds } from "@/lib/access";
 import { logAudit } from "@/lib/audit";
 
 const VALID_STATUSES = ["NEW", "IN_PROGRESS", "RESOLVED"] as const;
@@ -38,6 +39,21 @@ export async function PATCH(
         { error: "complaintStatus must be NEW | IN_PROGRESS | RESOLVED" },
         { status: 400 }
       );
+    }
+
+    // Branch scope: a MANAGER may only touch complaints from branches assigned
+    // to them. ADMIN (scope === null) is unrestricted. Closes the IDOR where
+    // any session could PATCH any response regardless of branch.
+    const scope = await getAccessibleBranchIds();
+    const target = await prisma.surveyResponse.findUnique({
+      where: { id },
+      select: { branchId: true },
+    });
+    if (!target) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (scope !== null && (!target.branchId || !scope.includes(target.branchId))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const updated = await prisma.surveyResponse.update({

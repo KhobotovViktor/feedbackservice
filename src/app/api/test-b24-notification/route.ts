@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { isSafeB24Url } from "@/lib/b24-url";
+import { SECRET_MASK } from "@/lib/secret-mask";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,15 +13,23 @@ export async function POST(req: NextRequest) {
 
     const { chatId, webhookUrl } = await req.json();
 
-    if (!webhookUrl || !chatId) {
+    // The webhook URL embeds a token, so the form sends the mask when it wasn't
+    // re-typed — fall back to the stored value.
+    let url = typeof webhookUrl === "string" ? webhookUrl : "";
+    if (!url || url === SECRET_MASK) {
+      const stored = await prisma.settings.findUnique({ where: { key: "b24_webhook_url" } });
+      url = stored?.value || "";
+    }
+
+    if (!url || !chatId) {
       return NextResponse.json({ error: "Необходимы URL вебхука и ID чата" }, { status: 400 });
     }
 
-    if (!isSafeB24Url(webhookUrl)) {
+    if (!isSafeB24Url(url)) {
       return NextResponse.json({ error: "Недопустимый URL вебхука" }, { status: 400 });
     }
 
-    const cleanBaseUrl = webhookUrl.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
+    const cleanBaseUrl = url.replace(/\/$/, "").replace(/\/(profile\.json|profile)$/, "");
     const dialogId = chatId.trim().startsWith("chat") ? chatId.trim() : `chat${chatId.trim()}`;
 
     const testMessage = `🚀 [b]ТЕСТ УВЕДОМЛЕНИЙ[/b]\n\nСистема обратной связи настроена корректно!\nЭто сообщение подтверждает работоспособность интеграции с чатом.`;

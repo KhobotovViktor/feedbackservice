@@ -5,12 +5,21 @@ import { NextRequest } from "next/server";
 // on restart. (For a multi-instance setup this would need Redis.)
 
 export function getClientIp(req: NextRequest): string {
-  // Behind nginx, the real client IP is in X-Forwarded-For (first hop).
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown"
-  );
+  // Our nginx sets `X-Real-IP: $remote_addr` (the direct peer — the real
+  // client) and APPENDS the peer to X-Forwarded-For via
+  // `$proxy_add_x_forwarded_for`. So the trustworthy value is X-Real-IP, and
+  // failing that the LAST hop of XFF — NEVER the left-most one. Taking
+  // split(",")[0] would trust the client-supplied head of XFF, letting anyone
+  // spoof a fresh IP per request and slip past the per-IP rate-limit and the
+  // login lockout. (See .deploy/nginx_request.md.)
+  const realIp = req.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) {
+    const hops = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    if (hops.length) return hops[hops.length - 1];
+  }
+  return "unknown";
 }
 
 const hits = new Map<string, number[]>();

@@ -49,10 +49,17 @@ next-env.d.ts
 # debug/test files
 gmaps_test.html
 google_njs_test.html
+dgis_test.html
+debug_2gis.html
+/debug_*.html
+*.bat
 /scripts/**/*.js
+/scripts/**/*.ts
 /scripts/**/*.html
 /scripts/**/*.json
 /tmp_test*.js
+# keep the live cron helper (matched by none of the above — *.sh)
+!/scripts/feedback-cron.sh
 
 # deployment helpers (contain credentials)
 /.deploy

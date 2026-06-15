@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword, isSha256Hash, verifySha256Password, hashPassword, login as setSession } from "@/lib/auth";
+import { getClientIp } from "@/lib/rate-limit";
 
 // In-memory rate limiter (сбрасывается при рестарте, достаточно для Edge/Serverless)
 // Структура: IP -> { count: number; lockedUntil: number; windowStart: number }
@@ -10,16 +11,26 @@ const MAX_ATTEMPTS = 10;          // макс попыток в окне
 const WINDOW_MS    = 15 * 60 * 1000; // окно 15 минут
 const LOCKOUT_MS   = 30 * 60 * 1000; // блокировка 30 минут
 
-function getClientIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown"
-  );
+// getClientIp is shared with the rest of the app (src/lib/rate-limit.ts) so the
+// XFF-spoofing fix lives in one place and the login lockout can't be bypassed
+// with a forged X-Forwarded-For head.
+
+let lastSweep = Date.now();
+function sweepStale(now: number) {
+  // Drop entries whose window AND lockout have both elapsed, so the Map can't
+  // grow unbounded over time (defence-in-depth alongside the XFF fix).
+  if (now - lastSweep < 60_000) return;
+  for (const [ip, e] of loginAttempts) {
+    if (now - e.windowStart > WINDOW_MS && (e.lockedUntil === 0 || now >= e.lockedUntil)) {
+      loginAttempts.delete(ip);
+    }
+  }
+  lastSweep = now;
 }
 
 function checkRateLimit(ip: string): { allowed: boolean; retryAfterSec: number } {
   const now = Date.now();
+  sweepStale(now);
   const entry = loginAttempts.get(ip);
 
   if (entry) {

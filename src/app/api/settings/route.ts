@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isSafeB24Url } from "@/lib/b24-url";
 import { logAudit } from "@/lib/audit";
+import { SECRET_MASK, isSecretKey } from "@/lib/secret-mask";
 
 export async function GET() {
   try {
     const settings = await prisma.settings.findMany();
     const settingsMap = settings.reduce(
       (acc: Record<string, string>, curr: { key: string; value: string }) => {
-        acc[curr.key] = curr.value;
+        // Never ship secret plaintext (bot token / webhook-with-token) in the
+        // bulk settings payload — mask it. The editor keeps working: the form
+        // submits the mask back untouched and POST treats it as "no change".
+        acc[curr.key] = isSecretKey(curr.key) && curr.value ? SECRET_MASK : curr.value;
         return acc;
       },
       {}
@@ -70,7 +74,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     // Validate the few keys we know how to validate. Unknown keys are dropped.
-    if (typeof body.b24_webhook_url === "string" && body.b24_webhook_url.trim() !== "") {
+    // A secret arriving as the mask means "unchanged" — skip validation for it.
+    if (
+      typeof body.b24_webhook_url === "string" &&
+      body.b24_webhook_url.trim() !== "" &&
+      body.b24_webhook_url !== SECRET_MASK
+    ) {
       if (!isSafeB24Url(body.b24_webhook_url)) {
         return NextResponse.json(
           { error: "b24_webhook_url must be an HTTPS URL on a *.bitrix24.* host" },
@@ -92,6 +101,9 @@ export async function POST(req: NextRequest) {
     const updates = [];
     for (const key of ALLOWED_KEYS) {
       if (body[key] !== undefined) {
+        // Secret submitted as the mask = "leave as stored" — don't overwrite
+        // the real value with the placeholder.
+        if (isSecretKey(key) && body[key] === SECRET_MASK) continue;
         changedKeys.push(key);
         updates.push(
           prisma.settings.upsert({
