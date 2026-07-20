@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Users, Plus, Trash2, Building2, Play, Power, Palette, Upload, X, Eye, EyeOff } from "lucide-react";
+import { MessageSquare, Save, Webhook, Zap, Star, MapPin, Bell, Info, CheckCircle2, Link as LinkIcon, Terminal, Loader2, Users, Plus, Trash2, Building2, Play, Power, Palette, Upload, X, Eye, EyeOff, Copy, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -262,6 +262,23 @@ export default function IntegrationPage() {
 
   const handleTestCityScenario = () => {
     window.open("/api/admin/test/generate-city-survey-token", "_blank");
+  };
+
+  // Permanent city-survey link (stories embed). Origin is taken from the
+  // browser after mount — the admin panel is served from the same origin as
+  // the survey, and this avoids an SSR/client hydration mismatch.
+  const [cityLinkOrigin, setCityLinkOrigin] = useState("");
+  useEffect(() => setCityLinkOrigin(window.location.origin), []);
+  const cityLink = `${cityLinkOrigin}/survey/city`;
+  const [cityLinkCopied, setCityLinkCopied] = useState(false);
+  const handleCopyCityLink = async () => {
+    try {
+      await navigator.clipboard.writeText(cityLink);
+      setCityLinkCopied(true);
+      setTimeout(() => setCityLinkCopied(false), 2000);
+    } catch {
+      // clipboard unavailable — the input stays selectable for manual copy
+    }
   };
 
   // ── Survey-page branding (own save, like the cities block) ───────────────
@@ -847,7 +864,7 @@ export default function IntegrationPage() {
                 </div>
                 <div className="space-y-0.5">
                   <h2 className="text-2xl font-black text-slate-900 tracking-tight">Выбор города</h2>
-                  <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Для опросов из CRM</p>
+                  <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">CRM-ссылки и сторис</p>
                 </div>
               </div>
               <button
@@ -894,6 +911,48 @@ export default function IntegrationPage() {
                   )}
                 />
               </button>
+            </div>
+
+            {/* Permanent survey link with the city step (stories embed).
+                Independent of the CRM toggle above — the city step is this
+                link's whole purpose, so it always asks. */}
+            <div className="p-5 rounded-2xl border border-emerald-100 bg-emerald-50/40 space-y-3">
+              <div className="flex items-center gap-3">
+                <LinkIcon className="w-5 h-5 text-emerald-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-black text-slate-800">Постоянная ссылка на опрос</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Для сторис и размещений</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                Ссылка не устаревает — её можно встроить в сторис или разместить где угодно.
+                Клиент сначала выбирает город, дальше опрос идёт по настройкам привязанного
+                филиала (вопросы, карты) и общим настройкам сервиса. Работает независимо от
+                переключателя выше.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={cityLink}
+                  onFocus={(e) => e.target.select()}
+                  className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-slate-100 bg-white text-xs font-bold text-slate-600 outline-none"
+                />
+                <button
+                  onClick={handleCopyCityLink}
+                  className={cn(
+                    "px-4 py-3 rounded-xl text-white transition-colors shrink-0",
+                    cityLinkCopied ? "bg-emerald-500" : "bg-emerald-600 hover:bg-emerald-700"
+                  )}
+                  title="Скопировать ссылку"
+                >
+                  {cityLinkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </button>
+              </div>
+              {cities.length === 0 && (
+                <p className="text-[11px] text-amber-600 font-bold">
+                  Добавьте хотя бы один город ниже — без городов ссылка откроет опрос без выбора города.
+                </p>
+              )}
             </div>
 
             {/* Existing cities */}

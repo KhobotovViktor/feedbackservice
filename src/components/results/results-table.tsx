@@ -110,24 +110,24 @@ function durationText(from: string | Date, to: string | Date): string {
   return `${Math.round(h / 24)} дн`;
 }
 
-function sourceText(res: ResultRow): string {
-  const isCRM =
-    res.dealId &&
-    res.dealId !== "0" &&
-    res.dealId !== "TEST_DEAL" &&
-    res.dealId !== "QR_GUEST";
-  if (res.branch?.name) return `${res.branch.name} ${isCRM ? "(CRM)" : "(QR)"}`;
-  if (isCRM) return "Bitrix24 (CRM)";
-  return "Прямая ссылка / QR";
-}
-
+// QR-prefixed dealIds are minted locally (in-store QR: QR_<ts>, permanent
+// stories link: QR_CITY_<ts>) — they never correspond to a real B24 entity,
+// so no CRM label / deep-link for them. Mirrors the submit handler's
+// `!dealId.startsWith("QR")` writeback guard.
 function isCrmSource(res: ResultRow): boolean {
   return Boolean(
     res.dealId &&
       res.dealId !== "0" &&
       res.dealId !== "TEST_DEAL" &&
-      res.dealId !== "QR_GUEST"
+      !res.dealId.startsWith("QR")
   );
+}
+
+function sourceText(res: ResultRow): string {
+  const local = res.dealId?.startsWith("QR_CITY_") ? "(Сторис)" : "(QR)";
+  if (res.branch?.name) return `${res.branch.name} ${isCrmSource(res) ? "(CRM)" : local}`;
+  if (isCrmSource(res)) return "Bitrix24 (CRM)";
+  return `Прямая ссылка ${local}`;
 }
 
 // AI auto-tags as small chips (e.g. #доставка #цена).

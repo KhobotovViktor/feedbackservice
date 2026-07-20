@@ -19,45 +19,50 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Недействительная ссылка" }, { status: 401 });
   }
 
-  const { clientId, branchId, isTest, templateId, entityType } = payload;
+  const { clientId, branchId, isTest, templateId, entityType, citySelect } = payload;
 
-  // ── "Pick your city" step (CRM links only) ──────────────────────────────
-  // For CRM-originated links (deal/lead) we may ask the client to choose a
-  // city first; the attached branch then drives the whole survey. Active when
-  // the scenario is enabled (or always, in test mode) AND at least one city is
-  // configured. If the client hasn't chosen yet we return the city list; once
-  // chosen (?cityId=…) the city's branch overrides the token's branch. QR and
-  // direct links are unaffected (entityType is null for them).
+  // ── "Pick your city" step ───────────────────────────────────────────────
+  // Two token kinds get it. CRM-originated links (deal/lead) ask when the
+  // scenario toggle is enabled (or always, in test mode). Permanent-link
+  // tokens (citySelect, minted by /survey/city for stories embeds) always ask
+  // — the city step is the link's whole purpose, so the CRM toggle doesn't
+  // apply. Either way it needs at least one configured city. If the client
+  // hasn't chosen yet we return the city list; once chosen (?cityId=…) the
+  // city's branch overrides the token's branch. QR and direct links are
+  // unaffected (no entityType, no citySelect).
   const cityId = searchParams.get("cityId");
   const isCrmLink = entityType === "deal" || entityType === "lead";
   let effectiveBranchId: string | null = branchId || null;
 
-  if (isCrmLink) {
+  let askCity = citySelect === true;
+  if (!askCity && isCrmLink) {
     const enabled =
       (await prisma.settings.findUnique({ where: { key: "city_selection_enabled" } }))
         ?.value === "true";
-    if (enabled || isTest) {
-      const cities = await prisma.city.findMany({
-        where: { branchId: { not: null } },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
-      });
-      if (cities.length > 0) {
-        if (!cityId) {
-          // Client must pick a city before we know which branch to use.
-          return NextResponse.json({
-            success: true,
-            needCity: true,
-            cities,
-            isTest: Boolean(isTest),
-          });
-        }
-        const city = await prisma.city.findUnique({ where: { id: cityId } });
-        if (!city || !city.branchId) {
-          return NextResponse.json({ error: "Город не найден" }, { status: 400 });
-        }
-        effectiveBranchId = city.branchId;
+    askCity = enabled || Boolean(isTest);
+  }
+
+  if (askCity) {
+    const cities = await prisma.city.findMany({
+      where: { branchId: { not: null } },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    });
+    if (cities.length > 0) {
+      if (!cityId) {
+        // Client must pick a city before we know which branch to use.
+        return NextResponse.json({
+          success: true,
+          needCity: true,
+          cities,
+          isTest: Boolean(isTest),
+        });
       }
+      const city = await prisma.city.findUnique({ where: { id: cityId } });
+      if (!city || !city.branchId) {
+        return NextResponse.json({ error: "Город не найден" }, { status: 400 });
+      }
+      effectiveBranchId = city.branchId;
     }
   }
 

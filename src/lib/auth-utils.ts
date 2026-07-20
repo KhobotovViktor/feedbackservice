@@ -46,6 +46,21 @@ export async function createQRToken(branchId?: string | null) {
     .sign(getJwtSecret());
 }
 
+// Permanent "stories" link (/survey/city): every visit mints one of these —
+// like a QR token, but flagged citySelect so the survey always opens with the
+// city-selection step regardless of the CRM scenario toggle. The QR_ prefix is
+// deliberate: downstream code (B24 writeback, results labeling) already treats
+// QR-prefixed dealIds as non-CRM. Only the entry URL is permanent; tokens stay
+// short-lived like QR ones.
+export async function createCityLinkToken() {
+  const uniqueId = `QR_CITY_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  return await new SignJWT({ clientId: uniqueId, dealId: uniqueId, citySelect: true })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(QR_TOKEN_TTL)
+    .sign(getJwtSecret());
+}
+
 export async function verifySurveyToken(token: string) {
   try {
     const { payload } = await jwtVerify(token, getJwtSecret());
@@ -57,6 +72,7 @@ export async function verifySurveyToken(token: string) {
       templateId?: string | null;
       responsibleName?: string | null;
       entityType?: "deal" | "lead" | null;
+      citySelect?: boolean;
     };
   } catch {
     return null;
