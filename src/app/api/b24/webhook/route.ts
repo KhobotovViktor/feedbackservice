@@ -6,6 +6,7 @@ import { getAppOrigin } from "@/lib/url";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 import { dispatchSurveyToOpenChannel } from "@/lib/b24-send";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { isQuietHoursMsk, nextSendTimeMsk } from "@/lib/quiet-hours";
 import { verbose } from "@/lib/log";
 
 function isValidId(value: string): boolean {
@@ -113,6 +114,16 @@ async function handleWebhook(req: NextRequest) {
     }
   }
 
+  // Quiet hours (20:00-09:00 МСК): don't message the customer at night.
+  // The dispatch row and survey link are still created now; the OL message
+  // and the CRM link field (which triggers B24's own SMS/WhatsApp robots)
+  // are deferred to the next 09:00 МСК via the cron job. The timeline
+  // comment is internal to B24, so it still goes out immediately.
+  const deferUntil = !isTest && isQuietHoursMsk() ? nextSendTimeMsk() : null;
+  if (deferUntil) {
+    verbose(`Quiet hours: deferring customer sends for ${dedupKey} until ${deferUntil.toISOString()}`);
+  }
+
   const settings = await prisma.settings.findMany({
     where: { key: { in: ["b24_webhook_url", "b24_message_template", "b24_link_field", "b24_template_id"] } }
   });
@@ -162,11 +173,17 @@ async function handleWebhook(req: NextRequest) {
       console.error("Shortening failed, using full URL:", shortError);
     }
     // Persist the link on the dispatch row so the follow-up reminder job can
-    // re-send the same URL later.
+    // re-send the same URL later. During quiet hours (20:00-09:00 МСК) the
+    // customer-facing sends below are skipped and deliverAfter is stamped
+    // instead — the cron job delivers the link at 09:00; daytime dispatches
+    // are delivered right here, so they get deliveredAt immediately.
     try {
       await prisma.sentSurvey.update({
         where: { dealId: dedupKey },
-        data: { surveyUrl },
+        data: {
+          surveyUrl,
+          ...(deferUntil ? { deliverAfter: deferUntil } : { deliveredAt: new Date() }),
+        },
       });
     } catch (e) {
       console.error("Failed to store surveyUrl on SentSurvey:", e);
@@ -282,7 +299,8 @@ async function handleWebhook(req: NextRequest) {
       // currently in the chat — that operator is the best fallback signal
       // for "who is handling this conversation". Backfill SentSurvey with
       // their displayName so the survey result shows them.
-      try {
+      // Skipped during quiet hours — the cron job delivers at 09:00 МСК.
+      if (!deferUntil) try {
         const dispatch = await dispatchSurveyToOpenChannel({
           baseUrl,
           sendCandidates,
@@ -347,10 +365,14 @@ async function handleWebhook(req: NextRequest) {
       // 3. Update the custom field for automated delivery (SMS/WhatsApp robots).
       // The same UF_-style field works on both Deals and Leads; we just dispatch
       // to crm.deal.update or crm.lead.update accordingly.
+      // Skipped during quiet hours: filling the field at night would let B24's
+      // own robots text the customer immediately — the cron fills it at 09:00.
       const linkField = settingsMap.b24_link_field || "UF_CRM_1773746121";
       const existingValue = dealData ? dealData[linkField] : null;
 
-      if (!existingValue || String(existingValue).trim() === "") {
+      if (deferUntil) {
+        verbose(`Quiet hours: link field ${linkField} left for deferred delivery.`);
+      } else if (!existingValue || String(existingValue).trim() === "") {
         verbose(`Field ${linkField} is empty. Updating with survey link.`);
         const updateMethod =
           entityType === "lead" ? "crm.lead.update.json" : "crm.deal.update.json";
@@ -387,6 +409,7 @@ async function handleWebhook(req: NextRequest) {
   return NextResponse.json({
     surveyUrl,
     token,
+    ...(deferUntil ? { deferred: true, deliverAfter: deferUntil.toISOString() } : {}),
   });
 }
 

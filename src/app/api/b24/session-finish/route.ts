@@ -4,7 +4,9 @@ import { createSurveyToken } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 import { getAppOrigin } from "@/lib/url";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
+import { sendMessageToChatId } from "@/lib/b24-send";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { isQuietHoursMsk, nextSendTimeMsk } from "@/lib/quiet-hours";
 
 // Bitrix24 fires ONSESSIONFINISH when an Open Line dialog is closed. Unlike the
 // stage-robot webhook (which carries a dealId), this event only gives us the
@@ -139,6 +141,11 @@ async function handle(req: NextRequest) {
   const appUrl = getAppOrigin(req);
   const fullUrl = `${appUrl}/survey/${token}`;
 
+  // Quiet hours (20:00-09:00 МСК): park the link instead of messaging the
+  // customer at night — the cron job (followups stage 1) delivers it into the
+  // same chat at 09:00, resolving the chat id back from dealId = "OL_<id>".
+  const deferUntil = isQuietHoursMsk() ? nextSendTimeMsk() : null;
+
   let surveyUrl = fullUrl;
   try {
     const code = randomBytes(4).toString("hex");
@@ -148,9 +155,20 @@ async function handle(req: NextRequest) {
     console.error("session-finish short link failed:", e);
   }
   try {
-    await prisma.sentSurvey.update({ where: { dealId: dedupKey }, data: { surveyUrl } });
+    await prisma.sentSurvey.update({
+      where: { dealId: dedupKey },
+      data: {
+        surveyUrl,
+        ...(deferUntil ? { deliverAfter: deferUntil } : { deliveredAt: new Date() }),
+      },
+    });
   } catch {
     // non-critical
+  }
+
+  if (deferUntil) {
+    console.log(`session-finish: quiet hours, chat ${chatId} delivery deferred until ${deferUntil.toISOString()}`);
+    return NextResponse.json({ ok: true, surveyUrl, deferred: true });
   }
 
   // Deliver straight into the closed chat. Try the operator's webhook first,
@@ -176,26 +194,7 @@ async function handle(req: NextRequest) {
     for (const w of perOp) push(w.url);
     push(baseUrl);
 
-    let sent = false;
-    for (const sendBase of sendCandidates) {
-      try {
-        const r = await fetch(`${sendBase}/im.message.add.json`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ DIALOG_ID: `chat${chatId}`, MESSAGE: message }),
-        });
-        const d = await r.json();
-        if (d.result) {
-          sent = true;
-          break;
-        }
-        if (d.error && d.error !== "CANCELED") {
-          console.log(`session-finish im.message.add error: ${d.error_description || d.error}`);
-        }
-      } catch (e) {
-        console.error("session-finish im.message.add request failed:", e);
-      }
-    }
+    const sent = (await sendMessageToChatId(sendCandidates, chatId, message)).ok;
     if (!sent) console.log(`session-finish: no webhook could post into chat ${chatId}`);
   } else {
     console.warn("session-finish: b24_webhook_url not configured");

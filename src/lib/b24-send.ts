@@ -127,6 +127,38 @@ async function sendToChatViaCandidates(
 }
 
 /**
+ * Deliver a message straight into a known OL chat by its numeric chat id —
+ * no CRM-entity resolution. Used for dispatches originating from an Open Line
+ * session close (SentSurvey.dealId = "OL_<chatId>"), where the chat id is the
+ * only handle we have. Tries each operator webhook in order; the first one
+ * that's a member of the line wins.
+ */
+export async function sendMessageToChatId(
+  sendCandidates: string[],
+  chatId: string,
+  message: string
+): Promise<DispatchResult> {
+  for (const sendBase of sendCandidates) {
+    try {
+      const r = await fetch(`${sendBase}/im.message.add.json`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ DIALOG_ID: `chat${chatId}`, MESSAGE: message }),
+      });
+      const d = await r.json();
+      if (d.result) {
+        verbose(`im.message.add OK — chat ${chatId} via ${sendBase.match(/\/rest\/(\d+)\//)?.[1] || "?"}`);
+        return { ok: true, usedWebhookUrl: sendBase };
+      }
+      verbose(`im.message.add to chat ${chatId} failed: ${d.error_description || d.error || "unknown"}`);
+    } catch (e) {
+      console.error(`im.message.add to chat ${chatId} threw:`, e);
+    }
+  }
+  return { ok: false };
+}
+
+/**
  * Resolve the OL chat for the entity (and its lead/contacts) and deliver the
  * message. Returns whether the message was accepted, and which operator
  * webhook ended up accepting it — that's the operator actually handling the

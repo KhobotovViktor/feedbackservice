@@ -211,8 +211,18 @@ model SentSurvey {
   followUpSentAt  DateTime?
   followUpCount   Int      @default(0)
 
+  // Quiet-hours deferral (no client sends 20:00-09:00 МСК). A dispatch created
+  // at night stores deliverAfter = next 09:00 МСК and deliveredAt = null; the
+  // cron job delivers it in the morning and stamps deliveredAt. Daytime
+  // dispatches get deliveredAt right away. Rows that predate this feature were
+  // backfilled with deliveredAt = createdAt.
+  deliveredAt     DateTime?
+  deliverAfter    DateTime?
+
   // Backs the follow-up job's scan (followUpSentAt IS NULL + createdAt window).
   @@index([followUpSentAt, createdAt])
+  // Backs the deferred-delivery scan (deliveredAt IS NULL + deliverAfter due).
+  @@index([deliverAfter])
 }
 
 // Lightweight audit trail of administrator actions (status changes, settings

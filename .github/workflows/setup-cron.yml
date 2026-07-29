@@ -1,13 +1,20 @@
 name: Setup cron jobs
 
-# One-shot (re-runnable) installer for the server-side follow-up reminder cron
-# (every 6 hours). Rating sync is intentionally NOT scheduled here: the map
-# sites block direct scraping from the server IP ("Access blocked"), so ratings
-# are pushed in by the Google Apps Script configured in the Hub instead.
+# One-shot (re-runnable) installer for the server-side follow-up/delivery cron
+# (hourly — the app itself skips quiet hours 20:00-09:00 МСК and delivers
+# night-parked links on the first morning slot). Rating sync is intentionally
+# NOT scheduled here: the map sites block direct scraping from the server IP
+# ("Access blocked"), so ratings are pushed in by the Google Apps Script
+# configured in the Hub instead.
 # Copies scripts/feedback-cron.sh to the server, installs the crontab
 # idempotently, then prints a safe diagnostic. The job script resolves
 # SYNC_API_KEY from the app's own env, so no secret is needed here beyond the
 # existing deploy SSH key.
+#
+# NOTE: the grep -v below only removes lines mentioning feedback-cron.sh. If
+# an older crontab line triggers the followups endpoint some other way (e.g.
+# a direct curl), remove it manually — two overlapping schedules used to
+# double-send reminders before the endpoint got atomic claims.
 on:
   workflow_dispatch:
 
@@ -33,7 +40,7 @@ jobs:
             sed -i 's/\r$//' /home/bitrix/feedback-cron.sh && \
             chmod +x /home/bitrix/feedback-cron.sh && \
             ( crontab -l 2>/dev/null | grep -v feedback-cron.sh ; \
-              echo '15 */6 * * * /home/bitrix/feedback-cron.sh followup >> /home/bitrix/feedback-cron.log 2>&1' \
+              echo '15 * * * * /home/bitrix/feedback-cron.sh followup >> /home/bitrix/feedback-cron.log 2>&1' \
             ) | crontab - && \
             echo '=== crontab (feedback) ===' && crontab -l | grep feedback-cron.sh && \
             echo '=== diag ===' && /home/bitrix/feedback-cron.sh diag || true; \
