@@ -34,6 +34,48 @@ interface DispatchOpts {
 export interface DispatchResult {
   ok: boolean;
   usedWebhookUrl?: string;
+  reason?: "stale_deal" | "active_session" | "send_failed" | "no_chat";
+}
+
+export interface ChatStatusInfo {
+  isLines: boolean;
+  boundEntityType?: string;
+  boundEntityId?: string;
+  sessionActive: boolean;
+  sessionId: number;
+}
+
+/**
+ * Inspect an Open Lines chat dialog to check if it is active or bound to another entity.
+ */
+export async function inspectChatStatus(
+  webhookBase: string,
+  chatId: string
+): Promise<ChatStatusInfo> {
+  try {
+    const r = await fetch(`${webhookBase}/im.dialog.get.json?DIALOG_ID=chat${encodeURIComponent(chatId)}`);
+    const j = await r.json();
+    const d = j?.result;
+    if (!d || d.entity_type !== "LINES") {
+      return { isLines: false, sessionActive: false, sessionId: 0 };
+    }
+    const ed1 = String(d.entity_data_1 || "");
+    const parts = ed1.split("|");
+    // e.g. "Y|DEAL|476489|N|N|127385|1789591314|0|0|0"
+    const boundEntityType = (parts[1] || "").toLowerCase();
+    const boundEntityId = parts[2] || undefined;
+    const sessionId = parts.length > 5 && /^\d+$/.test(parts[5]) ? parseInt(parts[5], 10) : 0;
+    return {
+      isLines: true,
+      boundEntityType,
+      boundEntityId,
+      sessionActive: sessionId > 0,
+      sessionId,
+    };
+  } catch (e) {
+    verbose(`inspectChatStatus threw for chat ${chatId}: ${e}`);
+    return { isLines: false, sessionActive: false, sessionId: 0 };
+  }
 }
 
 async function sendToChatViaCandidates(
@@ -56,7 +98,7 @@ async function sendToChatViaCandidates(
       verbose(
         `imopenlines.crm.chat.get error for ${entityType} ${id}: ${chatData.error_description || chatData.error}`
       );
-      return { ok: false };
+      return { ok: false, reason: "no_chat" };
     }
 
     let chats = chatData.result;
@@ -66,6 +108,27 @@ async function sendToChatViaCandidates(
       const chatId = chat?.CHAT_ID ?? chat;
       const chatIdNum = parseInt(String(chatId), 10);
       if (!chatId || Number.isNaN(chatIdNum)) continue;
+
+      // ── CHAT STATUS AND DEAL CONTEXT VALIDATION ──
+      // Avoid sending into active sessions or stale deals.
+      const status = await inspectChatStatus(sendCandidates[0], String(chatId));
+      if (status.isLines) {
+        // 1. If this is a deal survey, but the chat is now bound to a different deal:
+        if (entityType === "deal" && status.boundEntityType === "deal" && status.boundEntityId && status.boundEntityId !== id) {
+          verbose(
+            `Chat ${chatId} has moved on to newer deal ${status.boundEntityId} (target was ${id}). Skipping stale survey.`
+          );
+          return { ok: false, reason: "stale_deal" };
+        }
+
+        // 2. If the chat is currently in an active dialog session:
+        if (status.sessionActive) {
+          verbose(
+            `Chat ${chatId} has an active dialogue session (${status.sessionId}). Skipping to avoid interrupting active conversation.`
+          );
+          return { ok: false, reason: "active_session" };
+        }
+      }
 
       for (const sendBase of sendCandidates) {
         const sendWebhookUserId = sendBase.match(/\/rest\/(\d+)\//)?.[1] || "1";
@@ -123,7 +186,7 @@ async function sendToChatViaCandidates(
   } catch (e) {
     console.error("Error in sendToChatViaCandidates:", e);
   }
-  return { ok: false };
+  return { ok: false, reason: "send_failed" };
 }
 
 /**
@@ -136,8 +199,16 @@ async function sendToChatViaCandidates(
 export async function sendMessageToChatId(
   sendCandidates: string[],
   chatId: string,
-  message: string
+  message: string,
+  opts?: { requireClosedSession?: boolean }
 ): Promise<DispatchResult> {
+  if (opts?.requireClosedSession && sendCandidates.length > 0) {
+    const status = await inspectChatStatus(sendCandidates[0], chatId);
+    if (status.sessionActive) {
+      verbose(`sendMessageToChatId: chat ${chatId} has active session (${status.sessionId}). Skipping.`);
+      return { ok: false, reason: "active_session" };
+    }
+  }
   for (const sendBase of sendCandidates) {
     try {
       const r = await fetch(`${sendBase}/im.message.add.json`, {
@@ -229,12 +300,21 @@ export async function dispatchSurveyToOpenChannel(opts: DispatchOpts): Promise<D
 
   // Try order: root entity → deal's lead → deal contacts → lead's contact.
   let result = await sendToChatViaCandidates(sendCandidates, entityType, entityId, message);
-  if (!result.ok && dealLeadId)
+  // If explicitly rejected because the chat moved to a newer deal or has an active session,
+  // do not fall back to lead/contacts (they point to the exact same chat).
+  if (!result.ok && (result.reason === "stale_deal" || result.reason === "active_session")) {
+    return result;
+  }
+  if (!result.ok && dealLeadId) {
     result = await sendToChatViaCandidates(sendCandidates, "lead", dealLeadId, message);
+    if (!result.ok && (result.reason === "stale_deal" || result.reason === "active_session")) {
+      return result;
+    }
+  }
   if (!result.ok) {
     for (const cid of dealContactIds) {
       result = await sendToChatViaCandidates(sendCandidates, "contact", cid, message);
-      if (result.ok) break;
+      if (result.ok || result.reason === "stale_deal" || result.reason === "active_session") break;
     }
   }
   if (!result.ok && leadContactId && !dealContactIds.includes(leadContactId)) {
@@ -242,6 +322,6 @@ export async function dispatchSurveyToOpenChannel(opts: DispatchOpts): Promise<D
   }
 
   if (result.ok) verbose("SUCCESS: Message delivered to Open Channel.");
-  else verbose("No Open Channel session accepted the message via any registered webhook.");
+  else verbose(`Open Channel send not completed: ${result.reason || "no session accepted message"}`);
   return result;
 }

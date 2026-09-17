@@ -59,7 +59,7 @@ export default function IntegrationPage() {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   // Two robot URLs — Bitrix24's {{ID}} macro resolves to the current
   // document's id (the deal in a Deals funnel, the lead in a Leads funnel).
-  const webhookUrlDeal = `${origin}/api/b24/webhook?clientId={{ID}}&dealId={{ID}}`;
+  const webhookUrlDeal = `${origin}/api/b24/webhook?clientId={{CONTACT_ID}}&dealId={{ID}}`;
   const webhookUrlLead = `${origin}/api/b24/webhook?clientId={{ID}}&leadId={{ID}}&entityType=lead`;
 
   useEffect(() => {
@@ -1238,8 +1238,8 @@ export default function IntegrationPage() {
               </div>
             </div>
 
-            <p className="text-[10px] text-slate-500 font-medium relative z-10 leading-relaxed">
-              Метод запроса — GET. Не вешайте оба робота сразу (на сделку и на лид одного клиента), иначе клиент получит две ссылки.
+            <p className="text-[10px] text-slate-400 font-medium relative z-10 leading-relaxed">
+              Метод запроса — GET. Устанавливайте робота только на финальных стадиях завершения сделки. Не вешайте оба робота сразу (на сделку и на лид одного клиента). Включена защита от повторной отправки одному клиенту чаще 1 раза в 14 дней.
             </p>
 
             <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-indigo-500/10 blur-[100px] rounded-full" />

@@ -237,6 +237,45 @@ async function handleWebhook(req: NextRequest) {
         console.error(`Failed to fetch ${entityType} data for protection check:`, e);
       }
 
+      // Extract real contact ID to link survey to the contact and check 14-day cooldown.
+      const realContactId = dealData?.CONTACT_ID ? String(dealData.CONTACT_ID) : null;
+      if (realContactId) {
+        const COOLDOWN_DAYS = 14;
+        const cooldownCutoff = new Date(Date.now() - COOLDOWN_DAYS * 24 * 3600_000);
+        const recentForContact = await prisma.sentSurvey.findFirst({
+          where: {
+            clientId: realContactId,
+            dealId: { not: dedupKey },
+            createdAt: { gte: cooldownCutoff },
+            surveyUrl: { not: null },
+          },
+        });
+        if (recentForContact) {
+          verbose(
+            `Contact ${realContactId} already received a survey within ${COOLDOWN_DAYS} days (deal ${recentForContact.dealId}). Skipping to prevent duplicate spam.`
+          );
+          try {
+            await prisma.sentSurvey.delete({ where: { dealId: dedupKey } });
+          } catch {
+            // non-critical
+          }
+          return NextResponse.json({
+            message: "Contact received survey recently (cooldown active)",
+            skip: true,
+            cooldown: true,
+          });
+        }
+
+        try {
+          await prisma.sentSurvey.update({
+            where: { dealId: dedupKey },
+            data: { clientId: realContactId },
+          });
+        } catch {
+          // non-critical
+        }
+      }
+
       // Build the ordered list of webhook base URLs to try for im.message.add.
       // Priority:
       //   1) Per-operator webhook for the deal's ASSIGNED_BY_ID, if registered.
@@ -330,6 +369,35 @@ async function handleWebhook(req: NextRequest) {
               );
             } catch (e) {
               console.error("Failed to backfill responsibleName from dialog operator:", e);
+            }
+          }
+        } else if (!dispatch.ok) {
+          if (dispatch.reason === "active_session") {
+            // Operator/customer are currently chatting in this dialog.
+            // Postpone delivery by 15 mins so it delivers once the session finishes.
+            const retryAt = new Date(Date.now() + 15 * 60_000);
+            verbose(
+              `Chat has an active dialogue session. Postponing survey delivery until ${retryAt.toISOString()}.`
+            );
+            try {
+              await prisma.sentSurvey.update({
+                where: { dealId: dedupKey },
+                data: { deliverAfter: retryAt, deliveredAt: null },
+              });
+            } catch {
+              // non-critical
+            }
+          } else if (dispatch.reason === "stale_deal") {
+            verbose(
+              `Chat has moved on to a newer deal. Suppressing delivery for stale deal ${dedupKey}.`
+            );
+            try {
+              await prisma.sentSurvey.update({
+                where: { dealId: dedupKey },
+                data: { deliveredAt: new Date() },
+              });
+            } catch {
+              // non-critical
             }
           }
         }

@@ -133,39 +133,56 @@ async function run(req: NextRequest) {
     const message = baseTemplate.replace("{surveyUrl}", s.surveyUrl as string);
     try {
       let ok = false;
+      let reason: string | undefined;
       if (s.dealId.startsWith("OL_")) {
         const chatId = s.dealId.slice(3);
-        ok = (await sendMessageToChatId(sendCandidates, chatId, message)).ok;
+        const r = await sendMessageToChatId(sendCandidates, chatId, message, { requireClosedSession: true });
+        ok = r.ok;
+        reason = r.reason;
       } else {
         const entityType = s.dealId.startsWith("lead:") ? ("lead" as const) : ("deal" as const);
         const entityId = s.dealId.replace(/^lead:/, "");
-        ok = (
-          await dispatchSurveyToOpenChannel({
-            baseUrl,
-            sendCandidates,
-            entityType,
-            entityId,
-            message,
-          })
-        ).ok;
+        const r = await dispatchSurveyToOpenChannel({
+          baseUrl,
+          sendCandidates,
+          entityType,
+          entityId,
+          message,
+        });
+        ok = r.ok;
+        reason = r.reason;
 
-        // The initial webhook skipped the CRM link field at night so B24's
-        // own SMS/WhatsApp robots wouldn't fire after hours — fill it now.
-        const linkField = sm.b24_link_field || "UF_CRM_1773746121";
-        const updateMethod =
-          entityType === "lead" ? "crm.lead.update.json" : "crm.deal.update.json";
-        try {
-          await fetch(`${baseUrl}/${updateMethod}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: entityId, fields: { [linkField]: s.surveyUrl } }),
-          });
-        } catch (e) {
-          console.error(`Deferred ${updateMethod} failed for ${s.dealId}:`, e);
+        if (ok) {
+          // The initial webhook skipped the CRM link field at night so B24's
+          // own SMS/WhatsApp robots wouldn't fire after hours — fill it now.
+          const linkField = sm.b24_link_field || "UF_CRM_1773746121";
+          const updateMethod =
+            entityType === "lead" ? "crm.lead.update.json" : "crm.deal.update.json";
+          try {
+            await fetch(`${baseUrl}/${updateMethod}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: entityId, fields: { [linkField]: s.surveyUrl } }),
+            });
+          } catch (e) {
+            console.error(`Deferred ${updateMethod} failed for ${s.dealId}:`, e);
+          }
         }
       }
-      if (ok) delivered++;
-      else deliveryFailed++;
+      if (ok) {
+        delivered++;
+      } else if (reason === "stale_deal") {
+        verbose(`Deferred delivery for ${s.dealId} suppressed: chat moved to newer deal.`);
+        delivered++;
+      } else if (reason === "active_session") {
+        verbose(`Deferred delivery for ${s.dealId} postponed: chat is currently in active session.`);
+        await prisma.sentSurvey.update({
+          where: { id: s.id },
+          data: { deliveredAt: null, deliverAfter: new Date(Date.now() + 30 * 60_000) },
+        });
+      } else {
+        deliveryFailed++;
+      }
     } catch (e) {
       deliveryFailed++;
       console.error(`Deferred delivery failed for ${s.dealId}:`, e);
@@ -219,14 +236,15 @@ async function run(req: NextRequest) {
       baseTemplate.replace("{surveyUrl}", s.surveyUrl as string);
 
     try {
+      let r: { ok: boolean; reason?: string } = { ok: false };
       if (s.dealId.startsWith("OL_")) {
         // Open Line dispatches carry no CRM entity — deliver by chat id.
         const chatId = s.dealId.slice(3);
-        await sendMessageToChatId(sendCandidates, chatId, message);
+        r = await sendMessageToChatId(sendCandidates, chatId, message, { requireClosedSession: true });
       } else {
         const entityType = s.dealId.startsWith("lead:") ? ("lead" as const) : ("deal" as const);
         const entityId = s.dealId.replace(/^lead:/, "");
-        await dispatchSurveyToOpenChannel({
+        r = await dispatchSurveyToOpenChannel({
           baseUrl,
           sendCandidates,
           entityType,
@@ -234,10 +252,14 @@ async function run(req: NextRequest) {
           message,
         });
       }
+      if (r.ok) {
+        remindersSent++;
+      } else {
+        verbose(`Follow-up reminder for ${s.dealId} skipped (${r.reason || "delivery failed"}).`);
+      }
     } catch (e) {
       console.error(`Follow-up dispatch failed for ${s.dealId}:`, e);
     }
-    remindersSent++;
   }
 
   verbose(
