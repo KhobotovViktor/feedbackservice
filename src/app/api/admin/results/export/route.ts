@@ -30,7 +30,10 @@ export async function GET(req: NextRequest) {
   const branchId = searchParams.get("branchId") || undefined;
   const type = searchParams.get("type") || "all";
   const tag = searchParams.get("tag") || "all";
+  const complaint = searchParams.get("complaint") || "all";
   const responsible = searchParams.get("responsible") || "all";
+  const from = searchParams.get("from") || "";
+  const to = searchParams.get("to") || "";
   const q = (searchParams.get("q") || "").trim();
 
   const accessible = await getAccessibleBranchIds();
@@ -44,6 +47,26 @@ export async function GET(req: NextRequest) {
   if (type === "positive") where.averageScore = { gte: 4.5 };
   if (type === "negative") where.averageScore = { lt: 4.5 };
   if (tag && tag !== "all") where.tags = { has: tag };
+  if (complaint === "open") where.complaintStatus = { in: ["NEW", "IN_PROGRESS"] };
+  else if (complaint === "new") where.complaintStatus = "NEW";
+  else if (complaint === "in_progress") where.complaintStatus = "IN_PROGRESS";
+  else if (complaint === "resolved") where.complaintStatus = "RESOLVED";
+
+  // Date range filter (Europe/Moscow boundaries so the entire end day is included)
+  if (from || to) {
+    const createdAtFilter: Prisma.DateTimeFilter = {};
+    if (from) {
+      const dFrom = new Date(`${from}T00:00:00.000+03:00`);
+      if (!isNaN(dFrom.getTime())) createdAtFilter.gte = dFrom;
+    }
+    if (to) {
+      const dTo = new Date(`${to}T23:59:59.999+03:00`);
+      if (!isNaN(dTo.getTime())) createdAtFilter.lte = dTo;
+    }
+    if (createdAtFilter.gte || createdAtFilter.lte) {
+      where.createdAt = createdAtFilter;
+    }
+  }
   // Mirror the «Ответственный» filter on the Results page so the exported
   // file matches what's on screen.
   if (responsible === "__none__") {

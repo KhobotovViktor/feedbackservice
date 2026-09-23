@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import type { Prisma, SurveyResponse, Branch } from "@prisma/client";
-import { Building2, MessageCircle, Filter, ChevronLeft, ChevronRight, Download, Tag, AlertCircle, Clock, CheckCircle2, UserCheck } from "lucide-react";
+import { Building2, MessageCircle, Filter, ChevronLeft, ChevronRight, Download, Tag, AlertCircle, Clock, CheckCircle2, UserCheck, Calendar } from "lucide-react";
 import { BranchFilter } from "@/components/results/branch-filter";
+import { DateRangeFilter } from "@/components/results/date-range-filter";
 import { TypeFilter } from "@/components/results/type-filter";
 import { TagFilter } from "@/components/results/tag-filter";
 import { ComplaintFilter } from "@/components/results/complaint-filter";
@@ -19,9 +20,9 @@ const PAGE_SIZE = 25;
 export default async function ResultsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string; type?: string; tag?: string; complaint?: string; responsible?: string; q?: string; sortBy?: string; order?: string; page?: string }>;
+  searchParams: Promise<{ branchId?: string; type?: string; tag?: string; complaint?: string; responsible?: string; from?: string; to?: string; q?: string; sortBy?: string; order?: string; page?: string }>;
 }) {
-  const { branchId, type = "all", tag = "all", complaint = "all", responsible = "all", sortBy = "date", order = "desc", page } = await searchParams;
+  const { branchId, type = "all", tag = "all", complaint = "all", responsible = "all", from: dateFrom, to: dateTo, sortBy = "date", order = "desc", page } = await searchParams;
   const q = ((await searchParams).q || "").trim();
   const sortDir: "asc" | "desc" = order === "asc" ? "asc" : "desc";
   const pageNum = Math.max(1, parseInt(page || "1", 10) || 1);
@@ -34,6 +35,8 @@ export default async function ResultsPage({
     if (tag && tag !== "all") params.set("tag", tag);
     if (complaint && complaint !== "all") params.set("complaint", complaint);
     if (responsible && responsible !== "all") params.set("responsible", responsible);
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
     if (q) params.set("q", q);
     if (sortBy && sortBy !== "date") params.set("sortBy", sortBy);
     if (order && order !== "desc") params.set("order", order);
@@ -42,12 +45,15 @@ export default async function ResultsPage({
     return qs ? `?${qs}` : "?";
   };
 
-  // CSV export keeps the active branch/type/tag/responsible/search filters.
+  // CSV export keeps the active branch/type/tag/complaint/responsible/date/search filters.
   const exportParams = new URLSearchParams();
   if (branchId) exportParams.set("branchId", branchId);
   if (type && type !== "all") exportParams.set("type", type);
   if (tag && tag !== "all") exportParams.set("tag", tag);
+  if (complaint && complaint !== "all") exportParams.set("complaint", complaint);
   if (responsible && responsible !== "all") exportParams.set("responsible", responsible);
+  if (dateFrom) exportParams.set("from", dateFrom);
+  if (dateTo) exportParams.set("to", dateTo);
   if (q) exportParams.set("q", q);
   const exportHref = `/api/admin/results/export${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
 
@@ -105,6 +111,22 @@ export default async function ResultsPage({
     else if (complaint === "new") where.complaintStatus = "NEW";
     else if (complaint === "in_progress") where.complaintStatus = "IN_PROGRESS";
     else if (complaint === "resolved") where.complaintStatus = "RESOLVED";
+
+    // Date range filter (Europe/Moscow boundaries so the entire end day is included)
+    if (dateFrom || dateTo) {
+      const createdAtFilter: Prisma.DateTimeFilter = {};
+      if (dateFrom) {
+        const dFrom = new Date(`${dateFrom}T00:00:00.000+03:00`);
+        if (!isNaN(dFrom.getTime())) createdAtFilter.gte = dFrom;
+      }
+      if (dateTo) {
+        const dTo = new Date(`${dateTo}T23:59:59.999+03:00`);
+        if (!isNaN(dTo.getTime())) createdAtFilter.lte = dTo;
+      }
+      if (createdAtFilter.gte || createdAtFilter.lte) {
+        where.createdAt = createdAtFilter;
+      }
+    }
 
     // «Ответственный» filter. "__none__" → only rows without a responsible
     // (null or empty string), any other non-"all" value → exact match.
@@ -251,6 +273,17 @@ export default async function ResultsPage({
             </div>
             <div className="flex-1 sm:flex-none">
               <BranchFilter branches={branches} defaultValue={branchId || "all"} />
+            </div>
+          </div>
+
+          {/* Date Range Filter */}
+          <div className="flex items-center gap-2 p-1 md:p-1.5 glass rounded-2xl md:rounded-[1.5rem] w-full sm:w-auto border-white/50 shadow-xl shadow-indigo-500/5">
+            <div className="flex-1 sm:flex-none flex items-center gap-2 md:gap-3 px-3 md:px-6 py-2 md:py-3">
+              <Calendar className="w-4 h-4 md:w-5 md:h-5 text-indigo-400" />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden xs:inline">Период:</span>
+            </div>
+            <div className="flex-1 sm:flex-none">
+              <DateRangeFilter defaultFrom={dateFrom} defaultTo={dateTo} />
             </div>
           </div>
 
