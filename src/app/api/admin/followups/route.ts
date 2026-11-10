@@ -152,21 +152,18 @@ async function run(req: NextRequest) {
         ok = r.ok;
         reason = r.reason;
 
-        if (ok) {
-          // The initial webhook skipped the CRM link field at night so B24's
-          // own SMS/WhatsApp robots wouldn't fire after hours — fill it now.
-          const linkField = sm.b24_link_field || "UF_CRM_1773746121";
-          const updateMethod =
-            entityType === "lead" ? "crm.lead.update.json" : "crm.deal.update.json";
-          try {
-            await fetch(`${baseUrl}/${updateMethod}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: entityId, fields: { [linkField]: s.surveyUrl } }),
-            });
-          } catch (e) {
-            console.error(`Deferred ${updateMethod} failed for ${s.dealId}:`, e);
-          }
+        // Fill the CRM link field regardless of OL chat result so B24 robots / managers can see the link
+        const linkField = sm.b24_link_field || "UF_CRM_1773746121";
+        const updateMethod =
+          entityType === "lead" ? "crm.lead.update.json" : "crm.deal.update.json";
+        try {
+          await fetch(`${baseUrl}/${updateMethod}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: entityId, fields: { [linkField]: s.surveyUrl } }),
+          });
+        } catch (e) {
+          console.error(`Deferred ${updateMethod} failed for ${s.dealId}:`, e);
         }
       }
       if (ok) {
@@ -174,18 +171,28 @@ async function run(req: NextRequest) {
       } else if (reason === "stale_deal") {
         verbose(`Deferred delivery for ${s.dealId} suppressed: chat moved to newer deal.`);
         delivered++;
-      } else if (reason === "active_session") {
-        verbose(`Deferred delivery for ${s.dealId} postponed: chat is currently in active session.`);
-        await prisma.sentSurvey.update({
-          where: { id: s.id },
-          data: { deliveredAt: null, deliverAfter: new Date(Date.now() + 30 * 60_000) },
-        });
       } else {
         deliveryFailed++;
+        try {
+          await prisma.sentSurvey.update({
+            where: { id: s.id },
+            data: { deliveredAt: null },
+          });
+        } catch {
+          // non-critical
+        }
       }
     } catch (e) {
       deliveryFailed++;
       console.error(`Deferred delivery failed for ${s.dealId}:`, e);
+      try {
+        await prisma.sentSurvey.update({
+          where: { id: s.id },
+          data: { deliveredAt: null },
+        });
+      } catch {
+        // non-critical
+      }
     }
   }
 

@@ -36,20 +36,25 @@ async function handleWebhook(req: NextRequest) {
 
   // The robot can fire from either the Deals funnel or the Leads funnel.
   // entityType lets callers pick which CRM entity the rest of this handler
-  // operates against. Defaults to "deal" for backwards compatibility — old
-  // robots configured before Lead support shipped will continue working
-  // unchanged. Accepted: "deal" | "lead".
+  // operates against. Automatically infers "lead" if leadId is present,
+  // entityType=lead is passed, or the ID is prefixed with "lead:".
   const entityTypeRaw = searchParams.get("entityType")?.toLowerCase();
-  const entityType: "deal" | "lead" =
-    entityTypeRaw === "lead" ? "lead" : "deal";
+  let rawEntityId = leadId || dealId || clientId;
+  const isLead =
+    entityTypeRaw === "lead" ||
+    Boolean(leadId) ||
+    (typeof rawEntityId === "string" && rawEntityId.startsWith("lead:"));
+  const entityType: "deal" | "lead" = isLead ? "lead" : "deal";
 
-  // Backwards-compat: the original robots template was
-  //   ?clientId={{ID}}&dealId={{ID}}
-  // For leads we accept either ?leadId=... explicitly, or ?dealId=... with
-  // ?entityType=lead. clientId remains the canonical "who is this person"
-  // identifier — for leads it's usually the same as the lead id.
-  const entityId = leadId || dealId || clientId;
-  const effectiveClientId = clientId || entityId;
+  if (typeof rawEntityId === "string" && rawEntityId.startsWith("lead:")) {
+    rawEntityId = rawEntityId.replace(/^lead:/, "");
+  }
+  const entityId = rawEntityId;
+  const rawClientId = clientId || entityId;
+  const effectiveClientId =
+    typeof rawClientId === "string" && rawClientId.startsWith("lead:")
+      ? rawClientId.replace(/^lead:/, "")
+      : rawClientId;
 
   if (!effectiveClientId || !entityId) {
     console.error("Missing both clientId and dealId/leadId in request");
@@ -176,13 +181,13 @@ async function handleWebhook(req: NextRequest) {
     // re-send the same URL later. During quiet hours (20:00-09:00 МСК) the
     // customer-facing sends below are skipped and deliverAfter is stamped
     // instead — the cron job delivers the link at 09:00; daytime dispatches
-    // are delivered right here, so they get deliveredAt immediately.
+    // will stamp deliveredAt once dispatchSurveyToOpenChannel succeeds.
     try {
       await prisma.sentSurvey.update({
         where: { dealId: dedupKey },
         data: {
           surveyUrl,
-          ...(deferUntil ? { deliverAfter: deferUntil } : { deliveredAt: new Date() }),
+          ...(deferUntil ? { deliverAfter: deferUntil } : {}),
         },
       });
     } catch (e) {
@@ -348,46 +353,40 @@ async function handleWebhook(req: NextRequest) {
           message,
           dealData,
         });
-        if (
-          dispatch.ok &&
-          dispatch.usedWebhookUrl &&
-          !safeResponsibleName &&
-          !assignedWebhook?.displayName
-        ) {
-          const normalizedUsed = normalizeB24Url(dispatch.usedWebhookUrl);
-          const used = perOperatorWebhooks.find(
-            (w) => normalizeB24Url(w.url) === normalizedUsed
-          );
-          if (used?.displayName) {
-            try {
-              await prisma.sentSurvey.update({
-                where: { dealId: dedupKey },
-                data: { responsibleName: used.displayName },
-              });
-              verbose(
-                `responsibleName backfilled from dialog operator: ${used.displayName} (webhook user ${used.userId})`
-              );
-            } catch (e) {
-              console.error("Failed to backfill responsibleName from dialog operator:", e);
+        if (dispatch.ok) {
+          try {
+            await prisma.sentSurvey.update({
+              where: { dealId: dedupKey },
+              data: { deliveredAt: new Date() },
+            });
+          } catch (e) {
+            console.error("Failed to stamp deliveredAt on SentSurvey:", e);
+          }
+          if (
+            dispatch.usedWebhookUrl &&
+            !safeResponsibleName &&
+            !assignedWebhook?.displayName
+          ) {
+            const normalizedUsed = normalizeB24Url(dispatch.usedWebhookUrl);
+            const used = perOperatorWebhooks.find(
+              (w) => normalizeB24Url(w.url) === normalizedUsed
+            );
+            if (used?.displayName) {
+              try {
+                await prisma.sentSurvey.update({
+                  where: { dealId: dedupKey },
+                  data: { responsibleName: used.displayName },
+                });
+                verbose(
+                  `responsibleName backfilled from dialog operator: ${used.displayName} (webhook user ${used.userId})`
+                );
+              } catch (e) {
+                console.error("Failed to backfill responsibleName from dialog operator:", e);
+              }
             }
           }
         } else if (!dispatch.ok) {
-          if (dispatch.reason === "active_session") {
-            // Operator/customer are currently chatting in this dialog.
-            // Postpone delivery by 15 mins so it delivers once the session finishes.
-            const retryAt = new Date(Date.now() + 15 * 60_000);
-            verbose(
-              `Chat has an active dialogue session. Postponing survey delivery until ${retryAt.toISOString()}.`
-            );
-            try {
-              await prisma.sentSurvey.update({
-                where: { dealId: dedupKey },
-                data: { deliverAfter: retryAt, deliveredAt: null },
-              });
-            } catch {
-              // non-critical
-            }
-          } else if (dispatch.reason === "stale_deal") {
+          if (dispatch.reason === "stale_deal") {
             verbose(
               `Chat has moved on to a newer deal. Suppressing delivery for stale deal ${dedupKey}.`
             );
@@ -399,6 +398,10 @@ async function handleWebhook(req: NextRequest) {
             } catch {
               // non-critical
             }
+          } else {
+            verbose(
+              `Open Channel dispatch not delivered (${dispatch.reason || "unknown reason"}). Link saved for CRM.`
+            );
           }
         }
       } catch (ocError) {

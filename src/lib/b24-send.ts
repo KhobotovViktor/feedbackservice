@@ -110,23 +110,15 @@ async function sendToChatViaCandidates(
       if (!chatId || Number.isNaN(chatIdNum)) continue;
 
       // ── CHAT STATUS AND DEAL CONTEXT VALIDATION ──
-      // Avoid sending into active sessions or stale deals.
+      // Avoid sending into stale deals that have moved on to newer inquiries.
       const status = await inspectChatStatus(sendCandidates[0], String(chatId));
       if (status.isLines) {
-        // 1. If this is a deal survey, but the chat is now bound to a different deal:
+        // If this is a deal survey, but the chat is now bound to a different deal:
         if (entityType === "deal" && status.boundEntityType === "deal" && status.boundEntityId && status.boundEntityId !== id) {
           verbose(
             `Chat ${chatId} has moved on to newer deal ${status.boundEntityId} (target was ${id}). Skipping stale survey.`
           );
           return { ok: false, reason: "stale_deal" };
-        }
-
-        // 2. If the chat is currently in an active dialog session:
-        if (status.sessionActive) {
-          verbose(
-            `Chat ${chatId} has an active dialogue session (${status.sessionId}). Skipping to avoid interrupting active conversation.`
-          );
-          return { ok: false, reason: "active_session" };
         }
       }
 
@@ -300,21 +292,21 @@ export async function dispatchSurveyToOpenChannel(opts: DispatchOpts): Promise<D
 
   // Try order: root entity → deal's lead → deal contacts → lead's contact.
   let result = await sendToChatViaCandidates(sendCandidates, entityType, entityId, message);
-  // If explicitly rejected because the chat moved to a newer deal or has an active session,
+  // If explicitly rejected because the chat moved to a newer deal,
   // do not fall back to lead/contacts (they point to the exact same chat).
-  if (!result.ok && (result.reason === "stale_deal" || result.reason === "active_session")) {
+  if (!result.ok && result.reason === "stale_deal") {
     return result;
   }
   if (!result.ok && dealLeadId) {
     result = await sendToChatViaCandidates(sendCandidates, "lead", dealLeadId, message);
-    if (!result.ok && (result.reason === "stale_deal" || result.reason === "active_session")) {
+    if (!result.ok && result.reason === "stale_deal") {
       return result;
     }
   }
   if (!result.ok) {
     for (const cid of dealContactIds) {
       result = await sendToChatViaCandidates(sendCandidates, "contact", cid, message);
-      if (result.ok || result.reason === "stale_deal" || result.reason === "active_session") break;
+      if (result.ok || result.reason === "stale_deal") break;
     }
   }
   if (!result.ok && leadContactId && !dealContactIds.includes(leadContactId)) {
