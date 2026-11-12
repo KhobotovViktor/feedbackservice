@@ -50,11 +50,18 @@ async function handleWebhook(req: NextRequest) {
     rawEntityId = rawEntityId.replace(/^lead:/, "");
   }
   const entityId = rawEntityId;
-  const rawClientId = clientId || entityId;
+  const cleanedClientId =
+    typeof clientId === "string" && clientId.startsWith("lead:")
+      ? clientId.replace(/^lead:/, "")
+      : clientId;
+  // Bitrix24 Deal automation robots sometimes leave clientId={{CONTACT_ID}}
+  // unexpanded while providing a valid dealId={{ID}}. When entityId comes
+  // from dealId/leadId, fall back to it; CONTACT_ID is still resolved later
+  // via crm.deal.get.
   const effectiveClientId =
-    typeof rawClientId === "string" && rawClientId.startsWith("lead:")
-      ? rawClientId.replace(/^lead:/, "")
-      : rawClientId;
+    cleanedClientId && (isValidId(cleanedClientId) || !(dealId || leadId))
+      ? cleanedClientId
+      : entityId;
 
   if (!effectiveClientId || !entityId) {
     console.error("Missing both clientId and dealId/leadId in request");

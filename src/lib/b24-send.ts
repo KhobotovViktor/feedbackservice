@@ -25,6 +25,8 @@ interface DispatchOpts {
   message: string;
   /** Optional pre-fetched deal/lead record (saves a round-trip). */
   dealData?: DealLike | null;
+  /** Skip chats whose Open Lines session is currently active (for delayed/reminder sends). */
+  requireClosedSession?: boolean;
 }
 
 /** Outcome of an Open Channel send attempt. `usedWebhookUrl` is set when at
@@ -82,7 +84,8 @@ async function sendToChatViaCandidates(
   sendCandidates: string[],
   type: string,
   id: string,
-  message: string
+  message: string,
+  opts?: { requireClosedSession?: boolean }
 ): Promise<DispatchResult> {
   const entityType = type.toLowerCase();
   verbose(`Searching for chat bound to ${entityType} ${id}...`);
@@ -119,6 +122,12 @@ async function sendToChatViaCandidates(
             `Chat ${chatId} has moved on to newer deal ${status.boundEntityId} (target was ${id}). Skipping stale survey.`
           );
           return { ok: false, reason: "stale_deal" };
+        }
+        if (opts?.requireClosedSession && status.sessionActive) {
+          verbose(
+            `Chat ${chatId} has an active Open Lines session (${status.sessionId}). Skipping deferred/reminder survey.`
+          );
+          return { ok: false, reason: "active_session" };
         }
       }
 
@@ -228,7 +237,7 @@ export async function sendMessageToChatId(
  * dialog right now and the best signal of "who's responsible for this chat".
  */
 export async function dispatchSurveyToOpenChannel(opts: DispatchOpts): Promise<DispatchResult> {
-  const { baseUrl, sendCandidates, entityType, entityId, message } = opts;
+  const { baseUrl, sendCandidates, entityType, entityId, message, requireClosedSession } = opts;
   let dealData = opts.dealData ?? null;
 
   verbose(`Open Channel Delivery attempt for ${entityType} ${entityId}`);
@@ -290,27 +299,31 @@ export async function dispatchSurveyToOpenChannel(opts: DispatchOpts): Promise<D
     }
   }
 
+  const sendOpts = requireClosedSession ? { requireClosedSession: true } : undefined;
+  const shouldStopFallback = (r: DispatchResult) =>
+    !r.ok && (r.reason === "stale_deal" || r.reason === "active_session");
+
   // Try order: root entity → deal's lead → deal contacts → lead's contact.
-  let result = await sendToChatViaCandidates(sendCandidates, entityType, entityId, message);
-  // If explicitly rejected because the chat moved to a newer deal,
-  // do not fall back to lead/contacts (they point to the exact same chat).
-  if (!result.ok && result.reason === "stale_deal") {
+  let result = await sendToChatViaCandidates(sendCandidates, entityType, entityId, message, sendOpts);
+  // If explicitly rejected because the chat moved to a newer deal or already has an
+  // active session, do not fall back to lead/contacts (they point to the same chat).
+  if (shouldStopFallback(result)) {
     return result;
   }
   if (!result.ok && dealLeadId) {
-    result = await sendToChatViaCandidates(sendCandidates, "lead", dealLeadId, message);
-    if (!result.ok && result.reason === "stale_deal") {
+    result = await sendToChatViaCandidates(sendCandidates, "lead", dealLeadId, message, sendOpts);
+    if (shouldStopFallback(result)) {
       return result;
     }
   }
   if (!result.ok) {
     for (const cid of dealContactIds) {
-      result = await sendToChatViaCandidates(sendCandidates, "contact", cid, message);
-      if (result.ok || result.reason === "stale_deal") break;
+      result = await sendToChatViaCandidates(sendCandidates, "contact", cid, message, sendOpts);
+      if (result.ok || shouldStopFallback(result)) break;
     }
   }
   if (!result.ok && leadContactId && !dealContactIds.includes(leadContactId)) {
-    result = await sendToChatViaCandidates(sendCandidates, "contact", leadContactId, message);
+    result = await sendToChatViaCandidates(sendCandidates, "contact", leadContactId, message, sendOpts);
   }
 
   if (result.ok) verbose("SUCCESS: Message delivered to Open Channel.");

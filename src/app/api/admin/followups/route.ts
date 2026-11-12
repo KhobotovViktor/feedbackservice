@@ -148,6 +148,7 @@ async function run(req: NextRequest) {
           entityType,
           entityId,
           message,
+          requireClosedSession: true,
         });
         ok = r.ok;
         reason = r.reason;
@@ -257,6 +258,7 @@ async function run(req: NextRequest) {
           entityType,
           entityId,
           message,
+          requireClosedSession: true,
         });
       }
       if (r.ok) {
