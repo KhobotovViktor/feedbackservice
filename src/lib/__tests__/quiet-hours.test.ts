@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isQuietHoursMsk, mskHour, nextSendTimeMsk } from "../quiet-hours";
+import { isNightHoursMsk, isQuietHoursMsk, mskHour, nextSendTimeMsk } from "../quiet-hours";
 
 // Helper: build a Date at a given MSK wall-clock time (MSK = UTC+3).
 const msk = (iso: string) => new Date(`${iso}+03:00`);
@@ -56,5 +56,17 @@ describe("nextSendTimeMsk", () => {
     expect(nextSendTimeMsk(new Date("2026-07-28T21:30:00Z")).toISOString()).toBe(
       "2026-07-29T06:00:00.000Z"
     );
+  });
+});
+
+describe("isNightHoursMsk", () => {
+  it("allows evening 20:00–22:59 MSK while blocking 23:00–08:59 MSK", () => {
+    expect(isNightHoursMsk(msk("2026-07-28T20:00:00"))).toBe(false);
+    expect(isNightHoursMsk(msk("2026-07-28T22:19:00"))).toBe(false);
+    expect(isNightHoursMsk(msk("2026-07-28T22:59:59"))).toBe(false);
+    expect(isNightHoursMsk(msk("2026-07-28T23:00:00"))).toBe(true);
+    expect(isNightHoursMsk(msk("2026-07-29T02:10:00"))).toBe(true);
+    expect(isNightHoursMsk(msk("2026-07-29T08:59:59"))).toBe(true);
+    expect(isNightHoursMsk(msk("2026-07-29T09:00:00"))).toBe(false);
   });
 });

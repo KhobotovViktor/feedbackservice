@@ -6,7 +6,7 @@ import { getAppOrigin } from "@/lib/url";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 import { sendMessageToChatId } from "@/lib/b24-send";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
-import { isQuietHoursMsk, nextSendTimeMsk } from "@/lib/quiet-hours";
+import { isNightHoursMsk, nextSendTimeMsk } from "@/lib/quiet-hours";
 
 // Bitrix24 fires ONSESSIONFINISH when an Open Line dialog is closed. Unlike the
 // stage-robot webhook (which carries a dealId), this event only gives us the
@@ -141,10 +141,11 @@ async function handle(req: NextRequest) {
   const appUrl = getAppOrigin(req);
   const fullUrl = `${appUrl}/survey/${token}`;
 
-  // Quiet hours (20:00-09:00 МСК): park the link instead of messaging the
+  // Deep night hours (23:00-09:00 МСК): park the link instead of messaging the
   // customer at night — the cron job (followups stage 1) delivers it into the
   // same chat at 09:00, resolving the chat id back from dealId = "OL_<id>".
-  const deferUntil = isQuietHoursMsk() ? nextSendTimeMsk() : null;
+  // Evening shifts (20:00-22:59 МСК) dispatch immediately right when the dialog closes.
+  const deferUntil = isNightHoursMsk() ? nextSendTimeMsk() : null;
 
   let surveyUrl = fullUrl;
   try {

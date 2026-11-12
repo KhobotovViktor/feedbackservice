@@ -5,6 +5,7 @@
 const MSK_OFFSET_H = 3;
 export const QUIET_START_H = 20; // 20:00 МСК
 export const QUIET_END_H = 9; // 09:00 МСК
+export const NIGHT_START_H = 23; // 23:00 МСК (deep night — no evening manager OL sends)
 
 export function mskHour(d: Date = new Date()): number {
   return (d.getUTCHours() + MSK_OFFSET_H) % 24;
@@ -13,6 +14,17 @@ export function mskHour(d: Date = new Date()): number {
 export function isQuietHoursMsk(d: Date = new Date()): boolean {
   const h = mskHour(d);
   return h >= QUIET_START_H || h < QUIET_END_H;
+}
+
+/**
+ * Deep-night window (23:00–08:59 MSK) when even Open Lines chats should be
+ * deferred until 09:00 MSK (catching overnight B24 50h/74h auto-triggers),
+ * whereas evening hours (20:00–22:59 MSK) allow immediate OL replies when a
+ * manager closes an evening consultation.
+ */
+export function isNightHoursMsk(d: Date = new Date()): boolean {
+  const h = mskHour(d);
+  return h >= NIGHT_START_H || h < QUIET_END_H;
 }
 
 /**

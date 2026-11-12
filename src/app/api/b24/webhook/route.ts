@@ -6,7 +6,7 @@ import { getAppOrigin } from "@/lib/url";
 import { isSafeB24Url, normalizeB24Url } from "@/lib/b24-url";
 import { dispatchSurveyToOpenChannel } from "@/lib/b24-send";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
-import { isQuietHoursMsk, nextSendTimeMsk } from "@/lib/quiet-hours";
+import { isNightHoursMsk, isQuietHoursMsk, nextSendTimeMsk } from "@/lib/quiet-hours";
 import { verbose } from "@/lib/log";
 
 function isValidId(value: string): boolean {
@@ -126,14 +126,21 @@ async function handleWebhook(req: NextRequest) {
     }
   }
 
-  // Quiet hours (20:00-09:00 МСК): don't message the customer at night.
-  // The dispatch row and survey link are still created now; the OL message
-  // and the CRM link field (which triggers B24's own SMS/WhatsApp robots)
-  // are deferred to the next 09:00 МСК via the cron job. The timeline
-  // comment is internal to B24, so it still goes out immediately.
-  const deferUntil = !isTest && isQuietHoursMsk() ? nextSendTimeMsk() : null;
-  if (deferUntil) {
-    verbose(`Quiet hours: deferring customer sends for ${dedupKey} until ${deferUntil.toISOString()}`);
+  // Quiet hours (20:00-09:00 МСК):
+  // - Deep night (23:00-09:00 МСК): defer ALL customer-facing sends (OL + CRM
+  //   link field for SMS/WhatsApp) to 09:00 МСК so overnight auto-triggers never
+  //   disturb customers.
+  // - Evening (20:00-22:59 МСК): allow immediate Open Lines delivery when a
+  //   manager closes an evening dialog, while still deferring the CRM link
+  //   field (SMS/WhatsApp) to 09:00 МСК.
+  // The timeline comment is internal to B24, so it still goes out immediately.
+  const quietNow = !isTest && isQuietHoursMsk();
+  const deferAllUntil = quietNow && isNightHoursMsk() ? nextSendTimeMsk() : null;
+  const deferCrmFieldUntil = quietNow ? nextSendTimeMsk() : null;
+  if (deferAllUntil) {
+    verbose(`Night hours: deferring all customer sends for ${dedupKey} until ${deferAllUntil.toISOString()}`);
+  } else if (deferCrmFieldUntil) {
+    verbose(`Evening quiet hours: sending OL now if available, deferring CRM link field for ${dedupKey} until ${deferCrmFieldUntil.toISOString()}`);
   }
 
   const settings = await prisma.settings.findMany({
@@ -194,7 +201,7 @@ async function handleWebhook(req: NextRequest) {
         where: { dealId: dedupKey },
         data: {
           surveyUrl,
-          ...(deferUntil ? { deliverAfter: deferUntil } : {}),
+          ...(deferCrmFieldUntil ? { deliverAfter: deferCrmFieldUntil } : {}),
         },
       });
     } catch (e) {
@@ -350,8 +357,8 @@ async function handleWebhook(req: NextRequest) {
       // currently in the chat — that operator is the best fallback signal
       // for "who is handling this conversation". Backfill SentSurvey with
       // their displayName so the survey result shows them.
-      // Skipped during quiet hours — the cron job delivers at 09:00 МСК.
-      if (!deferUntil) try {
+      // Skipped during deep night hours (23:00-09:00 МСК) — the cron job handles morning delivery.
+      if (!deferAllUntil) try {
         const dispatch = await dispatchSurveyToOpenChannel({
           baseUrl,
           sendCandidates,
@@ -400,7 +407,7 @@ async function handleWebhook(req: NextRequest) {
             try {
               await prisma.sentSurvey.update({
                 where: { dealId: dedupKey },
-                data: { deliveredAt: new Date() },
+                data: { deliveredAt: new Date(), deliverAfter: null },
               });
             } catch {
               // non-critical
@@ -448,7 +455,7 @@ async function handleWebhook(req: NextRequest) {
       const linkField = settingsMap.b24_link_field || "UF_CRM_1773746121";
       const existingValue = dealData ? dealData[linkField] : null;
 
-      if (deferUntil) {
+      if (deferCrmFieldUntil) {
         verbose(`Quiet hours: link field ${linkField} left for deferred delivery.`);
       } else if (!existingValue || String(existingValue).trim() === "") {
         verbose(`Field ${linkField} is empty. Updating with survey link.`);
@@ -487,7 +494,7 @@ async function handleWebhook(req: NextRequest) {
   return NextResponse.json({
     surveyUrl,
     token,
-    ...(deferUntil ? { deferred: true, deliverAfter: deferUntil.toISOString() } : {}),
+    ...(deferCrmFieldUntil ? { deferred: true, deliverAfter: deferCrmFieldUntil.toISOString() } : {}),
   });
 }
 

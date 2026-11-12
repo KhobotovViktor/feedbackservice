@@ -55,6 +55,37 @@ async function hasResponse(dealId: string): Promise<boolean> {
   return Boolean(responded);
 }
 
+async function fillCrmLinkField(
+  baseUrl: string,
+  linkField: string,
+  entityType: "deal" | "lead",
+  entityId: string,
+  surveyUrl: string,
+  dedupKey: string
+): Promise<boolean> {
+  const updateMethod =
+    entityType === "lead" ? "crm.lead.update.json" : "crm.deal.update.json";
+  try {
+    const res = await fetch(`${baseUrl}/${updateMethod}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: entityId, fields: { [linkField]: surveyUrl } }),
+    });
+    const data = await res.json();
+    if (data?.error) {
+      console.error(
+        `Deferred ${updateMethod} error for ${dedupKey}:`,
+        data.error_description || data.error
+      );
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error(`Deferred ${updateMethod} failed for ${dedupKey}:`, e);
+    return false;
+  }
+}
+
 async function run(req: NextRequest) {
   if (!(await authorized(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -99,10 +130,9 @@ async function run(req: NextRequest) {
     sm.b24_message_template || "Оцените качество обслуживания по ссылке: {surveyUrl}";
   const now = Date.now();
 
-  // ── Stage 1: deferred deliveries (links parked during quiet hours) ────────
+  // ── Stage 1: deferred deliveries (links / CRM fields parked during quiet hours) ──
   const due = await prisma.sentSurvey.findMany({
     where: {
-      deliveredAt: null,
       deliverAfter: { not: null, lte: new Date(now) },
       surveyUrl: { not: null },
       createdAt: { gt: new Date(now - MAX_AGE_H * 3600_000) },
@@ -110,16 +140,52 @@ async function run(req: NextRequest) {
     take: 100,
   });
 
+  const linkField = sm.b24_link_field || "UF_CRM_1773746121";
   let delivered = 0;
   let deliveryFailed = 0;
   for (const s of due) {
-    // Customer already completed it (link was visible in CRM overnight) —
-    // stamp as delivered and move on without messaging them.
+    // Customer already completed it (from evening OL link or CRM overnight) —
+    // clear pending flags and move on without messaging or updating CRM.
     if (await hasResponse(s.dealId)) {
       await prisma.sentSurvey.updateMany({
-        where: { id: s.id, deliveredAt: null },
-        data: { deliveredAt: new Date() },
+        where: { id: s.id, deliverAfter: { not: null } },
+        data: {
+          deliverAfter: null,
+          ...(s.deliveredAt ? {} : { deliveredAt: new Date() }),
+        },
       });
+      continue;
+    }
+
+    // Evening OL already delivered immediately (20:00–22:59 MSK) — only the
+    // CRM link field (for SMS/WhatsApp robots) was deferred until 09:00 MSK.
+    if (s.deliveredAt) {
+      const claim = await prisma.sentSurvey.updateMany({
+        where: { id: s.id, deliverAfter: { not: null } },
+        data: { deliverAfter: null },
+      });
+      if (claim.count === 0) continue;
+
+      if (s.dealId.startsWith("OL_")) continue;
+
+      const entityType = s.dealId.startsWith("lead:") ? ("lead" as const) : ("deal" as const);
+      const entityId = s.dealId.replace(/^lead:/, "");
+      const crmOk = await fillCrmLinkField(
+        baseUrl,
+        linkField,
+        entityType,
+        entityId,
+        s.surveyUrl as string,
+        s.dealId
+      );
+      if (crmOk) {
+        delivered++;
+      } else {
+        deliveryFailed++;
+        await prisma.sentSurvey
+          .update({ where: { id: s.id }, data: { deliverAfter: s.deliverAfter } })
+          .catch(() => {});
+      }
       continue;
     }
 
@@ -133,6 +199,7 @@ async function run(req: NextRequest) {
     const message = baseTemplate.replace("{surveyUrl}", s.surveyUrl as string);
     try {
       let ok = false;
+      let crmOk = false;
       let reason: string | undefined;
       if (s.dealId.startsWith("OL_")) {
         const chatId = s.dealId.slice(3);
@@ -154,23 +221,22 @@ async function run(req: NextRequest) {
         reason = r.reason;
 
         // Fill the CRM link field regardless of OL chat result so B24 robots / managers can see the link
-        const linkField = sm.b24_link_field || "UF_CRM_1773746121";
-        const updateMethod =
-          entityType === "lead" ? "crm.lead.update.json" : "crm.deal.update.json";
-        try {
-          await fetch(`${baseUrl}/${updateMethod}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: entityId, fields: { [linkField]: s.surveyUrl } }),
-          });
-        } catch (e) {
-          console.error(`Deferred ${updateMethod} failed for ${s.dealId}:`, e);
-        }
+        crmOk = await fillCrmLinkField(
+          baseUrl,
+          linkField,
+          entityType,
+          entityId,
+          s.surveyUrl as string,
+          s.dealId
+        );
       }
-      if (ok) {
-        delivered++;
-      } else if (reason === "stale_deal") {
-        verbose(`Deferred delivery for ${s.dealId} suppressed: chat moved to newer deal.`);
+      if (ok || reason === "stale_deal" || (crmOk && reason !== "active_session")) {
+        if (reason === "stale_deal") {
+          verbose(`Deferred delivery for ${s.dealId} suppressed: chat moved to newer deal.`);
+        }
+        await prisma.sentSurvey
+          .update({ where: { id: s.id }, data: { deliverAfter: null } })
+          .catch(() => {});
         delivered++;
       } else {
         deliveryFailed++;
